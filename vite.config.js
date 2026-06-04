@@ -3,5 +3,5 @@ import vue from '@vitejs/plugin-vue'
 
 export default defineConfig(({ command }) => ({
   plugins: [vue()],
-  base: '/kana-quiz/',
-})
+  base: command === 'serve' ? '/' : '/kana-quiz/',
+}))
