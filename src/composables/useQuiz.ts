@@ -1,4 +1,4 @@
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import type { InjectionKey } from 'vue'
 import type { AppScreen, SetupTab, StatsFilter, StatRow, AccClass, TimeClass } from '../types'
 import { useStats } from './useStats'
@@ -81,10 +81,12 @@ export function useQuiz() {
 
   function submitTyped(): void {
     session.submitTyped(stats.recordAnswer)
+    if (session.feedbackType.value === 'correct') setTimeout(nextQuestion, 350)
   }
 
   function selectAnswer(chosen: string): void {
     session.selectAnswer(chosen, stats.recordAnswer)
+    if (session.feedbackType.value === 'correct') setTimeout(nextQuestion, 400)
   }
 
   function nextQuestion(): void {
@@ -103,6 +105,12 @@ export function useQuiz() {
   function init(): void {
     setup.init()
   }
+
+  watch(session.typedAnswer, (val) => {
+    const q = session.currentQuestion.value
+    if (!q || session.answered.value || q.inputType !== 'type') return
+    if (val.trim().toLowerCase() === q.answer.toLowerCase()) submitTyped()
+  })
 
   return {
     // orchestration

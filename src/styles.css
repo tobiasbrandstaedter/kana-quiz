@@ -437,7 +437,6 @@ header { text-align: center; margin-bottom: 40px; }
   text-transform: uppercase;
   text-align: center;
   margin-bottom: 20px;
-  display: none;
 }
 
 .result-score { font-size: 140px; font-weight: 700; color: var(--accent); line-height: 1; margin: 32px 0 8px; text-shadow: 0 0 40px rgba(232,197,71,0.4); }
@@ -593,16 +592,66 @@ header { text-align: center; margin-bottom: 40px; }
 .clear-stats-btn:hover { border-color: var(--wrong); color: var(--wrong); }
 
 @media (max-width: 600px) {
-  .title-jp { font-size: 64px; }
-  .q-main { font-size: 140px; }
-  .q-main.romaji-q { font-size: 58px !important; }
-  .option-btn { font-size: 56px; padding: 26px 14px; }
-  .option-btn.romaji-opt { font-size: 24px !important; }
-  .result-score { font-size: 96px; }
+  /* layout */
+  .container { padding: 20px 16px 40px; }
+  header { margin-bottom: 20px; }
+  .title-jp { font-size: 56px; letter-spacing: 6px; }
+  .title-en { font-size: 13px; letter-spacing: 3px; }
+
+  /* quiz screen */
+  .progress-bar-wrap { margin-bottom: 18px; }
+  .stats-row-top { margin-bottom: 18px; font-size: 14px; letter-spacing: 1px; }
+  .question-card { padding: 28px 20px 24px; margin-bottom: 18px; }
+  .q-label { font-size: 13px; letter-spacing: 2px; margin-bottom: 12px; }
+  .q-main { font-size: 110px; }
+  .q-main.romaji-q { font-size: 48px !important; }
+  .type-input-wrap { margin-bottom: 14px; }
+  .type-field { font-size: 28px; padding: 16px 18px; letter-spacing: 2px; }
+  .submit-btn { width: 100%; padding: 16px; margin-top: 10px; }
+  .options-grid { gap: 10px; margin-bottom: 18px; }
+  .option-btn { font-size: 52px; padding: 18px 12px; border-radius: 10px; }
+  .option-btn.romaji-opt { font-size: 22px !important; }
+  .feedback { font-size: 15px; margin-bottom: 14px; }
+  .next-btn { width: 100%; }
+  .error-mode-banner { font-size: 12px; letter-spacing: 2px; padding: 10px 16px; }
+
+  /* results */
+  .result-score { font-size: 88px; margin: 20px 0 6px; }
+  .result-label { font-size: 13px; letter-spacing: 2px; }
+  .missed-item .k { font-size: 42px; }
+  .result-btns { flex-direction: column; gap: 10px; }
+  .restart-btn, .practice-errors-btn, .back-btn { width: 100%; }
+
+  /* setup tabs */
+  .nav-tab { font-size: 11px; padding: 10px 4px; letter-spacing: 1px; }
+  .nav-tab .tab-count { font-size: 22px; }
+  .script-toggle { width: 100%; }
+  .script-btn { flex: 1; text-align: center; padding: 10px 12px; }
+  .mode-panel { flex-direction: column; align-items: flex-start; gap: 8px; padding: 16px; }
+  .mode-btn { width: 100%; text-align: center; }
+  .count-panel { flex-direction: column; align-items: flex-start; gap: 10px; padding: 16px; }
+  .count-input { width: 100%; }
+
+  /* stats summary */
   .stats-summary { grid-template-columns: repeat(2, 1fr); }
-  .stats-table-header, .stats-row { grid-template-columns: 64px 80px 1fr 80px 70px 70px; padding: 12px 12px; font-size: 14px; }
-  .stats-kana-cell { font-size: 34px; }
-  .error-table-header, .error-row { grid-template-columns: 70px 84px 1fr 90px 48px; padding: 12px 12px; }
-  .error-kana { font-size: 36px; }
-  .nav-tab { font-size: 12px; }
+  .stat-card { padding: 16px 12px; }
+  .stat-card .sc-value { font-size: 38px; }
+
+  /* stats table: drop "Seen" (4th col) and "Avg Time" (6th col) */
+  .stats-table-header { grid-template-columns: 52px 70px 1fr 60px; padding: 10px 12px; font-size: 12px; }
+  .stats-table-header span:nth-child(4),
+  .stats-table-header span:nth-child(6) { display: none; }
+  .stats-row { grid-template-columns: 52px 70px 1fr 60px; padding: 10px 12px; font-size: 13px; }
+  .stats-row > *:nth-child(4),
+  .stats-row > *:nth-child(6) { display: none; }
+  .stats-kana-cell { font-size: 30px; }
+  .stats-romaji-cell { font-size: 14px; }
+
+  /* error table */
+  .error-table-header { grid-template-columns: 56px 72px 1fr 64px 38px; padding: 10px 10px; font-size: 12px; }
+  .error-row { grid-template-columns: 56px 72px 1fr 64px 38px; padding: 10px 10px; }
+  .error-kana { font-size: 30px; }
+  .error-romaji { font-size: 14px; }
+  .error-accuracy { font-size: 14px; }
+  .error-count-label { font-size: 14px; }
 }
