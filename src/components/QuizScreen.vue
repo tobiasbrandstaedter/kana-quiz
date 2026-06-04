@@ -6,7 +6,7 @@ const {
   isErrorPractice, progress, current, questions, correctCount, wrongCount,
   currentQuestion, answered, feedbackText, feedbackType,
   typedAnswer, typeFieldEl, selectedOption,
-  submitTyped, selectAnswer, nextQuestion,
+  submitTyped, selectAnswer, nextQuestion, goHome,
 } = inject(QUIZ_KEY)!
 </script>
 
@@ -24,6 +24,7 @@ const {
         <span class="stat-correct">{{ correctCount }}</span> correct &nbsp;
         <span class="stat-wrong">{{ wrongCount }}</span> wrong
       </span>
+      <button class="home-btn" @click="goHome()">HOME</button>
     </div>
 
     <div class="question-card">

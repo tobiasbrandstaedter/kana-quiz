@@ -27,7 +27,7 @@ const {
     <div class="result-btns">
       <button class="restart-btn" @click="restartQuiz()">TRY AGAIN</button>
       <button class="practice-errors-btn" :disabled="errorPairs.length === 0" @click="startQuiz(true)">PRACTICE ERRORS</button>
-      <button class="back-btn" @click="goHome()">SETTINGS</button>
+      <button class="back-btn" @click="goHome()">HOME</button>
     </div>
   </div>
 </template>

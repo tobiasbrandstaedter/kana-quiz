@@ -426,6 +426,20 @@ header { text-align: center; margin-bottom: 40px; }
 .next-btn:hover { border-color: var(--accent); color: var(--accent); }
 .next-btn:disabled { opacity: 0.2; cursor: default; }
 
+.home-btn {
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-family: 'Space Mono', monospace;
+  font-size: 11px;
+  letter-spacing: 2px;
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.home-btn:hover { border-color: var(--text-dim); color: var(--text); }
+
 .error-mode-banner {
   background: rgba(224,92,92,0.1);
   border: 1px solid rgba(224,92,92,0.3);
