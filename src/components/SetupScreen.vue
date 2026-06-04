@@ -9,7 +9,6 @@ import StatsTab from './StatsTab.vue'
 const {
   headerTitle, kanaFont, setKanaFont,
   activeTab, showTab, errorTabCount, statsTabCount, selectedCount,
-  errorPairs,
   activeScript, setScript,
   selectorScripts, selectedCols, errorKanaSet, toggleCol, selectAll, selectNone, selectGroup,
   quizMode, setMode,

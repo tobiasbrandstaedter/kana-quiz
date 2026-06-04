@@ -117,7 +117,7 @@ export function useSession() {
       feedbackType.value = 'correct'
     } else {
       wrongCount.value++
-      missedPairs.value.push({ kana: q.kana, romaji: q.romaji })
+      missedPairs.value.push({ kana: q.kana, romaji: q.romaji, script: q.script })
       feedbackText.value = `✗ Answer: ${q.answer}`
       feedbackType.value = 'wrong'
     }
@@ -141,7 +141,7 @@ export function useSession() {
       feedbackType.value = 'correct'
     } else {
       wrongCount.value++
-      missedPairs.value.push({ kana: q.kana, romaji: q.romaji })
+      missedPairs.value.push({ kana: q.kana, romaji: q.romaji, script: q.script })
       feedbackText.value = `✗ Answer: ${q.answer}`
       feedbackType.value = 'wrong'
     }

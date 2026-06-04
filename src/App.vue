@@ -7,14 +7,15 @@ import ResultsScreen from './components/ResultsScreen.vue'
 
 const quiz = useQuiz()
 provide(QUIZ_KEY, quiz)
+const { screen } = quiz
 
 onMounted(quiz.init)
 </script>
 
 <template>
   <div class="container">
-    <SetupScreen v-show="quiz.screen === 'setup'" />
-    <QuizScreen  v-show="quiz.screen === 'quiz'" />
-    <ResultsScreen v-show="quiz.screen === 'results'" />
+    <SetupScreen v-show="screen === 'setup'" />
+    <QuizScreen  v-show="screen === 'quiz'" />
+    <ResultsScreen v-show="screen === 'results'" />
   </div>
 </template>
