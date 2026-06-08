@@ -45,7 +45,7 @@ const {
         type="text"
         autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
         placeholder="type romaji..."
-        :disabled="answered"
+        :readonly="answered"
         v-model="typedAnswer"
         @keydown.enter="submitTyped()"
       />

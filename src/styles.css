@@ -383,7 +383,7 @@ header { text-align: center; margin-bottom: 40px; }
 .type-field:focus { border-color: var(--accent2); }
 .type-field.input-correct { border-color: var(--correct); color: var(--correct); }
 .type-field.input-wrong { border-color: var(--wrong); color: var(--wrong); }
-.type-field:disabled { opacity: 0.7; }
+.type-field:read-only { opacity: 0.7; cursor: default; }
 
 .submit-btn {
   display: block;
