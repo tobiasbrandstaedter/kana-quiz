@@ -12,16 +12,20 @@ function audioUrl(hiragana: string): string {
   return `${BASE}/${hiragana}_v2.mp3`
 }
 
-// One element reused for every play. iOS Safari activates an HTMLAudioElement
-// on the first user-gesture play and keeps it activated — creating a new element
-// per tap forces iOS to re-evaluate the gesture each time, causing inconsistent
-// failures. A single element sidesteps that entirely.
+// Single element reused for every play so iOS Safari's activation persists.
 const player = new Audio()
 
+// Blob URLs created from cached audio data. iOS Safari sends Range requests
+// for audio loaded via http(s) URLs, and the service worker returns a full 200
+// instead of 206, which Safari refuses to play. Blob URLs load from memory and
+// skip the service worker entirely, so no Range requests are issued.
+const blobUrls = new Map<string, string>()
+
 export function playKana(kana: string): void {
+  const url = audioUrl(toHiragana(kana))
   player.pause()
-  player.src = audioUrl(toHiragana(kana))
-  player.currentTime = 0
+  player.src = blobUrls.get(url) ?? url
+  player.load()
   player.play().catch(() => {})
 }
 
@@ -31,6 +35,10 @@ export function precacheKanaAudio(): void {
     const h = toHiragana(kana)
     if (seen.has(h)) continue
     seen.add(h)
-    fetch(audioUrl(h)).catch(() => {})
+    const url = audioUrl(h)
+    fetch(url)
+      .then(r => r.blob())
+      .then(blob => { blobUrls.set(url, URL.createObjectURL(blob)) })
+      .catch(() => {})
   }
 }
