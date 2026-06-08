@@ -9,12 +9,37 @@ function toHiragana(kana: string): string {
   )
 }
 
+// Use literal kana in the URL string; the browser percent-encodes non-ASCII
+// characters when making the HTTP request, which is what the CDN expects.
+function audioUrl(hiragana: string): string {
+  return `${BASE}/${hiragana}_v2.mp3`
+}
+
+// iOS PWA (standalone mode) blocks HTMLAudioElement until the AudioContext
+// has been started inside a user gesture. Playing a silent 1-sample buffer
+// on first tap unlocks audio for the entire page session.
+let unlocked = false
+
+function ensureUnlocked(): void {
+  if (unlocked) return
+  unlocked = true
+  try {
+    const Ctor: typeof AudioContext =
+      window.AudioContext ?? (window as any).webkitAudioContext
+    const ctx = new Ctor()
+    const buf = ctx.createBuffer(1, 1, 22050)
+    const src = ctx.createBufferSource()
+    src.buffer = buf
+    src.connect(ctx.destination)
+    src.start(0)
+    ctx.resume().catch(() => {})
+  } catch {}
+}
+
 export function playKana(kana: string): void {
-  const encoded = encodeURIComponent(toHiragana(kana))
-  const audio = new Audio(`${BASE}/${encoded}_v2.mp3`)
-  audio.play().catch(() => {
-    new Audio(`${BASE}/${encoded}_v2.ogg`).play().catch(() => {})
-  })
+  ensureUnlocked() // synchronous — must stay in the user-gesture call stack
+  const audio = new Audio(audioUrl(toHiragana(kana)))
+  audio.play().catch(() => {})
 }
 
 export function precacheKanaAudio(): void {
@@ -23,6 +48,6 @@ export function precacheKanaAudio(): void {
     const h = toHiragana(kana)
     if (seen.has(h)) continue
     seen.add(h)
-    fetch(`${BASE}/${encodeURIComponent(h)}_v2.mp3`).catch(() => {})
+    fetch(audioUrl(h)).catch(() => {})
   }
 }
