@@ -1,6 +1,6 @@
 import { ref, computed, watch } from 'vue'
 import type { InjectionKey } from 'vue'
-import type { AppScreen, SetupTab, StatsFilter, StatRow, AccClass, TimeClass } from '../types'
+import type { AppScreen, SetupTab, StatsFilter, StatsSort, StatsSortCol, StatRow, AccClass, TimeClass } from '../types'
 import { useStats } from './useStats'
 import { useSetup } from './useSetup'
 import { useSession } from './useSession'
@@ -9,6 +9,7 @@ export function useQuiz() {
   const screen = ref<AppScreen>('setup')
   const activeTab = ref<SetupTab>('practice')
   const statsFilter = ref<StatsFilter>('all')
+  const statsSort = ref<StatsSort | null>(null)
 
   const stats = useStats()
   const setup = useSetup()
@@ -36,17 +37,29 @@ export function useQuiz() {
     let rows = Object.values(stats.statsData.value)
     if (statsFilter.value === 'hiragana')  rows = rows.filter(e => e.script === 'hiragana')
     else if (statsFilter.value === 'katakana') rows = rows.filter(e => e.script === 'katakana')
-    else if (statsFilter.value === 'worst')    rows = rows.filter(e => e.incorrect > 0).sort((a, b) => b.incorrect - a.incorrect)
-    else if (statsFilter.value === 'slowest')  rows = rows.filter(e => e.count > 0).sort((a, b) => (b.totalMs / b.count) - (a.totalMs / a.count))
-    else rows = [...rows].sort((a, b) => a.kana.charCodeAt(0) - b.kana.charCodeAt(0))
 
-    return rows.map(e => {
+    const mapped: StatRow[] = rows.map(e => {
       const seen = e.correct + e.incorrect
       const acc  = seen > 0 ? Math.round((e.correct / seen) * 100) : 0
       const accClass: AccClass = acc >= 80 ? 'good' : acc >= 50 ? 'ok' : 'bad'
       const avgTime  = e.count > 0 ? (e.totalMs / e.count / 1000).toFixed(1) : null
       const timeClass: TimeClass = avgTime === null ? '' : parseFloat(avgTime) < 3 ? 'fast' : parseFloat(avgTime) < 6 ? 'ok' : 'slow'
       return { ...e, seen, acc, accClass, avgTime, timeClass }
+    })
+
+    const s = statsSort.value
+    if (!s) return mapped.sort((a, b) => a.kana.charCodeAt(0) - b.kana.charCodeAt(0))
+
+    const sign = s.dir === 'asc' ? 1 : -1
+    return mapped.sort((a, b) => {
+      if (s.col === 'kana')   return sign * (a.kana.charCodeAt(0) - b.kana.charCodeAt(0))
+      if (s.col === 'acc')    return sign * (a.acc - b.acc)
+      if (s.col === 'seen')   return sign * (a.seen - b.seen)
+      if (s.col === 'errors') return sign * (a.incorrect - b.incorrect)
+      // time: null (unseen) sorts to end regardless of direction
+      const aMs = a.avgTime !== null ? parseFloat(a.avgTime) : (s.dir === 'asc' ? Infinity : -Infinity)
+      const bMs = b.avgTime !== null ? parseFloat(b.avgTime) : (s.dir === 'asc' ? Infinity : -Infinity)
+      return sign * (aMs - bMs)
     })
   })
 
@@ -56,6 +69,49 @@ export function useQuiz() {
 
   function setStatsFilter(filter: StatsFilter): void {
     statsFilter.value = filter
+  }
+
+  function setStatsSort(col: StatsSortCol): void {
+    if (statsSort.value?.col === col) {
+      statsSort.value = { col, dir: statsSort.value.dir === 'asc' ? 'desc' : 'asc' }
+    } else {
+      // errors and time default desc so worst/slowest appear on top on first click
+      statsSort.value = { col, dir: col === 'errors' || col === 'time' ? 'desc' : 'asc' }
+    }
+  }
+
+  function filteredEntries() {
+    const all = Object.values(stats.statsData.value)
+    if (statsFilter.value === 'hiragana')  return all.filter(e => e.script === 'hiragana')
+    if (statsFilter.value === 'katakana') return all.filter(e => e.script === 'katakana')
+    return all
+  }
+
+  function startWorstPractice(): void {
+    const pool = filteredEntries()
+      .filter(e => {
+        const seen = e.correct + e.incorrect
+        return seen > 0 && (e.correct / seen) < 0.8
+      })
+      .sort((a, b) => {
+        const accA = a.correct / (a.correct + a.incorrect)
+        const accB = b.correct / (b.correct + b.incorrect)
+        return accA - accB
+      })
+      .map(e => ({ kana: e.kana, romaji: e.romaji, script: e.script }))
+    if (pool.length === 0) { alert('No weak kana in this filter!'); return }
+    session.start(pool, pool.length, setup.quizMode.value, false)
+    screen.value = 'quiz'
+  }
+
+  function startSlowestPractice(): void {
+    const pool = filteredEntries()
+      .filter(e => e.count > 0 && (e.totalMs / e.count) > 3000)
+      .sort((a, b) => (b.totalMs / b.count) - (a.totalMs / a.count))
+      .map(e => ({ kana: e.kana, romaji: e.romaji, script: e.script }))
+    if (pool.length === 0) { alert('No slow kana in this filter!'); return }
+    session.start(pool, pool.length, setup.quizMode.value, false)
+    screen.value = 'quiz'
   }
 
   function startQuiz(errorMode: boolean): void {
@@ -114,9 +170,10 @@ export function useQuiz() {
 
   return {
     // orchestration
-    screen, activeTab, statsFilter,
+    screen, activeTab, statsFilter, statsSort,
     statsSummary, filteredStatsRows,
-    showTab, setStatsFilter, startQuiz, submitTyped, selectAnswer, nextQuestion, restartQuiz, goHome, init,
+    showTab, setStatsFilter, setStatsSort, startQuiz, startWorstPractice, startSlowestPractice,
+    submitTyped, selectAnswer, nextQuestion, restartQuiz, goHome, init,
     // stats
     statsData:          stats.statsData,
     errorPairs:         stats.errorPairs,

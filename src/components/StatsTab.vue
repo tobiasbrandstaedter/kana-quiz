@@ -1,20 +1,24 @@
 <script setup lang="ts">
 import { inject } from 'vue'
-import type { StatsFilter } from '../types'
+import type { StatsFilter, StatsSortCol } from '../types'
 import { QUIZ_KEY } from '../composables/useQuiz'
 
 const {
-  statsSummary, filteredStatsRows, statsFilter,
-  setStatsFilter, confirmClearStats,
+  statsSummary, filteredStatsRows, statsFilter, statsSort,
+  setStatsFilter, setStatsSort, confirmClearStats,
+  startWorstPractice, startSlowestPractice,
 } = inject(QUIZ_KEY)!
 
 const FILTERS: Array<[StatsFilter, string]> = [
   ['all', 'ALL'],
   ['hiragana', 'HIRAGANA'],
   ['katakana', 'KATAKANA'],
-  ['worst', 'WORST FIRST'],
-  ['slowest', 'SLOWEST'],
 ]
+
+function sortIcon(col: StatsSortCol): string {
+  if (statsSort.value?.col !== col) return '↕'
+  return statsSort.value.dir === 'asc' ? '↑' : '↓'
+}
 </script>
 
 <template>
@@ -38,14 +42,23 @@ const FILTERS: Array<[StatsFilter, string]> = [
       >{{ label }}</button>
     </div>
 
+    <div class="stats-practice-row">
+      <button class="stats-practice-btn" @click="startWorstPractice()">PRACTICE WEAK</button>
+      <button class="stats-practice-btn slow" @click="startSlowestPractice()">PRACTICE SLOW</button>
+    </div>
+
     <div v-if="filteredStatsRows.length === 0" class="no-stats-state">
       <div class="big">{{ statsSummary.kanaCount === 0 ? '統' : '？' }}</div>
       <div class="msg">{{ statsSummary.kanaCount === 0 ? 'No data yet — complete a quiz to see stats' : 'No data for this filter' }}</div>
     </div>
     <div v-else class="stats-table">
       <div class="stats-table-header">
-        <span>Kana</span><span>Romaji</span><span>Accuracy</span>
-        <span class="stats-num">Seen</span><span class="stats-num">Errors</span><span style="text-align:right">Avg Time</span>
+        <button class="stats-th" @click="setStatsSort('kana')">Kana <span class="sort-icon">{{ sortIcon('kana') }}</span></button>
+        <span>Romaji</span>
+        <button class="stats-th" @click="setStatsSort('acc')">Accuracy <span class="sort-icon">{{ sortIcon('acc') }}</span></button>
+        <button class="stats-th" @click="setStatsSort('seen')">Seen <span class="sort-icon">{{ sortIcon('seen') }}</span></button>
+        <button class="stats-th" @click="setStatsSort('errors')">Errors <span class="sort-icon">{{ sortIcon('errors') }}</span></button>
+        <button class="stats-th" style="justify-content:flex-end" @click="setStatsSort('time')">Avg Time <span class="sort-icon">{{ sortIcon('time') }}</span></button>
       </div>
       <div v-for="e in filteredStatsRows" :key="e.kana" class="stats-row">
         <span class="stats-kana-cell">{{ e.kana }}</span>
