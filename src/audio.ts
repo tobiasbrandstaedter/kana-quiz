@@ -1,3 +1,5 @@
+import { allPairs } from './data/kana'
+
 const BASE = 'https://files.tofugu.com/articles/japanese/2014-06-30-learn-hiragana'
 
 // katakana codepoints are exactly 0x60 above their hiragana equivalents
@@ -13,4 +15,14 @@ export function playKana(kana: string): void {
   audio.play().catch(() => {
     new Audio(`${BASE}/${encoded}_v2.ogg`).play().catch(() => {})
   })
+}
+
+export function precacheKanaAudio(): void {
+  const seen = new Set<string>()
+  for (const { kana } of allPairs()) {
+    const h = toHiragana(kana)
+    if (seen.has(h)) continue
+    seen.add(h)
+    fetch(`${BASE}/${encodeURIComponent(h)}_v2.mp3`).catch(() => {})
+  }
 }
