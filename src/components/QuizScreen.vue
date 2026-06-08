@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { inject } from 'vue'
 import { QUIZ_KEY } from '../composables/useQuiz'
+import { playKana } from '../audio'
 
 const {
   isErrorPractice, progress, current, questions, correctCount, wrongCount,
@@ -32,6 +33,17 @@ const {
       <div class="q-main" :class="{ 'romaji-q': currentQuestion?.direction === 'romaji-to-kana' }">
         {{ currentQuestion?.question }}
       </div>
+      <button
+        v-if="currentQuestion"
+        class="audio-btn"
+        @click="playKana(currentQuestion.kana)"
+        aria-label="Play pronunciation"
+      >
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+          <path d="M15.54 8.46a5 5 0 0 1 0 7.07"/>
+        </svg>
+      </button>
     </div>
 
     <div class="type-input-wrap" :class="{ visible: currentQuestion?.inputType === 'type' }">
