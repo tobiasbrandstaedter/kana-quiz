@@ -1,25 +1,16 @@
-let voice: SpeechSynthesisVoice | null = null
+const BASE = 'https://files.tofugu.com/articles/japanese/2014-06-30-learn-hiragana'
 
-function findVoice(): void {
-  const voices = window.speechSynthesis.getVoices()
-  // prefer a local (offline) Japanese voice, fall back to any Japanese voice
-  voice = voices.find(v => v.lang.startsWith('ja') && v.localService)
-        ?? voices.find(v => v.lang.startsWith('ja'))
-        ?? null
-}
-
-if ('speechSynthesis' in window) {
-  findVoice()
-  // Chrome loads voices async; Safari/Firefox have them immediately
-  window.speechSynthesis.addEventListener('voiceschanged', findVoice)
+// katakana codepoints are exactly 0x60 above their hiragana equivalents
+function toHiragana(kana: string): string {
+  return kana.replace(/[ァ-ヶ]/g, c =>
+    String.fromCharCode(c.charCodeAt(0) - 0x60)
+  )
 }
 
 export function playKana(kana: string): void {
-  if (!('speechSynthesis' in window)) return
-  window.speechSynthesis.cancel()
-  const u = new SpeechSynthesisUtterance(kana)
-  u.lang = 'ja-JP'
-  u.rate = 0.8
-  if (voice) u.voice = voice
-  window.speechSynthesis.speak(u)
+  const encoded = encodeURIComponent(toHiragana(kana))
+  const audio = new Audio(`${BASE}/${encoded}_v2.mp3`)
+  audio.play().catch(() => {
+    new Audio(`${BASE}/${encoded}_v2.ogg`).play().catch(() => {})
+  })
 }

@@ -19,6 +19,15 @@ export default defineConfig(({ command }) => ({
               cacheableResponse: { statuses: [0, 200] },
             },
           },
+          {
+            urlPattern: /^https:\/\/files\.tofugu\.com\/.*\.(mp3|ogg)$/i,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'kana-audio',
+              expiration: { maxEntries: 300, maxAgeSeconds: 60 * 60 * 24 * 365 },
+              cacheableResponse: { statuses: [0, 200] },
+            },
+          },
         ],
       },
       manifest: {
