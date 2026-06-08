@@ -2,44 +2,27 @@ import { allPairs } from './data/kana'
 
 const BASE = 'https://files.tofugu.com/articles/japanese/2014-06-30-learn-hiragana'
 
-// katakana codepoints are exactly 0x60 above their hiragana equivalents
 function toHiragana(kana: string): string {
   return kana.replace(/[ァ-ヶ]/g, c =>
     String.fromCharCode(c.charCodeAt(0) - 0x60)
   )
 }
 
-// Use literal kana in the URL string; the browser percent-encodes non-ASCII
-// characters when making the HTTP request, which is what the CDN expects.
 function audioUrl(hiragana: string): string {
   return `${BASE}/${hiragana}_v2.mp3`
 }
 
-// iOS PWA (standalone mode) blocks HTMLAudioElement until the AudioContext
-// has been started inside a user gesture. Playing a silent 1-sample buffer
-// on first tap unlocks audio for the entire page session.
-let unlocked = false
-
-function ensureUnlocked(): void {
-  if (unlocked) return
-  unlocked = true
-  try {
-    const Ctor: typeof AudioContext =
-      window.AudioContext ?? (window as any).webkitAudioContext
-    const ctx = new Ctor()
-    const buf = ctx.createBuffer(1, 1, 22050)
-    const src = ctx.createBufferSource()
-    src.buffer = buf
-    src.connect(ctx.destination)
-    src.start(0)
-    ctx.resume().catch(() => {})
-  } catch {}
-}
+// One element reused for every play. iOS Safari activates an HTMLAudioElement
+// on the first user-gesture play and keeps it activated — creating a new element
+// per tap forces iOS to re-evaluate the gesture each time, causing inconsistent
+// failures. A single element sidesteps that entirely.
+const player = new Audio()
 
 export function playKana(kana: string): void {
-  ensureUnlocked() // synchronous — must stay in the user-gesture call stack
-  const audio = new Audio(audioUrl(toHiragana(kana)))
-  audio.play().catch(() => {})
+  player.pause()
+  player.src = audioUrl(toHiragana(kana))
+  player.currentTime = 0
+  player.play().catch(() => {})
 }
 
 export function precacheKanaAudio(): void {
