@@ -1,4 +1,4 @@
-import { ref, computed, watch } from 'vue'
+import { ref, computed } from 'vue'
 import type { InjectionKey } from 'vue'
 import type { AppScreen, SetupTab, StatsFilter, StatsSort, StatsSortCol, StatRow, AccClass, TimeClass } from '../types'
 import { useStats } from './useStats'
@@ -161,12 +161,6 @@ export function useQuiz() {
   function init(): void {
     setup.init()
   }
-
-  watch(session.typedAnswer, (val) => {
-    const q = session.currentQuestion.value
-    if (!q || session.answered.value || q.inputType !== 'type') return
-    if (val.trim().toLowerCase() === q.answer.toLowerCase()) submitTyped()
-  })
 
   return {
     // orchestration
