@@ -25,7 +25,6 @@ export function playKana(kana: string): void {
   const url = audioUrl(toHiragana(kana))
   player.pause()
   player.src = blobUrls.get(url) ?? url
-  player.load()
   player.play().catch(() => {})
 }
 
