@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { inject } from 'vue'
+import { inject, ref } from 'vue'
 import { QUIZ_KEY } from '../composables/useQuiz'
-import { playKana, playing } from '../audio'
+import { playKana } from '../audio'
 
 const {
   isErrorPractice, progress, current, questions, correctCount, wrongCount,
@@ -9,6 +9,13 @@ const {
   typedAnswer, typeFieldEl, selectedOption,
   submitTyped, selectAnswer, nextQuestion, goHome,
 } = inject(QUIZ_KEY)!
+
+const audioActive = ref(false)
+function onAudioClick(kana: string) {
+  playKana(kana)
+  audioActive.value = true
+  setTimeout(() => { audioActive.value = false }, 250)
+}
 </script>
 
 <template>
@@ -36,8 +43,8 @@ const {
       <button
         v-if="currentQuestion"
         class="audio-btn"
-        :class="{ playing }"
-        @click="playKana(currentQuestion.kana)"
+        :class="{ playing: audioActive }"
+        @click="onAudioClick(currentQuestion.kana)"
         aria-label="Play pronunciation"
       >
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
