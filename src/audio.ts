@@ -12,20 +12,20 @@ function audioUrl(hiragana: string): string {
   return `${BASE}/${hiragana}_v2.mp3`
 }
 
-// Single element reused for every play so iOS Safari's activation persists.
-const player = new Audio()
-
-// Blob URLs created from cached audio data. iOS Safari sends Range requests
-// for audio loaded via http(s) URLs, and the service worker returns a full 200
-// instead of 206, which Safari refuses to play. Blob URLs load from memory and
-// skip the service worker entirely, so no Range requests are issued.
+// Blob URLs bypass the service worker entirely, avoiding the iOS Safari issue
+// where the SW returns a full 200 to a Range request and Safari refuses to play.
 const blobUrls = new Map<string, string>()
+
+// Track the current audio so rapid clicks stop the previous sound.
+let current: HTMLAudioElement | null = null
 
 export function playKana(kana: string): void {
   const url = audioUrl(toHiragana(kana))
-  player.pause()
-  player.src = blobUrls.get(url) ?? url
-  player.play().catch(() => {})
+  const src = blobUrls.get(url) ?? url
+  console.log('[audio] play', kana, blobUrls.has(url) ? '(blob)' : '(raw url)')
+  current?.pause()
+  current = new Audio(src)
+  current.play().catch(e => console.error('[audio] play failed:', e))
 }
 
 export function precacheKanaAudio(): void {
@@ -38,6 +38,6 @@ export function precacheKanaAudio(): void {
     fetch(url)
       .then(r => r.blob())
       .then(blob => { blobUrls.set(url, URL.createObjectURL(blob)) })
-      .catch(() => {})
+      .catch(e => console.warn('[audio] precache failed:', h, e))
   }
 }
