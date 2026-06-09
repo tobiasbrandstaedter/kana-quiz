@@ -352,7 +352,9 @@ header { text-align: center; margin-bottom: 40px; }
   line-height: 0;
   transition: color 0.15s;
 }
-.audio-btn:hover { color: var(--accent2); }
+@media (hover: hover) {
+  .audio-btn:hover { color: var(--accent2); }
+}
 .audio-btn:active,
 .audio-btn.playing { color: var(--accent); }
 
