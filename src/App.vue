@@ -11,6 +11,7 @@ const { screen } = quiz
 
 onMounted(() => {
   quiz.init()
+  caches.delete('kana-audio').catch(() => {})
 })
 </script>
 
