@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { inject } from 'vue'
 import { QUIZ_KEY } from '../composables/useQuiz'
-import { playKana } from '../audio'
+import { playKana, playing } from '../audio'
 
 const {
   isErrorPractice, progress, current, questions, correctCount, wrongCount,
@@ -36,6 +36,7 @@ const {
       <button
         v-if="currentQuestion"
         class="audio-btn"
+        :class="{ playing }"
         @click="playKana(currentQuestion.kana)"
         aria-label="Play pronunciation"
       >

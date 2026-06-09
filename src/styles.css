@@ -353,7 +353,8 @@ header { text-align: center; margin-bottom: 40px; }
   transition: color 0.15s;
 }
 .audio-btn:hover { color: var(--accent2); }
-.audio-btn:active { color: var(--accent); }
+.audio-btn:active,
+.audio-btn.playing { color: var(--accent); }
 
 .options-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; margin-bottom: 28px; }
 
