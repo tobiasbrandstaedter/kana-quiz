@@ -109,6 +109,7 @@ const MODES: Array<[QuizMode, string]> = [
         <span class="mode-label">Questions</span>
         <input
           class="count-input" type="number" min="1" max="999" placeholder="all"
+          aria-label="Number of questions"
           v-model="questionCountInput"
         />
         <span class="count-hint">{{ countHint }}</span>

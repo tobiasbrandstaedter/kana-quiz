@@ -22,7 +22,13 @@ function onAudioClick(kana: string) {
   <div>
     <div v-show="isErrorPractice" class="error-mode-banner">✦ Error Practice Mode</div>
 
-    <div class="progress-bar-wrap">
+    <div
+      class="progress-bar-wrap"
+      role="progressbar"
+      :aria-valuenow="Math.round(progress)"
+      aria-valuemin="0"
+      aria-valuemax="100"
+    >
       <div class="progress-bar-fill" :style="{ width: `${progress}%` }"></div>
     </div>
 
@@ -63,6 +69,7 @@ function onAudioClick(kana: string) {
           'input-wrong':   answered && feedbackType === 'wrong',
         }"
         type="text"
+        aria-label="Type the romaji answer"
         autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
         placeholder="type romaji..."
         :readonly="answered"
@@ -87,6 +94,8 @@ function onAudioClick(kana: string) {
 
     <div
       class="feedback"
+      role="status"
+      aria-live="polite"
       :class="{ show: !!feedbackText, correct: feedbackType === 'correct', wrong: feedbackType === 'wrong' }"
     >{{ feedbackText }}</div>
 
