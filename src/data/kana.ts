@@ -1,4 +1,4 @@
-import type { KanaData, KanaPair, ScriptName } from '../types'
+import type { KanaData, KanaGroupName, KanaPair, ScriptName } from '../types'
 
 export const HIRAGANA: KanaData = {
   main: [
@@ -16,7 +16,7 @@ export const HIRAGANA: KanaData = {
   dakuten: [
     { id:'ga',  label:'が行', sample:'が', kana:['が','ぎ','ぐ','げ','ご'],   romaji:['ga','gi','gu','ge','go'] },
     { id:'za',  label:'ざ行', sample:'ざ', kana:['ざ','じ','ず','ぜ','ぞ'],   romaji:['za','ji','zu','ze','zo'] },
-    { id:'da',  label:'だ行', sample:'だ', kana:['だ','ぢ','づ','で','ど'],   romaji:['da','di','du','de','do'] },
+    { id:'da',  label:'だ行', sample:'だ', kana:['だ','ぢ','づ','で','ど'],   romaji:['da','ji','zu','de','do'] },
     { id:'ba',  label:'ば行', sample:'ば', kana:['ば','び','ぶ','べ','ぼ'],   romaji:['ba','bi','bu','be','bo'] },
     { id:'pa',  label:'ぱ行', sample:'ぱ', kana:['ぱ','ぴ','ぷ','ぺ','ぽ'],   romaji:['pa','pi','pu','pe','po'] },
   ],
@@ -51,7 +51,7 @@ export const KATAKANA: KanaData = {
   dakuten: [
     { id:'GA',  label:'ガ行', sample:'ガ', kana:['ガ','ギ','グ','ゲ','ゴ'],   romaji:['ga','gi','gu','ge','go'] },
     { id:'ZA',  label:'ザ行', sample:'ザ', kana:['ザ','ジ','ズ','ゼ','ゾ'],   romaji:['za','ji','zu','ze','zo'] },
-    { id:'DA',  label:'ダ行', sample:'ダ', kana:['ダ','ヂ','ヅ','デ','ド'],   romaji:['da','di','du','de','do'] },
+    { id:'DA',  label:'ダ行', sample:'ダ', kana:['ダ','ヂ','ヅ','デ','ド'],   romaji:['da','ji','zu','de','do'] },
     { id:'BA',  label:'バ行', sample:'バ', kana:['バ','ビ','ブ','ベ','ボ'],   romaji:['ba','bi','bu','be','bo'] },
     { id:'PA',  label:'パ行', sample:'パ', kana:['パ','ピ','プ','ペ','ポ'],   romaji:['pa','pi','pu','pe','po'] },
   ],
@@ -86,4 +86,50 @@ export function allPairs(): KanaPair[] {
   add(HIRAGANA, 'hiragana')
   add(KATAKANA, 'katakana')
   return pairs
+}
+
+export interface KanaInfo {
+  pair: KanaPair
+  group: KanaGroupName
+  colId: string
+  colLabel: string
+  vowel: string  // '' for ん
+}
+
+let infoByKana: Map<string, KanaInfo> | null = null
+
+function buildInfo(): Map<string, KanaInfo> {
+  const map = new Map<string, KanaInfo>()
+  const add = (data: KanaData, script: ScriptName) => {
+    for (const [group, cols] of Object.entries(data) as Array<[KanaGroupName, typeof data.main]>)
+      for (const col of cols)
+        col.kana.forEach((k, i) => {
+          const romaji = col.romaji[i]
+          const last = romaji[romaji.length - 1]
+          map.set(k, {
+            pair: { kana: k, romaji, script },
+            group, colId: col.id, colLabel: col.label,
+            vowel: 'aiueo'.includes(last) ? last : '',
+          })
+        })
+  }
+  add(HIRAGANA, 'hiragana')
+  add(KATAKANA, 'katakana')
+  return map
+}
+
+export function kanaInfo(kana: string): KanaInfo | undefined {
+  if (!infoByKana) infoByKana = buildInfo()
+  return infoByKana.get(kana)
+}
+
+export function pairFor(kana: string): KanaPair | undefined {
+  return kanaInfo(kana)?.pair
+}
+
+export function kanaForRomaji(romaji: string, script: ScriptName): string | undefined {
+  if (!infoByKana) infoByKana = buildInfo()
+  for (const info of infoByKana.values())
+    if (info.pair.script === script && info.pair.romaji === romaji) return info.pair.kana
+  return undefined
 }

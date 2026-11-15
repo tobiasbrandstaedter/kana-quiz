@@ -1,11 +1,18 @@
 <script setup lang="ts">
 import { inject } from 'vue'
+import type { Point } from '../types'
 import { QUIZ_KEY } from '../composables/useQuiz'
+import { STROKES } from '../data/strokes'
+import PatternCards from './PatternCards.vue'
 
 const {
-  resultScore, resultLabel, uniqueMissedPairs, errorPairs,
-  restartQuiz, startQuiz, goHome,
+  resultScore, resultLabel, uniqueMissedPairs, errorPairs, roundPatterns, drawings,
+  restartQuiz, startQuiz, startPatternPractice, goHome,
 } = inject(QUIZ_KEY)!
+
+function polyline(points: Point[]): string {
+  return points.map(p => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ')
+}
 </script>
 
 <template>
@@ -18,11 +25,26 @@ const {
       <div class="missed-title">Missed This Round</div>
       <div class="missed-grid">
         <div v-for="p in uniqueMissedPairs" :key="p.kana" class="missed-item">
+          <!-- your drawing over the reference, strokes the app had to draw in red -->
+          <svg v-if="drawings[p.kana]" class="missed-drawing" viewBox="0 0 109 109" :aria-label="`Your drawing of ${p.kana}`">
+            <path v-for="(d, i) in STROKES[p.kana].paths" :key="`r${i}`" class="ref" :d="d" />
+            <template v-for="(stroke, i) in drawings[p.kana]" :key="i">
+              <polyline v-if="stroke" class="ink" :points="polyline(stroke)" />
+              <path v-else class="given" :d="STROKES[p.kana].paths[i]" />
+            </template>
+          </svg>
           <span class="k">{{ p.kana }}</span>
           <span class="r">{{ p.romaji }}</span>
         </div>
       </div>
     </div>
+
+    <PatternCards
+      v-if="roundPatterns.length > 0"
+      :patterns="roundPatterns"
+      title="Patterns this round"
+      @practice="startPatternPractice"
+    />
 
     <div class="result-btns">
       <button class="restart-btn" @click="restartQuiz()">TRY AGAIN</button>

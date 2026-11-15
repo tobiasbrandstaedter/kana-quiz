@@ -28,7 +28,9 @@ export function useSetup() {
   const activeScript = ref<ActiveScript>('hiragana')
   const selectedCols = ref<Set<string>>(new Set())
   const quizMode = ref<QuizMode>('kana-to-romaji')
-  const questionCountInput = ref('')
+  // v-model on a type="number" input hands us a number once the user types, so read it through questionCountText
+  const questionCountInput = ref<string | number>('')
+  const questionCountText = computed(() => String(questionCountInput.value).trim())
   const kanaFont = ref('Noto Sans JP')
 
   const selectorScripts = computed((): Array<[ScriptName, KanaData]> =>
@@ -38,6 +40,13 @@ export function useSetup() {
   )
 
   const selectedCount = computed(() => selectedCols.value.size)
+
+  // stroke order tab: the selected columns, or all of them when none is picked. No combos, those are two glyphs.
+  const strokeColumns = computed(() => {
+    const cols = selectorScripts.value.flatMap(([, data]) => [...data.main, ...data.dakuten])
+    const picked = cols.filter(c => selectedCols.value.has(c.id))
+    return picked.length > 0 ? picked : cols
+  })
 
   const headerTitle = computed(() =>
     ({ hiragana: 'ひらがな', katakana: 'カタカナ', both: 'かなカナ' } satisfies Record<ActiveScript, string>)[activeScript.value]
@@ -56,14 +65,14 @@ export function useSetup() {
 
   const countHint = computed(() => {
     const pool = buildPairsFromSelected()
-    const val = questionCountInput.value.trim()
+    const val = questionCountText.value
     if (!val) return pool.length > 0 ? `Blank = all ${pool.length} kana from selection` : 'Leave blank to use all selected kana'
     const n = parseInt(val)
     if (!isNaN(n) && pool.length > 0 && n > pool.length) return `${pool.length} unique kana — will repeat to fill ${n} questions`
     return `${n} question${n !== 1 ? 's' : ''} per session`
   })
 
-  watch(questionCountInput, val => savePrefs({ questionCount: val.trim() }))
+  watch(questionCountText, val => savePrefs({ questionCount: val }))
 
   function setKanaFont(family: string): void {
     kanaFont.value = family
@@ -135,8 +144,8 @@ export function useSetup() {
   }
 
   return {
-    activeScript, selectedCols, quizMode, questionCountInput, kanaFont,
-    selectorScripts, selectedCount, countHint, headerTitle,
+    activeScript, selectedCols, quizMode, questionCountInput, questionCountText, kanaFont,
+    selectorScripts, selectedCount, strokeColumns, countHint, headerTitle,
     buildPairsFromSelected,
     setKanaFont, setScript, toggleCol, selectAll, selectNone, selectGroup, setMode,
     init,
