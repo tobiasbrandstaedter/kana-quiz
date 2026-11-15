@@ -1,12 +1,23 @@
 <script setup lang="ts">
 import type { KanaData, ScriptName } from '../types'
+import type { ColumnProgress } from '../learning/scheduler'
 import { GROUP_NAMES } from '../data/kana'
 
 defineProps<{
   selectorScripts: Array<[ScriptName, KanaData]>
   selectedCols: Set<string>
   errorKanaSet: Set<string>
+  progress: Record<string, ColumnProgress>
 }>()
+
+function pct(part: number, total: number): string {
+  return `${Math.round((part / total) * 100)}%`
+}
+
+function progressTitle(p: ColumnProgress | undefined): string {
+  if (!p || p.seen === 0) return 'Not started'
+  return `${p.mastered}/${p.total} mastered, ${p.seen - p.mastered} learning, ${p.due} due`
+}
 
 const emit = defineEmits<{
   toggle: [id: string]
@@ -42,12 +53,18 @@ const emit = defineEmits<{
             :class="{
               active: selectedCols.has(col.id),
               'has-errors': col.kana.some(k => errorKanaSet.has(k)),
+              mastered: progress[col.id]?.mastered === col.kana.length,
             }"
+            :title="progressTitle(progress[col.id])"
             @click="emit('toggle', col.id)"
           >
             <span class="kana-sample">{{ col.sample }}</span>
             <span class="romaji-label">{{ col.label }}</span>
             <span class="error-dot"></span>
+            <span v-if="progress[col.id]?.seen" class="col-progress" aria-hidden="true">
+              <span class="mastered" :style="{ width: pct(progress[col.id].mastered, col.kana.length) }"></span>
+              <span class="learning" :style="{ width: pct(progress[col.id].seen - progress[col.id].mastered, col.kana.length) }"></span>
+            </span>
           </button>
         </div>
       </template>

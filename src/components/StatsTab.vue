@@ -2,11 +2,12 @@
 import { inject } from 'vue'
 import type { StatsFilter, StatsSortCol } from '../types'
 import { QUIZ_KEY } from '../composables/useQuiz'
+import PatternCards from './PatternCards.vue'
 
 const {
-  statsSummary, filteredStatsRows, statsFilter, statsSort,
+  statsSummary, filteredStatsRows, statsFilter, statsSort, allPatterns,
   setStatsFilter, setStatsSort, confirmClearStats,
-  startWorstPractice, startSlowestPractice,
+  startWorstPractice, startSlowestPractice, startPatternPractice,
 } = inject(QUIZ_KEY)!
 
 const FILTERS: Array<[StatsFilter, string]> = [
@@ -33,6 +34,14 @@ function sortIcon(col: StatsSortCol): string {
       <div class="stat-card wrong"><div class="sc-value">{{ statsSummary.totalErrors }}</div><div class="sc-label">Total Errors</div></div>
       <div class="stat-card purple"><div class="sc-value">{{ statsSummary.avgTime }}</div><div class="sc-label">Avg Time</div></div>
     </div>
+
+    <PatternCards
+      v-if="statsSummary.kanaCount > 0"
+      :patterns="allPatterns"
+      title="Detected patterns"
+      empty-text="No patterns yet. Keep practicing, this fills in as errors pile up."
+      @practice="startPatternPractice"
+    />
 
     <div class="stats-filters">
       <button

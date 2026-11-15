@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { inject } from 'vue'
+import { inject, computed } from 'vue'
 import type { ActiveScript, QuizMode } from '../types'
 import { QUIZ_KEY } from '../composables/useQuiz'
 import ColumnSelector from './ColumnSelector.vue'
 import ErrorsTab from './ErrorsTab.vue'
 import StatsTab from './StatsTab.vue'
+import StrokesTab from './StrokesTab.vue'
 
 const {
   headerTitle, kanaFont, setKanaFont,
@@ -13,8 +14,21 @@ const {
   selectorScripts, selectedCols, errorKanaSet, toggleCol, selectAll, selectNone, selectGroup,
   quizMode, setMode,
   questionCountInput, countHint,
-  startQuiz,
+  startQuiz, startSmartPractice, smartSummary, columnProgressMap, strokeColumns,
 } = inject(QUIZ_KEY)!
+
+const strokeKanaCount = computed(() => strokeColumns.value.reduce((n, c) => n + c.kana.length, 0))
+
+const smartText = computed(() => {
+  const s = smartSummary.value
+  const parts = [
+    s.due && `${s.due} due`,
+    s.weak && `${s.weak} weak`,
+    s.fresh && `${s.fresh} new`,
+    s.fill && `${s.fill} early review`,
+  ].filter(Boolean)
+  return parts.length > 0 ? parts.join(' · ') : 'Nothing to practice right now'
+})
 
 const FONTS = [
   { family: 'Noto Sans JP',      label: 'Sans' },
@@ -33,6 +47,7 @@ const SCRIPTS: Array<[ActiveScript, string]> = [
 const MODES: Array<[QuizMode, string]> = [
   ['kana-to-romaji', 'Kana → Romaji'],
   ['romaji-to-kana', 'Romaji → Kana'],
+  ['draw', 'Romaji → Write'],
   ['mixed', 'Mixed'],
 ]
 </script>
@@ -60,6 +75,9 @@ const MODES: Array<[QuizMode, string]> = [
       <button class="nav-tab" :class="{ active: activeTab === 'practice' }" @click="showTab('practice')">
         <span class="tab-count">{{ selectedCount }}</span>Practice Quiz
       </button>
+      <button class="nav-tab" :class="{ active: activeTab === 'strokes' }" @click="showTab('strokes')">
+        <span class="tab-count">{{ strokeKanaCount }}</span>Stroke Order
+      </button>
       <button
         class="nav-tab error-tab"
         :class="{ active: activeTab === 'errors', 'has-errors': errorTabCount > 0 }"
@@ -74,6 +92,15 @@ const MODES: Array<[QuizMode, string]> = [
 
     <!-- Practice tab -->
     <div v-show="activeTab === 'practice'">
+      <div class="smart-panel">
+        <div class="smart-text">
+          <div class="smart-title">Smart practice</div>
+          <div class="smart-summary">{{ smartText }}</div>
+          <div class="smart-note">Due reviews first, then new kana from your selection. Uses the settings below, blank count = 20.</div>
+        </div>
+        <button class="smart-btn" @click="startSmartPractice()">START</button>
+      </div>
+
       <div class="section-label">01 — Script</div>
       <div class="script-toggle">
         <button
@@ -88,6 +115,7 @@ const MODES: Array<[QuizMode, string]> = [
         :selector-scripts="selectorScripts"
         :selected-cols="selectedCols"
         :error-kana-set="errorKanaSet"
+        :progress="columnProgressMap"
         @toggle="toggleCol"
         @select-all="selectAll"
         @select-none="selectNone"
@@ -116,6 +144,11 @@ const MODES: Array<[QuizMode, string]> = [
       </div>
 
       <button class="start-btn" :disabled="selectedCount === 0" @click="startQuiz(false)">START QUIZ</button>
+    </div>
+
+    <!-- Stroke order tab, v-if so the animation only runs while it is visible -->
+    <div v-if="activeTab === 'strokes'">
+      <StrokesTab />
     </div>
 
     <!-- Errors tab -->

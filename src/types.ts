@@ -11,11 +11,11 @@ export type KanaData = Record<KanaGroupName, KanaColumn[]>
 
 export type ScriptName = 'hiragana' | 'katakana'
 export type ActiveScript = 'hiragana' | 'katakana' | 'both'
-export type QuizMode = 'kana-to-romaji' | 'romaji-to-kana' | 'mixed'
-export type QuizDirection = 'kana-to-romaji' | 'romaji-to-kana'
-export type InputType = 'type' | 'choice'
+export type QuizMode = 'kana-to-romaji' | 'romaji-to-kana' | 'draw' | 'mixed'
+export type QuizDirection = 'kana-to-romaji' | 'romaji-to-kana' | 'draw'
+export type InputType = 'type' | 'choice' | 'intro' | 'draw'
 export type AppScreen = 'setup' | 'quiz' | 'results'
-export type SetupTab = 'practice' | 'errors' | 'stats'
+export type SetupTab = 'practice' | 'strokes' | 'errors' | 'stats'
 export type StatsFilter = 'all' | 'hiragana' | 'katakana'
 export type StatsSortCol = 'kana' | 'acc' | 'seen' | 'errors' | 'time'
 export interface StatsSort { col: StatsSortCol; dir: 'asc' | 'desc' }
@@ -40,6 +40,11 @@ export interface QuizQuestion {
   options: string[]
 }
 
+export interface DirectionStat {
+  correct: number
+  incorrect: number
+}
+
 export interface StatEntry {
   kana: string
   romaji: string
@@ -48,9 +53,41 @@ export interface StatEntry {
   incorrect: number
   totalMs: number
   count: number
+  lastSeen: number   // ms epoch, 0 = never
+  lastWrong: number  // ms epoch, 0 = never
+  streak: number     // correct answers in a row
+  // wrong answer given -> how often. Typed romaji or chosen kana.
+  confusions: Record<string, number>
+  byDirection: Partial<Record<QuizDirection, DirectionStat>>
+  box: number  // Leitner box, see learning/scheduler.ts
+  due: number  // ms epoch of the next review
+  strokeErrors: number[]                         // rejected attempts per stroke index, draw mode
+  strokeFaults: Partial<Record<StrokeFault, number>>
 }
 
 export type StatsMap = Record<string, StatEntry>
+
+export interface AnswerInput {
+  kana: string
+  romaji: string
+  script: ScriptName
+  direction: QuizDirection
+  correct: boolean
+  given: string
+  elapsedMs: number
+  typo?: boolean  // counts as wrong, but leaves the Leitner box alone
+  strokes?: StrokeTally  // draw answers only
+}
+
+// one line in the rolling answer log
+export interface AnswerRecord {
+  kana: string
+  direction: QuizDirection
+  correct: boolean
+  given: string
+  ms: number
+  t: number
+}
 
 export interface StatRow extends StatEntry {
   seen: number
@@ -65,4 +102,26 @@ export interface StatsSummary {
   accuracy: string
   totalErrors: number
   avgTime: string
+}
+
+// one kana from KanjiVG, viewBox 0 0 109 109
+export interface StrokeData {
+  paths: string[]                     // svg path d, one per stroke, in writing order
+  numbers: Array<[number, number]>    // where KanjiVG puts the stroke number
+}
+
+export interface Point { x: number; y: number }
+
+// why a drawn stroke was rejected
+export type StrokeFault = 'shape' | 'direction' | 'order'
+
+export interface StrokeTally {
+  errors: number[]  // rejects per stroke index
+  faults: Partial<Record<StrokeFault, number>>
+}
+
+// what the drawing canvas hands back once every stroke is down
+export interface DrawResult extends StrokeTally {
+  correct: boolean
+  ink: Array<Point[] | null>  // the accepted stroke per index, null where the app drew it after three misses
 }

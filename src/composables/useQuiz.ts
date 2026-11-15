@@ -1,6 +1,11 @@
 import { ref, computed } from 'vue'
 import type { InjectionKey } from 'vue'
-import type { AppScreen, SetupTab, StatsFilter, StatsSort, StatsSortCol, StatRow, AccClass, TimeClass } from '../types'
+import type { AppScreen, SetupTab, StatsFilter, StatsSort, StatsSortCol, StatRow, AccClass, TimeClass, KanaPair, QuizMode, DrawResult } from '../types'
+import { pairFor, kanaForRomaji } from '../data/kana'
+import { detectPatterns, statsFromLog } from '../learning/patterns'
+import type { Pattern } from '../learning/patterns'
+import { pickSmart, orderSession, columnProgress } from '../learning/scheduler'
+import type { ColumnProgress } from '../learning/scheduler'
 import { useStats } from './useStats'
 import { useSetup } from './useSetup'
 import { useSession } from './useSession'
@@ -14,6 +19,35 @@ export function useQuiz() {
   const stats = useStats()
   const setup = useSetup()
   const session = useSession()
+
+  // what TRY AGAIN on the results screen should run
+  let replay: () => void = () => startQuiz(false)
+
+  const SMART_SIZE = 20
+
+  function smartPicks() {
+    const scripts = setup.selectorScripts.value.map(([script]) => script)
+    // new kana come from the selection, or from the whole table in order when nothing is selected
+    const selected = setup.buildPairsFromSelected()
+    const candidates = selected.length > 0 ? selected : setup.selectorScripts.value.flatMap(([script, data]) =>
+      Object.values(data).flatMap(cols => cols.flatMap(col => col.kana.map((k, i) => ({ kana: k, romaji: col.romaji[i], script })))))
+    const size = parseInt(setup.questionCountText.value) || SMART_SIZE
+    return pickSmart(stats.statsData.value, stats.answerLog.value, candidates, scripts, size, Date.now())
+  }
+
+  const smartSummary = computed(() => {
+    const p = smartPicks()
+    return { due: p.due.length, weak: p.weak.length, fresh: p.fresh.length, fill: p.fill.length }
+  })
+
+  const columnProgressMap = computed(() => {
+    const now = Date.now()
+    const out: Record<string, ColumnProgress> = {}
+    for (const [, data] of setup.selectorScripts.value)
+      for (const cols of Object.values(data))
+        for (const col of cols) out[col.id] = columnProgress(col.kana, stats.statsData.value, now)
+    return out
+  })
 
   const statsSummary = computed(() => {
     const all = Object.values(stats.statsData.value)
@@ -63,6 +97,42 @@ export function useQuiz() {
     })
   })
 
+  const allPatterns = computed(() => detectPatterns(stats.statsData.value, stats.answerLog.value, 'all'))
+
+  const roundPatterns = computed(() => {
+    const log = stats.answerLog.value.filter(r => r.t >= session.startedAt.value)
+    return detectPatterns(statsFromLog(log), log, 'round')
+  })
+
+  // kana the user mixed this one up with before, most frequent first
+  function confusedWith(kana: string): string[] {
+    const e = stats.statsData.value[kana]
+    if (!e) return []
+    return Object.entries(e.confusions)
+      .sort((a, b) => b[1] - a[1])
+      .map(([given]) => pairFor(given) ? given : kanaForRomaji(given, e.script))
+      .filter((k): k is string => !!k)
+  }
+
+  function beginSession(pool: KanaPair[], total: number, mode: QuizMode, errorMode: boolean): void {
+    session.start(pool, total, mode, errorMode, confusedWith)
+    screen.value = 'quiz'
+  }
+
+  function startSmartPractice(): void {
+    replay = startSmartPractice
+    const items = orderSession(smartPicks())
+    if (items.length === 0) { alert('Nothing to practice. Raise the question count or select some columns.'); return }
+    session.startPlanned(items, setup.quizMode.value, confusedWith)
+    screen.value = 'quiz'
+  }
+
+  function startPatternPractice(p: Pattern): void {
+    if (p.practice.length === 0) return
+    replay = () => startPatternPractice(p)
+    beginSession(p.practice, Math.max(p.practice.length, 8), p.mode ?? setup.quizMode.value, false)
+  }
+
   function showTab(tab: SetupTab): void {
     activeTab.value = tab
   }
@@ -88,6 +158,7 @@ export function useQuiz() {
   }
 
   function startWorstPractice(): void {
+    replay = startWorstPractice
     const pool = filteredEntries()
       .filter(e => {
         const seen = e.correct + e.incorrect
@@ -100,49 +171,62 @@ export function useQuiz() {
       })
       .map(e => ({ kana: e.kana, romaji: e.romaji, script: e.script }))
     if (pool.length === 0) { alert('No weak kana in this filter!'); return }
-    session.start(pool, pool.length, setup.quizMode.value, false)
-    screen.value = 'quiz'
+    beginSession(pool, pool.length, setup.quizMode.value, false)
   }
 
   function startSlowestPractice(): void {
+    replay = startSlowestPractice
     const pool = filteredEntries()
       .filter(e => e.count > 0 && (e.totalMs / e.count) > 3000)
       .sort((a, b) => (b.totalMs / b.count) - (a.totalMs / a.count))
       .map(e => ({ kana: e.kana, romaji: e.romaji, script: e.script }))
     if (pool.length === 0) { alert('No slow kana in this filter!'); return }
-    session.start(pool, pool.length, setup.quizMode.value, false)
-    screen.value = 'quiz'
+    beginSession(pool, pool.length, setup.quizMode.value, false)
   }
 
   function startQuiz(errorMode: boolean): void {
+    replay = () => startQuiz(errorMode)
     let pool
     let total
 
     if (errorMode) {
       const ep = stats.errorPairs.value
       if (ep.length === 0) { alert('No errors to practice yet!'); return }
+      // weight by recent errors, not lifetime ones, so old mistakes stop dominating
       pool = ep.flatMap(e =>
-        Array.from({ length: e.incorrect }, () => ({ kana: e.kana, romaji: e.romaji, script: e.script }))
+        Array.from({ length: Math.min(3, Math.max(1, stats.recentErrorCount(e.kana))) }, () => ({ kana: e.kana, romaji: e.romaji, script: e.script }))
       )
       total = pool.length
     } else {
       pool = setup.buildPairsFromSelected()
-      const requested = setup.questionCountInput.value.trim() ? parseInt(setup.questionCountInput.value.trim()) : null
+      const requested = setup.questionCountText.value ? parseInt(setup.questionCountText.value) : null
       total = (requested && requested > 0) ? requested : pool.length
     }
 
-    session.start(pool, total, setup.quizMode.value, errorMode)
-    screen.value = 'quiz'
+    beginSession(pool, total, setup.quizMode.value, errorMode)
+  }
+
+  // skip ahead after a correct answer, unless the user already pressed NEXT
+  function advanceSoon(ms: number): void {
+    if (session.feedbackType.value !== 'correct') return
+    const at = session.current.value
+    setTimeout(() => { if (screen.value === 'quiz' && session.current.value === at) nextQuestion() }, ms)
   }
 
   function submitTyped(): void {
     session.submitTyped(stats.recordAnswer)
-    if (session.feedbackType.value === 'correct') setTimeout(nextQuestion, 350)
+    advanceSoon(350)
   }
 
   function selectAnswer(chosen: string): void {
     session.selectAnswer(chosen, stats.recordAnswer)
-    if (session.feedbackType.value === 'correct') setTimeout(nextQuestion, 400)
+    advanceSoon(400)
+  }
+
+  function submitDrawing(result: DrawResult): void {
+    session.submitDrawing(result, stats.recordAnswer)
+    // a bit longer than the others so the finished kana can be seen
+    advanceSoon(900)
   }
 
   function nextQuestion(): void {
@@ -150,7 +234,7 @@ export function useQuiz() {
   }
 
   function restartQuiz(): void {
-    startQuiz(session.isErrorPractice.value)
+    replay()
   }
 
   function goHome(): void {
@@ -165,11 +249,12 @@ export function useQuiz() {
   return {
     // orchestration
     screen, activeTab, statsFilter, statsSort,
-    statsSummary, filteredStatsRows,
-    showTab, setStatsFilter, setStatsSort, startQuiz, startWorstPractice, startSlowestPractice,
-    submitTyped, selectAnswer, nextQuestion, restartQuiz, goHome, init,
+    statsSummary, filteredStatsRows, allPatterns, roundPatterns, smartSummary, columnProgressMap,
+    showTab, setStatsFilter, setStatsSort, startQuiz, startWorstPractice, startSlowestPractice, startPatternPractice, startSmartPractice,
+    submitTyped, selectAnswer, submitDrawing, nextQuestion, restartQuiz, goHome, init,
     // stats
     statsData:          stats.statsData,
+    answerLog:          stats.answerLog,
     errorPairs:         stats.errorPairs,
     maxErrorCount:      stats.maxErrorCount,
     errorTabCount:      stats.errorTabCount,
@@ -186,6 +271,7 @@ export function useQuiz() {
     kanaFont:           setup.kanaFont,
     selectorScripts:    setup.selectorScripts,
     selectedCount:      setup.selectedCount,
+    strokeColumns:      setup.strokeColumns,
     countHint:          setup.countHint,
     headerTitle:        setup.headerTitle,
     setKanaFont:        setup.setKanaFont,
@@ -206,12 +292,14 @@ export function useQuiz() {
     typedAnswer:        session.typedAnswer,
     feedbackText:       session.feedbackText,
     feedbackType:       session.feedbackType,
+    explanation:        session.explanation,
     typeFieldEl:        session.typeFieldEl,
     currentQuestion:    session.currentQuestion,
     progress:           session.progress,
     resultScore:        session.resultScore,
     resultLabel:        session.resultLabel,
     uniqueMissedPairs:  session.uniqueMissedPairs,
+    drawings:           session.drawings,
   }
 }
 

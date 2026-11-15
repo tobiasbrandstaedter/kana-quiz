@@ -1,33 +1,54 @@
 import { ref, computed, nextTick } from 'vue'
-import type { QuizQuestion, KanaPair, QuizMode, QuizDirection, FeedbackType, ScriptName } from '../types'
-import { allPairs } from '../data/kana'
+import type { QuizQuestion, KanaPair, QuizMode, QuizDirection, FeedbackType, AnswerInput, DrawResult, Point } from '../types'
+import { allPairs, pairFor, kanaForRomaji } from '../data/kana'
+import { lookalikeHint } from '../data/lookalikes'
+import { STROKES } from '../data/strokes'
+import { matchesRomaji, normalizeRomaji, isTypo } from '../learning/romaji'
+import { pickDistractors, shuffle } from '../learning/distractors'
+import type { PlannedItem } from '../learning/scheduler'
 
-function shuffle<T>(arr: T[]): T[] {
-  const a = [...arr]
-  for (let i = a.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [a[i], a[j]] = [a[j], a[i]]
-  }
-  return a
+type DistractorsFor = (kana: string) => string[]
+
+function makeIntro(pair: KanaPair): QuizQuestion {
+  return { direction: 'kana-to-romaji', inputType: 'intro', question: pair.kana, answer: pair.romaji, kana: pair.kana, romaji: pair.romaji, script: pair.script, options: [] }
 }
 
-function makeQuestion(pair: KanaPair, mode: QuizMode, full: KanaPair[]): QuizQuestion {
-  const direction: QuizDirection = mode === 'mixed'
-    ? (Math.random() < 0.5 ? 'kana-to-romaji' : 'romaji-to-kana')
-    : mode
+function pickDirection(pair: KanaPair, mode: QuizMode): QuizDirection {
+  // combos have no stroke data yet, so they can't be drawn
+  const canDraw = !!STROKES[pair.kana]
+  if (mode === 'mixed') {
+    const dirs: QuizDirection[] = canDraw ? ['kana-to-romaji', 'romaji-to-kana', 'draw'] : ['kana-to-romaji', 'romaji-to-kana']
+    return dirs[Math.floor(Math.random() * dirs.length)]
+  }
+  if (mode === 'draw' && !canDraw) return 'romaji-to-kana'
+  return mode
+}
+
+function makeQuestion(pair: KanaPair, mode: QuizMode, full: KanaPair[], distractorsFor: DistractorsFor): QuizQuestion {
+  const direction = pickDirection(pair, mode)
+
+  if (direction === 'draw') {
+    return { direction, inputType: 'draw', question: pair.romaji, answer: pair.kana, kana: pair.kana, romaji: pair.romaji, script: pair.script, options: [] }
+  }
 
   if (direction === 'kana-to-romaji') {
     return { direction, inputType: 'type', question: pair.kana, answer: pair.romaji, kana: pair.kana, romaji: pair.romaji, script: pair.script, options: [] }
   }
 
-  const correctVal = pair.kana
-  const sameScript = full.filter(p => p.script === pair.script && p.kana !== correctVal)
-  const pool = sameScript.length >= 3 ? sameScript : full.filter(p => p.kana !== correctVal)
-  const others = shuffle(pool).slice(0, 3).map(p => p.kana)
-  return { direction, inputType: 'choice', question: pair.romaji, answer: correctVal, kana: pair.kana, romaji: pair.romaji, script: pair.script, options: shuffle([correctVal, ...others]) }
+  const others = pickDistractors(pair, full, distractorsFor(pair.kana))
+  return { direction, inputType: 'choice', question: pair.romaji, answer: pair.kana, kana: pair.kana, romaji: pair.romaji, script: pair.script, options: shuffle([pair.kana, ...others]) }
 }
 
-type RecordFn = (kana: string, romaji: string, script: ScriptName, wasCorrect: boolean, elapsed: number) => void
+type RecordFn = (answer: AnswerInput) => void
+
+// what to show under a wrong answer
+export interface Explanation {
+  givenKana: string | null
+  givenLabel: string
+  hint: string | null
+}
+
+const MAX_REASKS = 2
 
 export function useSession() {
   const questions = ref<QuizQuestion[]>([])
@@ -41,10 +62,23 @@ export function useSession() {
   const typedAnswer = ref('')
   const feedbackText = ref('')
   const feedbackType = ref<FeedbackType>('')
+  const explanation = ref<Explanation | null>(null)
   const questionStartTime = ref(0)
+  const startedAt = ref(0)
   const typeFieldEl = ref<HTMLInputElement | null>(null)
+  // what the user drew for kana they missed in draw mode, shown on the results screen
+  const drawings = ref<Record<string, Array<Point[] | null>>>({})
+
+  // kept from start() so re-asked questions are built the same way
+  let sessionMode: QuizMode = 'kana-to-romaji'
+  let fullPairs: KanaPair[] = []
+  let distractorsFor: DistractorsFor = () => []
+  let reaskCount: Record<string, number> = {}
 
   const currentQuestion = computed(() => questions.value[current.value] ?? null)
+
+  // intro cards aren't answered, so they don't count towards the score
+  const scoredCount = computed(() => questions.value.filter(q => q.inputType !== 'intro').length)
 
   const progress = computed(() => {
     const total = questions.value.length
@@ -52,12 +86,12 @@ export function useSession() {
   })
 
   const resultScore = computed(() => {
-    const total = questions.value.length
+    const total = scoredCount.value
     return total > 0 ? `${Math.round((correctCount.value / total) * 100)}%` : '0%'
   })
 
   const resultLabel = computed(() => {
-    const total = questions.value.length
+    const total = scoredCount.value
     if (!total) return ''
     const pct = Math.round((correctCount.value / total) * 100)
     const tag =
@@ -78,6 +112,7 @@ export function useSession() {
     typedAnswer.value = ''
     feedbackText.value = ''
     feedbackType.value = ''
+    explanation.value = null
     questionStartTime.value = Date.now()
   }
 
@@ -85,41 +120,91 @@ export function useSession() {
     nextTick(() => typeFieldEl.value?.focus())
   }
 
-  function start(pool: KanaPair[], total: number, mode: QuizMode, errorMode: boolean): void {
+  function begin(build: () => QuizQuestion[], mode: QuizMode, errorMode: boolean, preferred: DistractorsFor): void {
     isErrorPractice.value = errorMode
-    const full = allPairs()
-    let base = [...pool]
-    while (base.length < total) base = [...base, ...pool]
-    questions.value = shuffle(base).slice(0, total).map(pair => makeQuestion(pair, mode, full))
+    sessionMode = mode
+    fullPairs = allPairs()
+    distractorsFor = preferred
+    reaskCount = {}
+    questions.value = build()
     current.value = 0
     correctCount.value = 0
     wrongCount.value = 0
     missedPairs.value = []
+    drawings.value = {}
+    startedAt.value = Date.now()
     resetQuestion()
     if (questions.value[0]?.inputType === 'type') focusTypeField()
+  }
+
+  function start(pool: KanaPair[], total: number, mode: QuizMode, errorMode: boolean, preferred: DistractorsFor = () => []): void {
+    begin(() => {
+      let base = [...pool]
+      while (base.length < total) base = [...base, ...pool]
+      return shuffle(base).slice(0, total).map(pair => makeQuestion(pair, sessionMode, fullPairs, distractorsFor))
+    }, mode, errorMode, preferred)
+  }
+
+  // keeps the given order, used by smart practice
+  function startPlanned(items: PlannedItem[], mode: QuizMode, preferred: DistractorsFor): void {
+    begin(
+      () => items.map(i => i.intro ? makeIntro(i.pair) : makeQuestion(i.pair, sessionMode, fullPairs, distractorsFor)),
+      mode, false, preferred,
+    )
+  }
+
+  // a missed kana comes back a few questions later, up to MAX_REASKS times per session
+  function queueReask(q: QuizQuestion): void {
+    const n = reaskCount[q.kana] ?? 0
+    if (n >= MAX_REASKS) return
+    reaskCount[q.kana] = n + 1
+    const offset = 3 + Math.floor(Math.random() * 4)
+    const idx = Math.min(current.value + offset, questions.value.length)
+    const pair = { kana: q.kana, romaji: q.romaji, script: q.script }
+    questions.value.splice(idx, 0, makeQuestion(pair, sessionMode, fullPairs, distractorsFor))
+  }
+
+  function markCorrect(suffix = ''): void {
+    correctCount.value++
+    feedbackText.value = suffix ? `✓ CORRECT · ${suffix}` : '✓ CORRECT'
+    feedbackType.value = 'correct'
+  }
+
+  function markWrong(q: QuizQuestion, text: string, explain: Explanation | null): void {
+    wrongCount.value++
+    missedPairs.value.push({ kana: q.kana, romaji: q.romaji, script: q.script })
+    feedbackText.value = text
+    feedbackType.value = 'wrong'
+    explanation.value = explain
+    queueReask(q)
   }
 
   function submitTyped(onRecord: RecordFn): void {
     if (answered.value) return
     const q = currentQuestion.value
     if (!q) return
-    const typed = typedAnswer.value.trim().toLowerCase()
+    const typed = normalizeRomaji(typedAnswer.value)
     if (!typed) return
 
     answered.value = true
     const elapsed = Date.now() - questionStartTime.value
-    const wasCorrect = typed === q.answer.toLowerCase()
-    onRecord(q.kana, q.romaji, q.script, wasCorrect, elapsed)
+    const wasCorrect = matchesRomaji(typed, q.kana, q.romaji)
+    const typo = !wasCorrect && isTypo(typed, q.kana, q.romaji)
+    // a typo is still wrong, but it says nothing about which kana got mixed up
+    onRecord({ kana: q.kana, romaji: q.romaji, script: q.script, direction: q.direction, correct: wasCorrect, given: typo ? '' : typed, elapsedMs: elapsed, typo })
 
     if (wasCorrect) {
-      correctCount.value++
-      feedbackText.value = '✓ CORRECT'
-      feedbackType.value = 'correct'
+      // show the Hepburn form when an alternate spelling was used
+      markCorrect(typed === q.answer ? '' : q.answer)
+    } else if (typo) {
+      markWrong(q, `✗ Typo? Answer: ${q.answer}`, null)
     } else {
-      wrongCount.value++
-      missedPairs.value.push({ kana: q.kana, romaji: q.romaji, script: q.script })
-      feedbackText.value = `✗ Answer: ${q.answer}`
-      feedbackType.value = 'wrong'
+      const givenKana = kanaForRomaji(typed, q.script) ?? null
+      markWrong(q, `✗ Answer: ${q.answer}`, {
+        givenKana,
+        givenLabel: typed,
+        hint: givenKana ? lookalikeHint(q.kana, givenKana) : null,
+      })
     }
   }
 
@@ -133,18 +218,42 @@ export function useSession() {
 
     const elapsed = Date.now() - questionStartTime.value
     const wasCorrect = chosen === q.answer
-    onRecord(q.kana, q.romaji, q.script, wasCorrect, elapsed)
+    onRecord({ kana: q.kana, romaji: q.romaji, script: q.script, direction: q.direction, correct: wasCorrect, given: chosen, elapsedMs: elapsed })
 
     if (wasCorrect) {
-      correctCount.value++
-      feedbackText.value = '✓ CORRECT'
-      feedbackType.value = 'correct'
+      markCorrect()
     } else {
-      wrongCount.value++
-      missedPairs.value.push({ kana: q.kana, romaji: q.romaji, script: q.script })
-      feedbackText.value = `✗ Answer: ${q.answer}`
-      feedbackType.value = 'wrong'
+      markWrong(q, `✗ Answer: ${q.answer}`, {
+        givenKana: chosen,
+        givenLabel: pairFor(chosen)?.romaji ?? '',
+        hint: lookalikeHint(q.kana, chosen),
+      })
     }
+  }
+
+  function submitDrawing(result: DrawResult, onRecord: RecordFn): void {
+    if (answered.value) return
+    const q = currentQuestion.value
+    if (!q) return
+
+    answered.value = true
+    const elapsed = Date.now() - questionStartTime.value
+    onRecord({
+      kana: q.kana, romaji: q.romaji, script: q.script, direction: q.direction,
+      correct: result.correct, given: '', elapsedMs: elapsed,
+      strokes: { errors: result.errors, faults: result.faults },
+    })
+
+    if (result.correct) {
+      markCorrect()
+      return
+    }
+    drawings.value[q.kana] = result.ink
+    const why =
+      result.faults.order ? 'stroke order' :
+      result.faults.direction ? 'stroke direction' :
+      'needed a hint'
+    markWrong(q, `✗ ${q.kana}: ${why}`, null)
   }
 
   function next(onResults: () => void): void {
@@ -159,8 +268,8 @@ export function useSession() {
 
   return {
     questions, current, correctCount, wrongCount, answered, selectedOption,
-    missedPairs, isErrorPractice, typedAnswer, feedbackText, feedbackType, typeFieldEl,
+    missedPairs, isErrorPractice, typedAnswer, feedbackText, feedbackType, explanation, startedAt, typeFieldEl, drawings,
     currentQuestion, progress, resultScore, resultLabel, uniqueMissedPairs,
-    start, submitTyped, selectAnswer, next,
+    start, startPlanned, submitTyped, selectAnswer, submitDrawing, next,
   }
 }
