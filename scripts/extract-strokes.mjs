@@ -8,8 +8,9 @@ import { HIRAGANA, KATAKANA } from '../src/data/kana.ts'
 const TAG = 'r20260714'
 const BASE = `https://raw.githubusercontent.com/KanjiVG/kanjivg/${TAG}/kanji`
 
-// monographs only, combos are drawn as two glyphs later
-const kana = [HIRAGANA, KATAKANA].flatMap(d => [...d.main, ...d.dakuten]).flatMap(c => c.kana)
+// monographs plus the small ya/yu/yo, a combo is drawn as its two glyphs
+const SMALL = ['ゃ', 'ゅ', 'ょ', 'ャ', 'ュ', 'ョ']
+const kana = [HIRAGANA, KATAKANA].flatMap(d => [...d.main, ...d.dakuten]).flatMap(c => c.kana).concat(SMALL)
 
 async function load(k) {
   const file = k.codePointAt(0).toString(16).padStart(5, '0') + '.svg'

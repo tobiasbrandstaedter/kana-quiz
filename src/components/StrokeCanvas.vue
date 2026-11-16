@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import type { Point, StrokeFault, DrawResult } from '../types'
-import { STROKES } from '../data/strokes'
+import { kanaStrokes } from '../data/strokeGlyphs'
 import { checkStroke, SAMPLES } from '../learning/strokeMatch'
 import type { StrokeCheck } from '../learning/strokeMatch'
 
@@ -9,8 +9,9 @@ import type { StrokeCheck } from '../learning/strokeMatch'
 const props = defineProps<{ kana: string; mode: 'trace' | 'recall' }>()
 const emit = defineEmits<{ done: [result: DrawResult] }>()
 
-const paths = computed(() => STROKES[props.kana]?.paths ?? [])
-const count = computed(() => paths.value.length)
+const layout = computed(() => kanaStrokes(props.kana) ?? { width: 109, strokes: [] })
+const strokes = computed(() => layout.value.strokes)
+const count = computed(() => strokes.value.length)
 
 const svgEl = ref<SVGSVGElement | null>(null)
 const refGroup = ref<SVGGElement | null>(null)
@@ -18,7 +19,7 @@ let refs: Point[][] = []
 
 const next = ref(0)
 const ink = ref<Array<Point[] | null>>([])
-const errors = ref<number[]>(paths.value.map(() => 0))
+const errors = ref<number[]>(strokes.value.map(() => 0))
 const faults: Partial<Record<StrokeFault, number>> = {}
 const hinted = new Set<number>()
 const showHint = ref(false)
@@ -31,20 +32,17 @@ const finished = computed(() => count.value > 0 && next.value >= count.value)
 // ?debug shows the matcher distances so thresholds can be tuned on a phone
 const debug = new URLSearchParams(location.search).has('debug')
 
-const sampled = new Map<string, Point[][]>()
-
+// getPointAtLength ignores the transform, so the glyph offset is added by hand
 onMounted(() => {
-  const cached = sampled.get(props.kana)
-  if (cached) { refs = cached; return }
   const els = refGroup.value ? [...refGroup.value.querySelectorAll('path')] : []
-  refs = els.map(p => {
+  refs = els.map((p, n) => {
     const len = p.getTotalLength()
+    const dx = strokes.value[n].dx
     return Array.from({ length: SAMPLES }, (_, i) => {
       const pt = p.getPointAtLength((len * i) / (SAMPLES - 1))
-      return { x: pt.x, y: pt.y }
+      return { x: pt.x + dx, y: pt.y }
     })
   })
-  sampled.set(props.kana, refs)
 })
 
 function toSvg(e: PointerEvent): Point {
@@ -122,6 +120,10 @@ function revealHint(): void {
   showHint.value = true
 }
 
+function at(dx: number): string {
+  return `translate(${dx} 0)`
+}
+
 function polyline(points: Point[]): string {
   return points.map(p => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ')
 }
@@ -142,25 +144,28 @@ const debugText = computed(() => {
 <template>
   <div class="stroke-canvas">
     <svg
-      ref="svgEl" class="stroke-svg draw-svg" viewBox="0 0 109 109"
+      ref="svgEl" class="stroke-svg draw-svg" :style="{ '--w': layout.width / 109 }" :viewBox="`0 0 ${layout.width} 109`"
       role="img" :aria-label="`Drawing area for ${kana}, stroke ${Math.min(next + 1, count)} of ${count}`"
       @pointerdown.prevent="onDown" @pointermove="onMove" @pointerup="onUp" @pointercancel="onUp"
     >
       <g class="stroke-guide">
         <line x1="54.5" y1="2" x2="54.5" y2="107" />
-        <line x1="2" y1="54.5" x2="107" y2="54.5" />
+        <line x1="2" y1="54.5" :x2="layout.width - 2" y2="54.5" />
       </g>
       <!-- reference strokes, also sampled by the matcher, hidden while recalling -->
       <g ref="refGroup" class="draw-ref" :class="{ hidden: mode === 'recall' && !finished }">
-        <path v-for="(d, i) in paths" :key="i" :d="d" />
+        <path v-for="(s, i) in strokes" :key="i" :d="s.d" :transform="at(s.dx)" />
       </g>
 
       <template v-for="(stroke, i) in ink" :key="i">
         <polyline v-if="stroke" class="draw-ink" :points="polyline(stroke)" />
-        <path v-else-if="i < next" class="draw-given" :d="paths[i]" />
+        <path v-else-if="i < next" class="draw-given" :d="strokes[i].d" :transform="at(strokes[i].dx)" />
       </template>
 
-      <path v-if="showHint && !finished" :key="`hint${next}`" class="draw-hint" :d="paths[next]" pathLength="1" />
+      <path
+        v-if="showHint && !finished" :key="`hint${next}`" class="draw-hint"
+        :d="strokes[next].d" :transform="at(strokes[next].dx)" pathLength="1"
+      />
       <circle v-if="nextStart" class="draw-start" :cx="nextStart.x" :cy="nextStart.y" r="3" />
 
       <polyline v-if="rejected" class="draw-ink rejected" :points="polyline(rejected)" />

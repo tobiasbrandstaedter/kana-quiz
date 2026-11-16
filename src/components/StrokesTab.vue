@@ -88,7 +88,7 @@ function move(delta: number): void {
     </div>
 
     <div class="section-label">Pick a kana</div>
-    <div class="stroke-note">Shows the columns selected on the Practice tab, or all of them if none is selected. Combinations are written as their two parts.</div>
+    <div class="stroke-note">Shows the columns selected on the Practice tab, or all of them if none is selected. Combinations are written as the base kana followed by the small ya, yu or yo.</div>
     <div v-for="col in strokeColumns" :key="col.id" class="stroke-row">
       <span class="stroke-row-label">{{ col.label }}</span>
       <button

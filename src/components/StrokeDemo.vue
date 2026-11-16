@@ -1,11 +1,12 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, nextTick } from 'vue'
-import { STROKES } from '../data/strokes'
+import { kanaStrokes } from '../data/strokeGlyphs'
 
 const props = defineProps<{ kana: string; controls?: boolean }>()
 
-const strokes = computed(() => STROKES[props.kana])
-const strokeCount = computed(() => strokes.value?.paths.length ?? 0)
+const layout = computed(() => kanaStrokes(props.kana))
+const strokes = computed(() => layout.value?.strokes ?? [])
+const strokeCount = computed(() => strokes.value.length)
 
 const ghostEl = ref<SVGGElement | null>(null)
 const timings = ref<Array<{ delay: number; duration: number }>>([])
@@ -36,6 +37,10 @@ function stepBy(delta: number): void {
   step.value = Math.min(strokeCount.value, Math.max(1, current + delta))
 }
 
+function at(dx: number): string {
+  return `translate(${dx} 0)`
+}
+
 watch(() => props.kana, async () => {
   timings.value = []
   step.value = null
@@ -50,38 +55,38 @@ defineExpose({ replay })
 </script>
 
 <template>
-  <div v-if="strokes" class="stroke-demo">
+  <div v-if="layout" class="stroke-demo">
     <svg
-      class="stroke-svg" viewBox="0 0 109 109"
+      class="stroke-svg" :style="{ '--w': layout.width / 109 }" :viewBox="`0 0 ${layout.width} 109`"
       role="img" :aria-label="`Stroke order of ${kana}, ${strokeCount} strokes`"
       @click="replay()"
     >
       <g class="stroke-guide">
         <line x1="54.5" y1="2" x2="54.5" y2="107" />
-        <line x1="2" y1="54.5" x2="107" y2="54.5" />
+        <line x1="2" :y1="54.5" :x2="layout.width - 2" y2="54.5" />
       </g>
       <g ref="ghostEl" class="stroke-ghost">
-        <path v-for="(d, i) in strokes.paths" :key="i" :d="d" />
+        <path v-for="(s, i) in strokes" :key="i" :d="s.d" :transform="at(s.dx)" />
       </g>
 
       <g v-if="step === null && timings.length === strokeCount" :key="run" class="stroke-anim">
         <path
-          v-for="(d, i) in strokes.paths" :key="i" :d="d" pathLength="1"
+          v-for="(s, i) in strokes" :key="i" :d="s.d" :transform="at(s.dx)" pathLength="1"
           :style="{ animationDelay: `${timings[i].delay}ms`, animationDuration: `${timings[i].duration}ms` }"
         />
         <text
-          v-for="([x, y], i) in strokes.numbers" :key="`n${i}`" :x="x" :y="y"
+          v-for="(s, i) in strokes" :key="`n${i}`" :x="s.number[0] + s.dx" :y="s.number[1]"
           :style="{ animationDelay: `${timings[i].delay}ms` }"
         >{{ i + 1 }}</text>
       </g>
 
       <g v-else-if="step !== null" class="stroke-steps">
         <path
-          v-for="(d, i) in strokes.paths.slice(0, step)" :key="i" :d="d"
+          v-for="(s, i) in strokes.slice(0, step)" :key="i" :d="s.d" :transform="at(s.dx)"
           :class="{ current: i === step - 1 }"
         />
         <text
-          v-for="([x, y], i) in strokes.numbers.slice(0, step)" :key="`n${i}`" :x="x" :y="y"
+          v-for="(s, i) in strokes.slice(0, step)" :key="`n${i}`" :x="s.number[0] + s.dx" :y="s.number[1]"
           :class="{ current: i === step - 1 }"
         >{{ i + 1 }}</text>
       </g>

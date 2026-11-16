@@ -11,7 +11,8 @@ export type KanaData = Record<KanaGroupName, KanaColumn[]>
 
 export type ScriptName = 'hiragana' | 'katakana'
 export type ActiveScript = 'hiragana' | 'katakana' | 'both'
-export type QuizMode = 'kana-to-romaji' | 'romaji-to-kana' | 'draw' | 'mixed'
+// 'listen' is a draw question prompted by audio instead of romaji
+export type QuizMode = 'kana-to-romaji' | 'romaji-to-kana' | 'draw' | 'listen' | 'mixed'
 export type QuizDirection = 'kana-to-romaji' | 'romaji-to-kana' | 'draw'
 export type InputType = 'type' | 'choice' | 'intro' | 'draw'
 export type AppScreen = 'setup' | 'quiz' | 'results'
@@ -38,6 +39,7 @@ export interface QuizQuestion {
   romaji: string
   script: ScriptName
   options: string[]
+  listen?: boolean  // prompt is the sound, the romaji shows only after answering
 }
 
 export interface DirectionStat {
@@ -75,7 +77,8 @@ export interface AnswerInput {
   correct: boolean
   given: string
   elapsedMs: number
-  typo?: boolean  // counts as wrong, but leaves the Leitner box alone
+  typo?: boolean     // counts as wrong, but leaves the Leitner box alone
+  timeout?: boolean  // too slow in a timed session, same treatment as a typo
   strokes?: StrokeTally  // draw answers only
 }
 

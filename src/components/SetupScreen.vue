@@ -12,7 +12,7 @@ const {
   activeTab, showTab, errorTabCount, statsTabCount, selectedCount,
   activeScript, setScript,
   selectorScripts, selectedCols, errorKanaSet, toggleCol, selectAll, selectNone, selectGroup,
-  quizMode, setMode,
+  quizMode, setMode, timed, toggleTimed,
   questionCountInput, countHint,
   startQuiz, startSmartPractice, smartSummary, columnProgressMap, strokeColumns,
 } = inject(QUIZ_KEY)!
@@ -48,6 +48,7 @@ const MODES: Array<[QuizMode, string]> = [
   ['kana-to-romaji', 'Kana → Romaji'],
   ['romaji-to-kana', 'Romaji → Kana'],
   ['draw', 'Romaji → Write'],
+  ['listen', 'Listen → Write'],
   ['mixed', 'Mixed'],
 ]
 </script>
@@ -130,6 +131,13 @@ const MODES: Array<[QuizMode, string]> = [
           class="mode-btn" :class="{ active: quizMode === val }"
           @click="setMode(val)"
         >{{ label }}</button>
+      </div>
+      <div class="mode-panel">
+        <span class="mode-label">Fluency</span>
+        <button class="mode-btn" :class="{ active: timed }" :aria-pressed="timed" @click="toggleTimed()">
+          ⏱ {{ timed ? 'Timed: on' : 'Timed: off' }}
+        </button>
+        <span class="count-hint">3 to 3.5 s per answer, drawing is never timed</span>
       </div>
 
       <div class="section-label">04 — Number of Questions</div>
