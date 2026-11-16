@@ -4,8 +4,8 @@ import { QUIZ_KEY } from '../composables/useQuiz'
 import { playKana } from '../audio'
 import { lookalikesOf, lookalikeHint } from '../data/lookalikes'
 import { mnemonicFor } from '../data/mnemonics'
-import { kanaStrokes } from '../data/strokeGlyphs'
 import { kanaForRomaji } from '../data/kana'
+import { isSeen } from '../learning/scheduler'
 import StrokeDemo from './StrokeDemo.vue'
 import StrokeCanvas from './StrokeCanvas.vue'
 import Icon from './Icon.vue'
@@ -21,7 +21,6 @@ const isIntro = computed(() => currentQuestion.value?.inputType === 'intro')
 const isDraw = computed(() => currentQuestion.value?.inputType === 'draw')
 const isChoice = computed(() => currentQuestion.value?.inputType === 'choice')
 const isType = computed(() => currentQuestion.value?.inputType === 'type')
-const hasStrokes = computed(() => !!currentQuestion.value && !!kanaStrokes(currentQuestion.value.kana))
 
 // first contact: watch the strokes, then trace once over the guide. Not scored.
 const introStep = ref<'watch' | 'trace' | 'traced'>('watch')
@@ -54,10 +53,7 @@ const twinNote = computed(() => {
 const introWarning = computed(() => {
   const q = currentQuestion.value
   if (!q || !isIntro.value) return null
-  const met = (k: string) => {
-    const e = statsData.value[k]
-    return (!!e && e.correct + e.incorrect > 0) || questions.value.some(x => x.kana === k)
-  }
+  const met = (k: string) => isSeen(statsData.value[k]) || questions.value.some(x => x.kana === k)
   const others = lookalikesOf(q.kana).filter(met)
   if (others.length === 0) return null
   return { others: others.join('・'), hint: lookalikeHint(q.kana, others[0]) }
@@ -73,8 +69,10 @@ const mnemonic = computed(() => {
 const audioActive = ref(false)
 // iOS can refuse to play until the next tap, listen mode then shows a tap target
 const audioBlocked = ref(false)
+// offline without a Japanese voice: say so instead of asking for taps that can't help
+const audioMissing = ref(false)
 function onAudioClick(kana: string) {
-  playKana(kana).then(ok => { audioBlocked.value = !ok })
+  playKana(kana).then(r => { audioBlocked.value = r === 'blocked'; audioMissing.value = r === 'none' })
   audioActive.value = true
   setTimeout(() => { audioActive.value = false }, 250)
 }
@@ -82,11 +80,22 @@ function onAudioClick(kana: string) {
 watch(currentQuestion, q => {
   introStep.value = 'watch'
   audioBlocked.value = false
+  audioMissing.value = false
   // in listen mode the sound is the question, so it plays by itself, intro cards included
   if (q && (q.listen || (q.inputType === 'intro' && quizMode.value === 'listen'))) onAudioClick(q.kana)
 }, { immediate: true })
 
 const isLast = computed(() => current.value >= questions.value.length - 1)
+
+// a missed kana is queued again and the counter grows: say so, or it looks like a glitch
+const added = ref(0)
+let addedTimer: ReturnType<typeof setTimeout> | undefined
+watch(() => [startedAt.value, questions.value.length] as const, ([id, n], [oldId, old]) => {
+  if (id !== oldId || n <= old) return
+  added.value = n - old
+  clearTimeout(addedTimer)
+  addedTimer = setTimeout(() => { added.value = 0 }, 2500)
+})
 
 interface Action { label: string; run: () => void; enabled?: boolean }
 
@@ -95,7 +104,7 @@ const primary = computed((): Action | null => {
   const q = currentQuestion.value
   if (!q) return null
   if (isIntro.value) {
-    if (introStep.value === 'watch' && hasStrokes.value) return { label: 'Trace it', run: () => { introStep.value = 'trace' } }
+    if (introStep.value === 'watch') return { label: 'Trace it', run: () => { introStep.value = 'trace' } }
     if (introStep.value === 'trace') return { label: 'Got it', run: nextQuestion, enabled: false }
     return { label: 'Got it', run: nextQuestion }
   }
@@ -125,6 +134,8 @@ function onTypedEnter(e: KeyboardEvent): void {
 // Enter continues, 1 to 4 pick a choice. Handy with an iPad keyboard.
 function onKey(e: KeyboardEvent): void {
   if (screen.value !== 'quiz' || e.isComposing || e.target === typeFieldEl.value) return
+  // Cmd+1 switches browser tabs, and a held key must not run through the cards
+  if (e.metaKey || e.ctrlKey || e.altKey || e.repeat) return
   const q = currentQuestion.value
   if (!q) return
   if (e.key === 'Enter') {
@@ -168,7 +179,10 @@ onBeforeUnmount(() => {
         >
           <div class="progress-fill" :style="{ width: `${progress}%` }"></div>
         </div>
-        <span class="quiz-count">{{ current + 1 }}/{{ questions.length }}</span>
+        <span class="quiz-count">
+          {{ current + 1 }}/{{ questions.length }}
+          <span v-if="added" class="count-added" role="status">+{{ added }}<span class="sr-only"> card{{ added === 1 ? '' : 's' }} for the missed kana</span></span>
+        </span>
         <span class="score-pill" :aria-label="`${correctCount} correct, ${wrongCount} wrong`">
           <Icon name="check" :size="14" />{{ correctCount }}
         </span>
@@ -189,8 +203,8 @@ onBeforeUnmount(() => {
         </div>
 
         <template v-if="isIntro && currentQuestion">
-          <StrokeDemo v-if="introStep === 'watch' && hasStrokes" :kana="currentQuestion.kana" class="intro-strokes" />
-          <div v-else class="q-main" :class="{ 'intro-small': introStep !== 'watch' }">{{ currentQuestion.kana }}</div>
+          <StrokeDemo v-if="introStep === 'watch'" :kana="currentQuestion.kana" class="intro-strokes" />
+          <div v-else class="q-main intro-small">{{ currentQuestion.kana }}</div>
           <div class="intro-romaji">{{ currentQuestion.romaji }}</div>
         </template>
 
@@ -198,9 +212,10 @@ onBeforeUnmount(() => {
         <template v-else-if="isListen && !answered && currentQuestion">
           <button class="listen-btn" :class="{ playing: audioActive, blocked: audioBlocked }" @click="onAudioClick(currentQuestion.kana)">
             <Icon name="speaker" :size="48" />
-            <span>{{ audioBlocked ? 'Tap to hear' : 'Play again' }}</span>
+            <span>{{ audioBlocked ? 'Tap to hear' : audioMissing ? 'Try again' : 'Play again' }}</span>
           </button>
-          <div class="listen-note">No sound? Check the silent switch.</div>
+          <div v-if="audioMissing" class="twin-note">No sound available, you may be offline.</div>
+          <div v-else class="listen-note">No sound? Check the silent switch.</div>
         </template>
 
         <div v-else class="q-main" :class="{ 'romaji-q': currentQuestion?.direction !== 'kana-to-romaji', 'draw-q': isDraw }">
@@ -263,7 +278,6 @@ onBeforeUnmount(() => {
               correct: answered && opt === currentQuestion.answer,
               wrong:   answered && opt === selectedOption && opt !== currentQuestion.answer,
               dim:     answered && opt !== currentQuestion.answer && opt !== selectedOption,
-              'romaji-opt': currentQuestion.direction === 'kana-to-romaji',
             }"
             :disabled="answered"
             :aria-keyshortcuts="String(i + 1)"

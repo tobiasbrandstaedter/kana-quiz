@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { acceptedRomaji, matchesRomaji, isTypo } from './romaji'
+import { acceptedRomaji, matchesRomaji, isTypo, kanaForTyped } from './romaji'
 
 describe('matchesRomaji', () => {
   it('accepts the Hepburn form', () => {
@@ -37,6 +37,19 @@ describe('acceptedRomaji', () => {
   it('lists the Hepburn form first', () => {
     expect(acceptedRomaji('し', 'shi')).toEqual(['shi', 'si'])
     expect(acceptedRomaji('か', 'ka')).toEqual(['ka'])
+  })
+})
+
+describe('kanaForTyped', () => {
+  it('finds the kana behind Hepburn and alternate spellings', () => {
+    expect(kanaForTyped('chi', 'hiragana')).toBe('ち')
+    expect(kanaForTyped('ti', 'hiragana')).toBe('ち')
+    expect(kanaForTyped('Syu ', 'katakana')).toBe('シュ')
+    expect(kanaForTyped('du', 'hiragana')).toBe('づ')
+  })
+
+  it('finds nothing for input that is no reading', () => {
+    expect(kanaForTyped('xyz', 'hiragana')).toBeUndefined()
   })
 })
 

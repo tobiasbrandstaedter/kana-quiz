@@ -1,6 +1,7 @@
 import { ref, computed, watch } from 'vue'
 import type { ActiveScript, QuizMode, KanaPair, KanaData, ScriptName } from '../types'
 import { HIRAGANA, KATAKANA } from '../data/kana'
+import { loadKanaFont } from '../fonts'
 
 const LS_FONT   = 'hiragana_kana_font'
 const LS_SCRIPT = 'kana_script'
@@ -51,10 +52,6 @@ export function useSetup() {
   const pickedCols = computed(() => activeCols.value.filter(c => selectedCols.value.has(c.id)))
   const selectedCount = computed(() => pickedCols.value.length)
 
-  const headerTitle = computed(() =>
-    ({ hiragana: 'ひらがな', katakana: 'カタカナ', both: 'かなカナ' } satisfies Record<ActiveScript, string>)[activeScript.value]
-  )
-
   function buildPairsFromSelected(): KanaPair[] {
     const pairs: KanaPair[] = []
     for (const [scriptName, columns] of selectorScripts.value)
@@ -68,16 +65,17 @@ export function useSetup() {
 
   const countHint = computed(() => {
     const pool = buildPairsFromSelected()
-    const val = questionCountText.value
-    if (!val) return pool.length > 0 ? `Blank = all ${pool.length} kana from selection` : 'Leave blank to use all selected kana'
-    const n = parseInt(val)
-    if (!isNaN(n) && pool.length > 0 && n > pool.length) return `${pool.length} unique kana, repeated to fill ${n} questions`
+    const n = parseInt(questionCountText.value)
+    // 0 and nonsense start the quiz with every picked kana, so say that
+    if (!(n > 0)) return pool.length > 0 ? `Blank = all ${pool.length} kana from selection` : 'Leave blank to use all selected kana'
+    if (pool.length > 0 && n > pool.length) return `${pool.length} unique kana, repeated to fill ${n} questions`
     return `${n} question${n !== 1 ? 's' : ''} per session`
   })
 
   watch(questionCountText, val => savePrefs({ questionCount: val }))
 
   function setKanaFont(family: string): void {
+    loadKanaFont(family)
     kanaFont.value = family
     document.documentElement.style.setProperty('--kana-font', `'${family}', sans-serif`)
     try { localStorage.setItem(LS_FONT, family) } catch {}
@@ -159,6 +157,7 @@ export function useSetup() {
     try {
       const savedFont = localStorage.getItem(LS_FONT)
       if (savedFont) {
+        loadKanaFont(savedFont)
         kanaFont.value = savedFont
         document.documentElement.style.setProperty('--kana-font', `'${savedFont}', sans-serif`)
       }
@@ -167,7 +166,7 @@ export function useSetup() {
 
   return {
     activeScript, selectedCols, quizMode, timed, smartSize, smartNew, questionCountInput, questionCountText, kanaFont,
-    selectorScripts, activeCols, pickedCols, selectedCount, countHint, headerTitle,
+    selectorScripts, activeCols, pickedCols, selectedCount, countHint,
     buildPairsFromSelected,
     setKanaFont, setScript, toggleCol, selectAll, selectNone, selectGroup, setMode, toggleTimed, setSmartSize, setSmartNew,
     init,

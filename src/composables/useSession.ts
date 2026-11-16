@@ -1,9 +1,8 @@
 import { ref, computed, nextTick } from 'vue'
 import type { QuizQuestion, KanaPair, QuizMode, QuizDirection, FeedbackType, AnswerInput, DrawResult, Point } from '../types'
-import { allPairs, pairFor, kanaForRomaji } from '../data/kana'
+import { allPairs, pairFor } from '../data/kana'
 import { lookalikeHint } from '../data/lookalikes'
-import { kanaStrokes } from '../data/strokeGlyphs'
-import { matchesRomaji, normalizeRomaji, isTypo } from '../learning/romaji'
+import { matchesRomaji, normalizeRomaji, isTypo, kanaForTyped } from '../learning/romaji'
 import { pickDistractors, shuffle } from '../learning/distractors'
 import { reaskSlot } from '../learning/scheduler'
 import type { PlannedItem } from '../learning/scheduler'
@@ -13,7 +12,7 @@ import type { FluencyLimits } from '../learning/progress'
 // what the session needs to know about the learner, handed in so it doesn't depend on stats
 export interface SessionHelpers {
   distractorsFor: (kana: string) => string[]   // past confusions, preferred as wrong options
-  directionFor?: (pair: KanaPair, canDraw: boolean) => QuizDirection  // mixed mode
+  directionFor?: (pair: KanaPair) => QuizDirection  // mixed mode
   known?: Set<string>                           // kana the user has met, for the other options
 }
 
@@ -22,14 +21,12 @@ function makeIntro(pair: KanaPair): QuizQuestion {
 }
 
 function pickDirection(pair: KanaPair, mode: QuizMode, helpers: SessionHelpers): QuizDirection {
-  const canDraw = !!kanaStrokes(pair.kana)
   if (mode === 'mixed') {
-    if (helpers.directionFor) return helpers.directionFor(pair, canDraw)
-    const dirs: QuizDirection[] = canDraw ? ['kana-to-romaji', 'romaji-to-kana', 'draw'] : ['kana-to-romaji', 'romaji-to-kana']
+    if (helpers.directionFor) return helpers.directionFor(pair)
+    const dirs: QuizDirection[] = ['kana-to-romaji', 'romaji-to-kana', 'draw']
     return dirs[Math.floor(Math.random() * dirs.length)]
   }
-  if (mode === 'draw' || mode === 'listen') return canDraw ? 'draw' : 'romaji-to-kana'
-  return mode
+  return mode === 'listen' ? 'draw' : mode
 }
 
 function makeQuestion(
@@ -245,9 +242,11 @@ export function useSession() {
 
     answered.value = true
     const elapsed = Date.now() - questionStartTime.value
-    // only the reading of another kana says something about what got mixed up, a typo or nonsense doesn't
-    const givenKana = typo ? null : kanaForRomaji(typed, q.script) ?? null
-    onRecord({ kana: q.kana, romaji: q.romaji, script: q.script, direction: q.direction, correct: wasCorrect, given: givenKana ? typed : '', elapsedMs: elapsed, typo })
+    // only the reading of another kana says something about what got mixed up, a typo or nonsense doesn't.
+    // Stored in its Hepburn form, however it was spelled.
+    const givenKana = typo ? null : kanaForTyped(typed, q.script) ?? null
+    const given = givenKana ? pairFor(givenKana)!.romaji : ''
+    onRecord({ kana: q.kana, romaji: q.romaji, script: q.script, direction: q.direction, correct: wasCorrect, given, elapsedMs: elapsed, typo })
 
     if (wasCorrect) {
       // show the Hepburn form when an alternate spelling was used

@@ -1,19 +1,55 @@
 <script setup lang="ts">
-import { inject, ref } from 'vue'
+import { inject, ref, onMounted } from 'vue'
 import { QUIZ_KEY } from '../composables/useQuiz'
+import { KANA_FONTS, loadKanaFont } from '../fonts'
+import { buildBackup, parseBackup, kanaInBackup, restoreBackup } from '../backup'
+import type { Backup } from '../backup'
+import { dayKey } from '../learning/progress'
 import BottomSheet from './BottomSheet.vue'
 
 const emit = defineEmits<{ close: [] }>()
-const { kanaFont, setKanaFont, resetAll, statsTabCount } = inject(QUIZ_KEY)!
+const { kanaFont, setKanaFont, resetAll, kanaTracked } = inject(QUIZ_KEY)!
 
-const FONTS = [
-  { family: 'Zen Maru Gothic',   label: 'Maru' },
-  { family: 'Noto Sans JP',      label: 'Sans' },
-  { family: 'Noto Serif JP',     label: 'Serif' },
-  { family: 'M PLUS Rounded 1c', label: 'Round' },
-  { family: 'Kosugi Maru',       label: 'Soft' },
-  { family: 'BIZ UDGothic',      label: 'Gothic' },
-]
+// the picker shows each font, so now is the time to fetch them
+onMounted(() => KANA_FONTS.forEach(f => loadKanaFont(f.family)))
+
+// a site in the browser can lose its storage, an installed app keeps it
+const installed = window.matchMedia('(display-mode: standalone)').matches || (navigator as { standalone?: boolean }).standalone === true
+
+function exportBackup(): void {
+  const backup = buildBackup(key => localStorage.getItem(key), Date.now())
+  const url = URL.createObjectURL(new Blob([JSON.stringify(backup)], { type: 'application/json' }))
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `kana-quiz-backup-${dayKey(Date.now())}.json`
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
+// a picked file waits here until the learner confirms that it replaces everything
+const pending = ref<Backup | null>(null)
+const importError = ref('')
+
+async function onFile(e: Event): Promise<void> {
+  const input = e.target as HTMLInputElement
+  const file = input.files?.[0]
+  input.value = ''  // so picking the same file again fires a change
+  if (!file) return
+  pending.value = null
+  importError.value = ''
+  try {
+    pending.value = parseBackup(await file.text())
+  } catch (err) {
+    importError.value = (err as Error).message
+  }
+}
+
+function importBackup(): void {
+  if (!pending.value) return
+  restoreBackup(pending.value, localStorage)
+  // every composable reads its state at start, a reload is the one sure way to pick it all up
+  location.reload()
+}
 
 // two taps on purpose: this wipes everything and can't be undone
 const confirming = ref(false)
@@ -30,7 +66,7 @@ function reset(): void {
     <div class="option-title">Kana font</div>
     <div class="font-switcher">
       <button
-        v-for="f in FONTS" :key="f.family"
+        v-for="f in KANA_FONTS" :key="f.family"
         class="font-btn" :class="{ active: kanaFont === f.family }"
         :aria-pressed="kanaFont === f.family"
         @click="setKanaFont(f.family)"
@@ -40,12 +76,40 @@ function reset(): void {
       </button>
     </div>
 
+    <div class="option-title">Backup</div>
+    <div class="option-block">
+      <p class="hint-line backup-note">
+        Your progress only lives in this browser.
+        <template v-if="!installed">Add the app to your home screen so the browser keeps it, and export a backup now and then.</template>
+        <template v-else>Export a backup now and then, it also moves your progress to another device.</template>
+      </p>
+      <div class="backup-row">
+        <button class="btn btn-sm" :disabled="kanaTracked === 0" @click="exportBackup()">Export backup</button>
+        <label class="btn btn-sm">
+          Import backup
+          <input class="file-input" type="file" accept="application/json,.json" @change="onFile">
+        </label>
+      </div>
+      <p v-if="importError" class="hint-line backup-error" role="alert">{{ importError }}</p>
+      <div v-if="pending" class="danger-zone">
+        <p>
+          Replace everything on this device with the backup
+          <template v-if="pending.savedAt">from {{ new Date(pending.savedAt).toLocaleDateString() }}</template>
+          ({{ kanaInBackup(pending) }} kana)? What is here now is lost.
+        </p>
+        <div class="danger-confirm">
+          <button class="btn btn-sm btn-bad" @click="importBackup()">Yes, replace</button>
+          <button class="btn btn-sm" @click="pending = null">Keep mine</button>
+        </div>
+      </div>
+    </div>
+
     <div class="option-title">Progress</div>
     <div class="danger-zone">
       <p>Deletes every answer, all review schedules and the streak. This can't be undone.</p>
-      <button v-if="!confirming" class="btn btn-sm" :disabled="statsTabCount === 0" @click="confirming = true">Reset all progress</button>
+      <button v-if="!confirming" class="btn btn-sm" :disabled="kanaTracked === 0" @click="confirming = true">Reset all progress</button>
       <div v-else class="danger-confirm">
-        <button class="btn btn-sm btn-bad" @click="reset()">Yes, delete {{ statsTabCount }} kana</button>
+        <button class="btn btn-sm btn-bad" @click="reset()">Yes, delete {{ kanaTracked }} kana</button>
         <button class="btn btn-sm" @click="confirming = false">Keep it</button>
       </div>
     </div>

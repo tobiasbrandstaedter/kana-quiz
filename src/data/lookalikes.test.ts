@@ -15,6 +15,11 @@ describe('lookalikes', () => {
     expect(lookalikesOf('ん')).toEqual([])
   })
 
+  it('merges the groups of a kana that is in more than one', () => {
+    expect(lookalikesOf('は')).toEqual(['ほ', 'ま', 'け'])
+    expect(lookalikesOf('コ')).toEqual(['ユ', 'ロ'])
+  })
+
   it('finds a hint for a pair in the same group', () => {
     expect(lookalikeHint('シ', 'ツ')).toContain('シ')
     expect(lookalikeHint('シ', 'ぬ')).toBeNull()

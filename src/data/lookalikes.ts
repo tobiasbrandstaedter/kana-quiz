@@ -34,9 +34,10 @@ export const LOOKALIKES: LookalikeGroup[] = [
   { kana: ['オ', 'ホ'],      hint: 'ホ has two extra dots at the bottom' },
 ]
 
+/** Every kana that shares a group with this one. は is in two groups, so it gets ほ, ま and け. */
 export function lookalikesOf(kana: string): string[] {
-  const group = LOOKALIKES.find(g => g.kana.includes(kana))
-  return group ? group.kana.filter(k => k !== kana) : []
+  const others = LOOKALIKES.filter(g => g.kana.includes(kana)).flatMap(g => g.kana)
+  return [...new Set(others)].filter(k => k !== kana)
 }
 
 export function lookalikeHint(a: string, b: string): string | null {

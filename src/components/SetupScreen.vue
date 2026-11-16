@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { inject, computed, ref } from 'vue'
+import { inject, computed, ref, nextTick } from 'vue'
 import type { ActiveScript, QuizMode, SetupTab } from '../types'
 import { QUIZ_KEY } from '../composables/useQuiz'
 import { fromNow } from '../format'
 import { MAX_LEARNING } from '../learning/scheduler'
+import { clock } from '../clock'
 import ColumnSelector from './ColumnSelector.vue'
 import ProgressTab from './ProgressTab.vue'
 import StrokesTab from './StrokesTab.vue'
@@ -13,7 +14,7 @@ import Icon from './Icon.vue'
 
 const {
   today,
-  activeTab, showTab, errorPairs, selectedCount, pickedCols, statsTabCount,
+  activeTab, showTab, errorPairs, selectedCount, pickedCols, kanaTracked,
   activeScript, setScript,
   selectorScripts, selectedCols, errorKanaSet, toggleCol, selectAll, selectNone, selectGroup,
   quizMode, setMode, timed, toggleTimed,
@@ -26,7 +27,7 @@ const settingsOpen = ref(false)
 const optionsOpen = ref(false)
 
 const greeting = computed(() => {
-  const h = new Date().getHours()
+  const h = new Date(clock.value).getHours()
   return h < 5 ? 'Up late' : h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening'
 })
 
@@ -106,6 +107,12 @@ const TABS: Array<[SetupTab, string, string]> = [
 const SIZES = [10, 20, 30]
 const NEW_COUNTS = [0, 3, 5]
 
+// the errors tile leads to the list, not to the top of a long tab
+function showErrors(): void {
+  showTab('progress')
+  nextTick(() => document.getElementById('open-errors')?.scrollIntoView({ block: 'start' }))
+}
+
 function badge(tab: SetupTab): number {
   if (tab === 'practice') return smartSummary.value.outlook.now
   if (tab === 'progress') return errorPairs.value.length
@@ -176,7 +183,7 @@ function badge(tab: SetupTab): number {
           You can review early, it won't move anything up before it is due.
         </div>
         <!-- the app in one sentence, until there is something to show instead -->
-        <div v-if="statsTabCount === 0" class="hero-note">
+        <div v-if="kanaTracked === 0" class="hero-note">
           What you learn comes back as short reviews, later and later the better you know it.
         </div>
 
@@ -205,7 +212,7 @@ function badge(tab: SetupTab): number {
           <span class="stat-num">{{ smartSummary.seen - smartSummary.mastered }}</span>
           <span class="stat-label">learning</span>
         </div>
-        <button class="stat-tile bad" :aria-label="`${errorPairs.length} open errors, show progress`" @click="showTab('progress')">
+        <button class="stat-tile bad" :aria-label="`${errorPairs.length} open errors, show them`" @click="showErrors()">
           <span class="stat-num">{{ errorPairs.length }}</span>
           <span class="stat-label">errors</span>
         </button>
@@ -236,6 +243,8 @@ function badge(tab: SetupTab): number {
         <span class="switch" :class="{ on: timed }" aria-hidden="true"></span>
       </button>
 
+      <!-- a section of its own, so the start bar only sticks while the rows are on screen -->
+      <section class="custom-quiz">
       <div class="section-head">
         <h2 class="section-title">Custom quiz</h2>
         <span class="section-aside">{{ selectedCount ? `${selectedCount} row${selectedCount === 1 ? '' : 's'} picked` : 'pick rows' }}</span>
@@ -251,7 +260,8 @@ function badge(tab: SetupTab): number {
         @select-group="selectGroup"
       />
 
-      <div class="custom-start">
+      <!-- the rows fill two screens on a phone, the start button stays in reach once something is picked -->
+      <div class="custom-start" :class="{ pinned: selectedCount > 0 }">
         <label class="count-field">
           <span class="count-label">Questions</span>
           <input
@@ -265,6 +275,7 @@ function badge(tab: SetupTab): number {
         </button>
       </div>
       <p class="hint-line">{{ countHint }}</p>
+      </section>
     </div>
 
     <!-- writing tab, v-if so the animation only runs while it is visible -->

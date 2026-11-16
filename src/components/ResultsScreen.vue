@@ -1,24 +1,15 @@
 <script setup lang="ts">
 import { inject, computed } from 'vue'
-import type { Point } from '../types'
 import { QUIZ_KEY } from '../composables/useQuiz'
-import { kanaStrokes } from '../data/strokeGlyphs'
+import { kanaStrokes, glyphShift, polylinePoints } from '../data/strokeGlyphs'
 import { fromNow } from '../format'
 import PatternCards from './PatternCards.vue'
 import Icon from './Icon.vue'
 
 const {
   resultScore, resultLabel, uniqueMissedPairs, errorPairs, roundPatterns, drawings, roundOutcome,
-  restartQuiz, startQuiz, startPatternPractice, goHome, openKana,
+  restartQuiz, replayLabel, startQuiz, startPatternPractice, goHome, openKana,
 } = inject(QUIZ_KEY)!
-
-function at(dx: number): string {
-  return `translate(${dx} 0)`
-}
-
-function polyline(points: Point[]): string {
-  return points.map(p => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ')
-}
 
 // what comes next, so the session ends with a reason to come back
 const outlookText = computed(() => {
@@ -70,10 +61,10 @@ const movedUp = computed(() => roundOutcome.value.up.filter(u => !roundOutcome.v
             v-if="drawings[p.kana] && kanaStrokes(p.kana)" class="missed-drawing"
             :viewBox="`0 0 ${kanaStrokes(p.kana)!.width} 109`" :style="{ '--w': kanaStrokes(p.kana)!.width / 109 }" :aria-label="`Your drawing of ${p.kana}`"
           >
-            <path v-for="(s, i) in kanaStrokes(p.kana)!.strokes" :key="`r${i}`" class="ref" :d="s.d" :transform="at(s.dx)" />
+            <path v-for="(s, i) in kanaStrokes(p.kana)!.strokes" :key="`r${i}`" class="ref" :d="s.d" :transform="glyphShift(s.dx)" />
             <template v-for="(stroke, i) in drawings[p.kana]" :key="i">
-              <polyline v-if="stroke" class="ink" :points="polyline(stroke)" />
-              <path v-else class="given" :d="kanaStrokes(p.kana)!.strokes[i].d" :transform="at(kanaStrokes(p.kana)!.strokes[i].dx)" />
+              <polyline v-if="stroke" class="ink" :points="polylinePoints(stroke)" />
+              <path v-else class="given" :d="kanaStrokes(p.kana)!.strokes[i].d" :transform="glyphShift(kanaStrokes(p.kana)!.strokes[i].dx)" />
             </template>
           </svg>
           <span class="k">{{ p.kana }}</span>
@@ -90,7 +81,7 @@ const movedUp = computed(() => roundOutcome.value.up.filter(u => !roundOutcome.v
     />
 
     <div class="result-btns">
-      <button class="btn btn-action btn-lg" @click="restartQuiz()"><Icon name="replay" :size="20" />Again</button>
+      <button class="btn btn-action btn-lg" @click="restartQuiz()"><Icon name="replay" :size="20" />{{ replayLabel }}</button>
       <button v-if="errorPairs.length" class="btn btn-bad btn-lg" @click="startQuiz(true)">Practice errors <span class="btn-badge">{{ errorPairs.length }}</span></button>
       <button class="btn btn-lg" @click="goHome()"><Icon name="home" :size="20" />Home</button>
     </div>

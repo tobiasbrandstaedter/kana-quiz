@@ -1,3 +1,4 @@
+import type { ScriptName } from '../types'
 import { allPairs } from '../data/kana'
 
 // Hepburn is what the data shows. These are the Kunrei / Nihon-shiki spellings
@@ -31,6 +32,12 @@ export function acceptedRomaji(kana: string, romaji: string): string[] {
 
 export function matchesRomaji(typed: string, kana: string, romaji: string): boolean {
   return acceptedRomaji(kana, romaji).includes(normalizeRomaji(typed))
+}
+
+/** The kana a typed answer stands for, alternate spellings included: 'ti' is ち. */
+export function kanaForTyped(typed: string, script: ScriptName): string | undefined {
+  const t = normalizeRomaji(typed)
+  return allPairs().find(p => p.script === script && acceptedRomaji(p.kana, p.romaji).includes(t))?.kana
 }
 
 let validRomaji: Set<string> | null = null

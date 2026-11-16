@@ -17,7 +17,6 @@ export type QuizDirection = 'kana-to-romaji' | 'romaji-to-kana' | 'draw'
 export type InputType = 'type' | 'choice' | 'intro' | 'draw'
 export type AppScreen = 'setup' | 'quiz' | 'results'
 export type SetupTab = 'practice' | 'strokes' | 'progress'
-export type StatsFilter = 'all' | 'hiragana' | 'katakana'
 export type StatsSortCol = 'kana' | 'acc' | 'seen' | 'errors' | 'time' | 'box'
 export interface StatsSort { col: StatsSortCol; dir: 'asc' | 'desc' }
 export type FeedbackType = 'correct' | 'wrong' | ''
@@ -101,13 +100,6 @@ export interface StatRow extends StatEntry {
   accClass: AccClass
   avgTime: string | null
   timeClass: TimeClass
-}
-
-export interface StatsSummary {
-  kanaCount: number
-  accuracy: string
-  totalErrors: number
-  avgTime: string
 }
 
 // one kana from KanjiVG, viewBox 0 0 109 109

@@ -5,9 +5,10 @@ import { QUIZ_KEY } from '../composables/useQuiz'
 import { pairFor, kanaForRomaji } from '../data/kana'
 import { lookalikesOf, lookalikeHint } from '../data/lookalikes'
 import { mnemonicFor } from '../data/mnemonics'
-import { kanaStrokes } from '../data/strokeGlyphs'
+import { dueAt, isDue, isSeen } from '../learning/scheduler'
 import { playKana } from '../audio'
-import { fromNow, stageOf, STAGE_LABEL } from '../format'
+import { clock } from '../clock'
+import { fromNow, stageOf, accuracy, accClass, STAGE_LABEL } from '../format'
 import BottomSheet from './BottomSheet.vue'
 import StrokeDemo from './StrokeDemo.vue'
 import Icon from './Icon.vue'
@@ -17,7 +18,7 @@ const { detailKana, closeKana, statsData, startKanaPractice } = inject(QUIZ_KEY)
 const kana = computed(() => detailKana.value ?? '')
 const pair = computed(() => pairFor(kana.value))
 const entry = computed(() => statsData.value[kana.value])
-const seen = computed(() => !!entry.value && entry.value.correct + entry.value.incorrect > 0)
+const seen = computed(() => isSeen(entry.value))
 const stage = computed(() => stageOf(entry.value?.box ?? 0, seen.value))
 const others = computed(() => lookalikesOf(kana.value))
 
@@ -29,8 +30,8 @@ const DIRECTIONS: Array<[QuizDirection, string]> = [
 
 const directions = computed(() => DIRECTIONS.map(([d, label]) => {
   const s = entry.value?.byDirection[d]
-  const state = !s || s.correct + s.incorrect === 0 ? 'none' : s.correct >= s.incorrect ? 'good' : 'bad'
-  return { label, state, text: s ? `${s.correct} right, ${s.incorrect} wrong` : 'not tried' }
+  const tried = !!s && s.correct + s.incorrect > 0
+  return { label, state: tried ? accClass(accuracy(s)) : 'none', text: tried ? `${s.correct} right, ${s.incorrect} wrong` : 'not tried' }
 }))
 
 // what the user answered instead, as kana where possible
@@ -43,9 +44,11 @@ const confusions = computed(() => {
     .map(([given, n]) => ({ kana: pairFor(given) ? given : kanaForRomaji(given, e.script) ?? given, n }))
 })
 
-const accuracy = computed(() => {
+// the same moment the chart shows its due dot for
+const reviewText = computed(() => {
   const e = entry.value
-  return e && seen.value ? Math.round((e.correct / (e.correct + e.incorrect)) * 100) : null
+  if (!e) return ''
+  return isDue(e, clock.value) ? 'Due now' : `Next review ${fromNow(dueAt(e), clock.value)}`
 })
 
 function practice(): void {
@@ -60,18 +63,17 @@ function practice(): void {
     <div class="kana-detail">
       <div class="kd-top">
         <div class="kd-glyph">
-          <StrokeDemo v-if="kanaStrokes(kana)" :key="kana" :kana="kana" controls />
-          <div v-else class="kd-kana">{{ kana }}</div>
+          <StrokeDemo :key="kana" :kana="kana" controls />
         </div>
+        <!-- kana and romaji are the sheet title, so this row only adds what the title can't say -->
         <div class="kd-facts">
-          <div class="kd-romaji">{{ pair.romaji }}</div>
           <button class="icon-btn boxed butter" :aria-label="`Play ${pair.romaji}`" @click="playKana(kana)"><Icon name="speaker" :size="20" /></button>
           <div class="kd-stage" :class="stage">{{ STAGE_LABEL[stage] }}</div>
-          <div v-if="seen && entry" class="kd-line">
-            {{ fromNow(entry.due) === 'now' ? 'Due now' : `Next review ${fromNow(entry.due)}` }}
-          </div>
-          <div v-if="accuracy !== null && entry" class="kd-line">
-            {{ accuracy }}% right over {{ entry.correct + entry.incorrect }} answer{{ entry.correct + entry.incorrect === 1 ? '' : 's' }}
+          <div v-if="seen && entry" class="kd-lines">
+            <div class="kd-line">{{ reviewText }}</div>
+            <div class="kd-line">
+              {{ accuracy(entry) }}% right over {{ entry.correct + entry.incorrect }} answer{{ entry.correct + entry.incorrect === 1 ? '' : 's' }}
+            </div>
           </div>
         </div>
       </div>
