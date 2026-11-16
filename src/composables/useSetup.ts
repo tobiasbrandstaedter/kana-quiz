@@ -46,14 +46,10 @@ export function useSetup() {
       : [[activeScript.value === 'katakana' ? 'katakana' : 'hiragana', activeScript.value === 'katakana' ? KATAKANA : HIRAGANA]]
   )
 
-  const selectedCount = computed(() => selectedCols.value.size)
-
-  // stroke order tab: the selected columns, or all of them when none is picked
-  const strokeColumns = computed(() => {
-    const cols = selectorScripts.value.flatMap(([, data]) => [...data.main, ...data.dakuten, ...data.combo])
-    const picked = cols.filter(c => selectedCols.value.has(c.id))
-    return picked.length > 0 ? picked : cols
-  })
+  // selectedCols keeps the picks of both scripts, only the ones on screen count
+  const activeCols = computed(() => selectorScripts.value.flatMap(([, data]) => [...data.main, ...data.dakuten, ...data.combo]))
+  const pickedCols = computed(() => activeCols.value.filter(c => selectedCols.value.has(c.id)))
+  const selectedCount = computed(() => pickedCols.value.length)
 
   const headerTitle = computed(() =>
     ({ hiragana: 'ひらがな', katakana: 'カタカナ', both: 'かなカナ' } satisfies Record<ActiveScript, string>)[activeScript.value]
@@ -101,18 +97,19 @@ export function useSetup() {
     savePrefs({ cols: [...next] })
   }
 
+  // All and None only touch the script on screen, the other script keeps its picks
   function selectAll(): void {
-    const next = new Set<string>()
-    for (const [, columns] of selectorScripts.value)
-      for (const cols of Object.values(columns))
-        for (const col of cols) next.add(col.id)
+    const next = new Set(selectedCols.value)
+    for (const col of activeCols.value) next.add(col.id)
     selectedCols.value = next
     savePrefs({ cols: [...next] })
   }
 
   function selectNone(): void {
-    selectedCols.value = new Set()
-    savePrefs({ cols: [] })
+    const next = new Set(selectedCols.value)
+    for (const col of activeCols.value) next.delete(col.id)
+    selectedCols.value = next
+    savePrefs({ cols: [...next] })
   }
 
   function selectGroup(group: string): void {
@@ -170,7 +167,7 @@ export function useSetup() {
 
   return {
     activeScript, selectedCols, quizMode, timed, smartSize, smartNew, questionCountInput, questionCountText, kanaFont,
-    selectorScripts, selectedCount, strokeColumns, countHint, headerTitle,
+    selectorScripts, activeCols, pickedCols, selectedCount, countHint, headerTitle,
     buildPairsFromSelected,
     setKanaFont, setScript, toggleCol, selectAll, selectNone, selectGroup, setMode, toggleTimed, setSmartSize, setSmartNew,
     init,

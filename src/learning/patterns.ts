@@ -290,13 +290,15 @@ function slipping(entries: StatEntry[], log: AnswerRecord[], now: number): Patte
   }]
 }
 
-// missed one of a lookalike group, never saw the others: they'll bite later
+// missed one of a lookalike group, never saw the others: they'll bite later.
+// Only once the learner has reached the other kana's row, a beginner on あ行 has no use for り yet.
 function blindSpots(stats: StatsMap, entries: StatEntry[]): Pattern[] {
+  const startedRows = new Set(entries.map(e => kanaInfo(e.kana)?.colId))
   const examples: string[] = []
   const kana: string[] = []
   for (const e of entries) {
     if (e.incorrect === 0) continue
-    const unseen = lookalikesOf(e.kana).filter(k => !stats[k])
+    const unseen = lookalikesOf(e.kana).filter(k => !stats[k] && startedRows.has(kanaInfo(k)?.colId))
     if (!unseen.length) continue
     kana.push(e.kana, ...unseen)
     if (examples.length < 3) examples.push(`${e.kana} vs ${unseen.join('/')}`)
@@ -304,7 +306,7 @@ function blindSpots(stats: StatsMap, entries: StatEntry[]): Pattern[] {
   if (!kana.length) return []
   return [{
     kind: 'blind-spot', title: 'Untested lookalikes',
-    detail: `You missed ${examples.join(', ')} but never practiced the lookalike`,
+    detail: `You missed a kana whose lookalike you have not practiced yet: ${examples.join(', ')}`,
     kana: uniq(kana), severity: 2, practice: pairs(kana), mode: 'romaji-to-kana',
   }]
 }

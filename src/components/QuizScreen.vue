@@ -1,19 +1,20 @@
 <script setup lang="ts">
-import { inject, ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
+import { inject, ref, computed, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
 import { QUIZ_KEY } from '../composables/useQuiz'
 import { playKana } from '../audio'
 import { lookalikesOf, lookalikeHint } from '../data/lookalikes'
 import { mnemonicFor } from '../data/mnemonics'
 import { kanaStrokes } from '../data/strokeGlyphs'
+import { kanaForRomaji } from '../data/kana'
 import StrokeDemo from './StrokeDemo.vue'
 import StrokeCanvas from './StrokeCanvas.vue'
 import Icon from './Icon.vue'
 
 const {
-  screen, isErrorPractice, progress, current, questions, correctCount, wrongCount,
+  screen, isErrorPractice, progress, current, startedAt, questions, correctCount, wrongCount,
   currentQuestion, answered, gaveUp, feedbackText, feedbackType, explanation,
-  typedAnswer, typeFieldEl, selectedOption, timeLimit,
-  submitTyped, selectAnswer, submitDrawing, giveUp, nextQuestion, goHome, quizMode,
+  typedAnswer, typeFieldEl, selectedOption, timeLimit, timerRun, typoRetry,
+  submitTyped, selectAnswer, submitDrawing, giveUp, nextQuestion, goHome, quizMode, statsData,
 } = inject(QUIZ_KEY)!
 
 const isIntro = computed(() => currentQuestion.value?.inputType === 'intro')
@@ -25,25 +26,39 @@ const hasStrokes = computed(() => !!currentQuestion.value && !!kanaStrokes(curre
 // first contact: watch the strokes, then trace once over the guide. Not scored.
 const introStep = ref<'watch' | 'trace' | 'traced'>('watch')
 
-const LABELS = {
-  'kana-to-romaji': 'Type the romaji for',
-  'romaji-to-kana': 'Which kana is',
-  draw: 'Write the kana for',
-}
+// this screen stays mounted between sessions and the index starts over, so the index alone
+// would hand the first card of a new session the canvas of the last one
+const cardKey = computed(() => `${startedAt.value}-${current.value}`)
 
 const isListen = computed(() => !!currentQuestion.value?.listen)
 const label = computed(() => {
   const q = currentQuestion.value
   if (!q) return ''
   if (isIntro.value) return introStep.value === 'watch' ? 'New kana' : 'Now trace it'
-  return isListen.value ? 'Write what you hear' : LABELS[q.direction]
+  // か and カ sound and romanize the same, a write question has to say which one it wants
+  if (isListen.value) return `Write what you hear in ${q.script}`
+  if (q.direction === 'draw') return `Write the ${q.script} for`
+  return q.direction === 'kana-to-romaji' ? 'Type the romaji for' : 'Which kana is'
 })
 
-// warn about lookalikes on first contact, before the mix-up gets learned
+// ぢ and づ read like じ and ず. When the rarer one is asked for, say so.
+const twinNote = computed(() => {
+  const q = currentQuestion.value
+  if (!q || !isDraw.value || answered.value) return null
+  const usual = kanaForRomaji(q.romaji, q.script)
+  return usual && usual !== q.kana ? `not ${usual}, the other one` : null
+})
+
+// warn about lookalikes on first contact, before the mix-up gets learned.
+// Only about kana the learner knows or meets in this session, the rest would be noise.
 const introWarning = computed(() => {
   const q = currentQuestion.value
   if (!q || !isIntro.value) return null
-  const others = lookalikesOf(q.kana)
+  const met = (k: string) => {
+    const e = statsData.value[k]
+    return (!!e && e.correct + e.incorrect > 0) || questions.value.some(x => x.kana === k)
+  }
+  const others = lookalikesOf(q.kana).filter(met)
   if (others.length === 0) return null
   return { others: others.join('・'), hint: lookalikeHint(q.kana, others[0]) }
 })
@@ -91,8 +106,14 @@ const primary = computed((): Action | null => {
 
 const secondary = computed((): Action | null => {
   if (!currentQuestion.value || answered.value) return null
-  if (isIntro.value) return introStep.value === 'traced' ? null : { label: 'Skip', run: nextQuestion }
+  // both move on to the next card, the label says what is left out
+  if (isIntro.value) return introStep.value === 'traced' ? null : { label: introStep.value === 'watch' ? 'Skip intro' : 'Skip tracing', run: nextQuestion }
   return { label: "Don't know", run: giveUp }
+})
+
+// coming back to a session that was left: the cursor goes back into the field
+watch(screen, s => {
+  if (s === 'quiz' && isType.value && !answered.value) nextTick(() => typeFieldEl.value?.focus())
 })
 
 function onTypedEnter(e: KeyboardEvent): void {
@@ -133,7 +154,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="quiz" :class="{ compact }">
+  <div class="quiz" :class="{ compact, 'q-listen': isListen && !answered, 'q-trace': isIntro }">
     <div class="quiz-top">
       <div class="quiz-topbar">
         <button class="icon-btn boxed" aria-label="End session" @click="goHome()"><Icon name="x" :size="20" /></button>
@@ -156,7 +177,7 @@ onBeforeUnmount(() => {
       <div v-show="isErrorPractice" class="mode-banner">Error practice</div>
 
       <!-- fluency countdown, restarts per question through :key and freezes once answered -->
-      <div v-if="timeLimit" :key="current" class="countdown" aria-hidden="true">
+      <div v-if="timeLimit" :key="`${cardKey}-${timerRun}`" class="countdown" aria-hidden="true">
         <div class="countdown-fill" :class="{ stopped: answered }" :style="{ animationDuration: `${timeLimit}ms` }"></div>
       </div>
     </div>
@@ -186,8 +207,11 @@ onBeforeUnmount(() => {
           {{ currentQuestion?.question }}
         </div>
 
+        <div v-if="twinNote" class="twin-note">{{ twinNote }}</div>
+
+        <!-- not before the answer where the sound is the answer: listening, and reading a kana -->
         <button
-          v-if="currentQuestion && !(isListen && !answered)"
+          v-if="currentQuestion && !((isListen || isType) && !answered)"
           class="audio-btn"
           :class="{ playing: audioActive }"
           @click="onAudioClick(currentQuestion.kana)"
@@ -205,6 +229,7 @@ onBeforeUnmount(() => {
             :class="{
               'input-correct': answered && feedbackType === 'correct',
               'input-wrong':   answered && feedbackType === 'wrong',
+              'input-retry':   typoRetry && !answered,
             }"
             type="text"
             aria-label="Type the romaji answer"
@@ -215,17 +240,18 @@ onBeforeUnmount(() => {
             v-model="typedAnswer"
             @keydown.enter="onTypedEnter"
           />
+          <div v-if="typoRetry && !answered" class="type-hint" role="status">Looks like a typo. Fix it and check again.</div>
         </div>
 
         <template v-if="isDraw && currentQuestion">
           <!-- gave up: show how it's written instead of an empty canvas -->
-          <StrokeDemo v-if="gaveUp" :key="`demo${current}`" :kana="currentQuestion.kana" class="draw-demo" />
-          <StrokeCanvas v-else :key="current" :kana="currentQuestion.kana" mode="recall" @done="submitDrawing" />
+          <StrokeDemo v-if="gaveUp" :key="`demo${cardKey}`" :kana="currentQuestion.kana" class="draw-demo" />
+          <StrokeCanvas v-else :key="cardKey" :kana="currentQuestion.kana" mode="recall" @done="submitDrawing" />
         </template>
 
         <StrokeCanvas
           v-if="isIntro && currentQuestion && introStep !== 'watch'"
-          :key="`trace${current}`" :kana="currentQuestion.kana" mode="trace"
+          :key="`trace${cardKey}`" :kana="currentQuestion.kana" mode="trace"
           @done="introStep = 'traced'"
         />
 

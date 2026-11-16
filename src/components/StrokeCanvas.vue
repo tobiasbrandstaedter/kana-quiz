@@ -219,7 +219,8 @@ const debugText = computed(() => {
     </div>
     <div v-if="!finished" class="draw-tools">
       <button class="stroke-ctl" :disabled="!canUndo" @click="undo()"><Icon name="undo" :size="18" />Undo</button>
-      <button v-if="mode === 'recall' && !showHint" class="stroke-ctl" @click="revealHint()">Show stroke {{ next + 1 }}</button>
+      <!-- stays in place once the hint is up, so Undo doesn't jump -->
+      <button v-if="mode === 'recall'" class="stroke-ctl" :disabled="showHint" @click="revealHint()">Show stroke {{ next + 1 }}</button>
     </div>
     <div v-if="debug" class="draw-debug">{{ debugText }}</div>
   </div>

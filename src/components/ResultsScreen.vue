@@ -23,7 +23,7 @@ function polyline(points: Point[]): string {
 // what comes next, so the session ends with a reason to come back
 const outlookText = computed(() => {
   const o = roundOutcome.value.outlook
-  if (o.now) return `${o.now} kana are due now.`
+  if (o.now) return `${o.now} kana ${o.now === 1 ? 'is' : 'are'} due now.`
   if (o.soon) return `${o.soon} kana come back within a day.`
   if (o.nextAt) return `Next review ${fromNow(o.nextAt)}.`
   return ''

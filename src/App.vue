@@ -9,7 +9,7 @@ import KanaSheet from './components/KanaSheet.vue'
 
 const quiz = useQuiz()
 provide(QUIZ_KEY, quiz)
-const { screen, notice } = quiz
+const { screen, notice, noticeAction, runNoticeAction } = quiz
 
 const { needRefresh, apply } = useAppUpdate()
 // nothing to lose on the setup screen, so switch over right away;
@@ -34,7 +34,10 @@ onMounted(() => {
     <ResultsScreen v-show="screen === 'results'" />
   </div>
   <KanaSheet />
-  <div v-if="notice" class="notice" role="status">{{ notice }}</div>
+  <div v-if="notice" class="notice" role="status">
+    <span>{{ notice }}</span>
+    <button v-if="noticeAction" @click="runNoticeAction()">{{ noticeAction.label }}</button>
+  </div>
   <div v-if="needRefresh" class="update-banner" role="status">
     <span>New version ready</span>
     <button @click="apply()">Update</button>
