@@ -17,9 +17,12 @@ export function shuffle<T>(arr: T[], rng: () => number = Math.random): T[] {
  * then anything from the same script. Row, vowel and random fill come from
  * `known` kana first, so a beginner isn't shown kana they never met.
  * Lookalikes don't wait for that, telling them apart is the point.
+ * A kana with the same romaji (ぢ for じ, カ for か) is never offered,
+ * it would be a second right answer.
  */
 export function pickDistractors(pair: KanaPair, full: KanaPair[], preferred: string[], rng: () => number = Math.random, known?: Set<string>): string[] {
-  const sameScript = full.filter(p => p.script === pair.script && p.kana !== pair.kana)
+  const others = full.filter(p => p.romaji !== pair.romaji)
+  const sameScript = others.filter(p => p.script === pair.script)
   const available = new Set(sameScript.map(p => p.kana))
   const info = kanaInfo(pair.kana)
 
@@ -32,7 +35,7 @@ export function pickDistractors(pair: KanaPair, full: KanaPair[], preferred: str
   const relatedMix = shuffle(related, rng)
   const scriptMix = shuffle(sameScript.map(p => p.kana), rng)
   // tiny custom pools may not have three same-script kana
-  const anyKana = shuffle(full.map(p => p.kana), rng)
+  const anyKana = shuffle(others.map(p => p.kana), rng)
 
   const tiers = [
     preferred,

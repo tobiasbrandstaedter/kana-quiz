@@ -106,10 +106,16 @@ describe('time based patterns', () => {
 
 describe('blind spots', () => {
   it('suggests unseen lookalikes of missed kana', () => {
-    const s = stats(entry('シ', 1, 2))
+    const s = stats(entry('シ', 1, 2), entry('タ', 1, 0))
     const p = detectPatterns(s, [], 'all').find(x => x.kind === 'blind-spot')!
     expect(p.kana).toEqual(['シ', 'ツ'])
     expect(p.detail).toContain('シ vs ツ')
+  })
+
+  it('waits until the row of the lookalike has been started', () => {
+    // ツ sits in the ta row, nothing from it has been practiced yet
+    const s = stats(entry('シ', 1, 2))
+    expect(detectPatterns(s, [], 'all').some(x => x.kind === 'blind-spot')).toBe(false)
   })
 
   it('is not reported for a single round', () => {

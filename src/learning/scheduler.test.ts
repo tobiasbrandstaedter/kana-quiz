@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import type { AnswerRecord, StatEntry, StatsMap } from '../types'
-import { review, isDue, recentErrors, pickSmart, orderSession, columnProgress, dueOutlook, mixedDirection, MAX_BOX } from './scheduler'
+import { review, isDue, recentErrors, pickSmart, orderSession, reaskSlot, columnProgress, dueOutlook, mixedDirection, MAX_BOX } from './scheduler'
 import { allPairs, pairFor, HIRAGANA } from '../data/kana'
 import { newEntry } from './statsMigration'
 
@@ -124,6 +124,27 @@ describe('orderSession', () => {
     expect(items).toHaveLength(7)
     expect(items.filter(i => !i.intro && i.pair.kana !== 'あ').map(i => i.pair.kana).sort()).toEqual(['か', 'き', 'く', 'け'])
     expect(items.findIndex(i => i.intro)).toBeLessThan(items.findIndex(i => !i.intro && i.pair.kana === 'あ'))
+  })
+})
+
+describe('reaskSlot', () => {
+  const queue = ['あ', 'い', 'う', 'え', 'お', 'か', 'き', 'く']
+
+  it('puts the re-ask a few cards later when there is room', () => {
+    expect(reaskSlot(queue, 0, 'あ', 4)).toEqual({ index: 4, pad: 0 })
+  })
+
+  it('asks for filler cards near the end instead of re-asking right away', () => {
+    expect(reaskSlot(queue, 7, 'く', 3)).toEqual({ index: 8, pad: 2 })
+    expect(reaskSlot(queue, 6, 'き', 5)).toEqual({ index: 8, pad: 1 })
+    expect(reaskSlot(queue, 5, 'か', 6)).toEqual({ index: 8, pad: 0 })
+  })
+
+  it('never lands next to another card of the same kana', () => {
+    // a second あ is planned at 3: go behind it, with a card in between
+    expect(reaskSlot(['あ', 'い', 'う', 'あ', 'え', 'お'], 0, 'あ', 3)).toEqual({ index: 5, pad: 0 })
+    // the planned card is the last one, so one filler has to separate them
+    expect(reaskSlot(['い', 'あ', 'う', 'え', 'あ'], 1, 'あ', 3)).toEqual({ index: 5, pad: 1 })
   })
 })
 

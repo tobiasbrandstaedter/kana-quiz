@@ -25,6 +25,7 @@
   --primary-soft: #e8e4ff;
   --primary-text: #4536b5;
   --hero-dim: #dcd7ff;
+  --hero-well: rgba(7, 6, 26, 0.28);   /* sunken areas on the hero, same in both themes */
 
   --action: #ffc83d;
   --on-action: #1b1b2f;
@@ -42,6 +43,9 @@
   --sky-soft: #dceffc;
   --mint-soft: #dbf5ea;
   --lilac-soft: #e8e4ff;
+  /* kana chart: a cell's fill is its stage, so these must stand apart from --surface */
+  --stage-learning: #e8e4ff;
+  --stage-reviewing: #fff1bf;
 
   --bw: 2px;
   --lift-1: 2px;
@@ -90,6 +94,9 @@
     --sky-soft: #1b3248;
     --mint-soft: #17392f;
     --lilac-soft: #312c66;
+    /* the soft tints sit one shade off the surface here, the chart needs real fills */
+    --stage-learning: #5145c2;
+    --stage-reviewing: #8a6d14;
   }
 }
 
@@ -329,9 +336,26 @@ body {
 
 .ring { position: relative; width: 76px; height: 76px; flex-shrink: 0; }
 .ring circle { fill: none; stroke-width: 10; }
-.ring-track { stroke: rgba(7, 6, 26, 0.28); }
+.ring-track { stroke: var(--hero-well); }
 .ring-fill { stroke: var(--action); stroke-linecap: round; transition: stroke-dasharray 0.6s ease; }
-.ring-label { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 17px; font-weight: 900; }
+.ring-label { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1.05; }
+.ring-num { font-size: 19px; font-weight: 900; }
+.ring-of { font-size: 12px; font-weight: 800; }
+
+/* the row selection reaching into smart practice, with the way out next to it */
+.hero-scope {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 8px 8px 14px;
+  border-radius: var(--r-sm);
+  background: var(--hero-well);
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.35;
+}
+.hero-scope .btn { flex-shrink: 0; }
 
 .hero-new { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .hero-new-label { font-size: 12px; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; color: var(--hero-dim); margin-right: 4px; }
@@ -425,10 +449,16 @@ body {
 .tile.peach { --tint: var(--peach-soft); }
 .tile.butter { --tint: var(--butter-soft); }
 .tile.sky { --tint: var(--sky-soft); }
-.tile.timed { --tint: var(--surface-2); }
-.tile.active { background: var(--tint); }
-.tile.active .tile-icon { background: var(--surface); }
-.tile.timed.active { --tint: var(--good-soft); }
+/* an odd tile at the end fills its row instead of leaving a hole */
+.mode-grid .tile:last-child:nth-child(odd) { grid-column: span 2; }
+/* selected looks the same as a selected row or chip: filled */
+.tile.active { background: var(--primary); color: var(--on-primary); }
+.tile.active .tile-hint { color: var(--on-primary); }
+.tile.active .tile-icon { color: var(--ink); }
+
+.tile.timed-row { flex-direction: row; align-items: center; gap: 12px; width: 100%; min-height: 0; margin-top: 12px; }
+.tile.timed-row .tile-icon { margin-bottom: 0; flex-shrink: 0; }
+.timed-text { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
 .tile-check {
   position: absolute;
   top: 10px;
@@ -468,8 +498,8 @@ body {
 .legend-item { display: inline-flex; align-items: center; gap: 6px; }
 .legend-swatch { width: 14px; height: 14px; border-radius: 4px; border: var(--bw) solid var(--edge); background: var(--surface); }
 .legend-swatch.mastered { background: var(--good); }
-.legend-swatch.reviewing { background: var(--action); }
-.legend-swatch.learning { background: var(--primary-soft); }
+.legend-swatch.reviewing { background: var(--stage-reviewing); }
+.legend-swatch.learning { background: var(--stage-learning); }
 .legend-swatch.new { background: var(--surface); }
 .legend-due, .legend-error { width: 10px; height: 10px; border-radius: 50%; border: 1.5px solid var(--edge); }
 .legend-due { background: var(--action); }
@@ -499,7 +529,7 @@ body {
 .col-btn .romaji-label { font-size: 12px; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; color: var(--ink-2); }
 .col-btn.mastered { background: var(--good-soft); }
 .col-btn.active { background: var(--primary); color: var(--on-primary); }
-.col-btn.active .romaji-label { color: var(--hero-dim); }
+.col-btn.active .romaji-label { color: var(--on-primary); }
 .col-btn .error-dot { display: none; position: absolute; top: 6px; right: 6px; width: 9px; height: 9px; border-radius: 50%; background: var(--bad); border: 1.5px solid var(--edge); }
 .col-btn.has-errors .error-dot { display: block; }
 .col-btn .col-progress { position: absolute; left: 9px; right: 9px; bottom: 6px; height: 5px; border-radius: 3px; background: var(--surface-2); display: flex; overflow: hidden; }
@@ -594,6 +624,25 @@ body {
   min-height: calc(100dvh - var(--top-gap));
 }
 .quiz-body { flex: 1; }
+
+/* Phones: the canvas can't be scrolled by dragging on it, so it only takes the height that
+   the top bar, the card, its own tools and the action bar leave. --draw-chrome is the sum
+   of those, larger where the card is taller. */
+@media (max-width: 639px) {
+  .quiz { --draw-chrome: 420px; --draw-size: min(86vw, max(200px, calc(100vh - var(--draw-chrome)))); }
+  .quiz.q-trace { --draw-chrome: 470px; }
+  .quiz.q-listen { --draw-chrome: 530px; }
+  @supports (height: 100dvh) {
+    .quiz { --draw-size: min(86vw, max(200px, calc(100dvh - var(--draw-chrome)))); }
+  }
+}
+/* short phones: the listen card gives up its height first, the canvas is already at its minimum */
+@media (max-width: 639px) and (max-height: 700px) {
+  .quiz.q-listen { --draw-chrome: 460px; }
+  .listen-btn { flex-direction: row; gap: 10px; margin: 2px auto; padding: 12px 22px; }
+  .listen-btn svg { width: 28px; height: 28px; }
+  .listen-note { display: none; }
+}
 .question-card, .options-grid, .result-score, .missed-item, .stroke-svg, .explain, .chart { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
 
 .quiz-topbar { display: flex; align-items: center; gap: 12px; margin-bottom: 18px; }
@@ -677,7 +726,7 @@ body {
 .listen-btn.playing { background: var(--action); color: var(--on-action); }
 .listen-btn.blocked { animation: listen-pulse 1.2s ease-in-out infinite; }
 @keyframes listen-pulse { 50% { background: var(--action); } }
-.listen-note { font-size: 14px; font-weight: 700; color: var(--ink-2); margin-top: 10px; }
+.listen-note, .twin-note { font-size: 14px; font-weight: 700; color: var(--ink-2); margin-top: 10px; }
 @media (prefers-reduced-motion: reduce) { .listen-btn.blocked { animation: none; } }
 
 .intro-romaji { font-size: 40px; font-weight: 900; letter-spacing: 0.04em; color: var(--primary); }
@@ -713,6 +762,10 @@ body {
 .type-field.input-correct { background: var(--good-soft); color: var(--good-text); border-color: var(--edge); box-shadow: none; }
 .type-field.input-wrong { background: var(--bad-soft); color: var(--bad-text); border-color: var(--edge); box-shadow: none; }
 .type-field:read-only { cursor: default; }
+/* one typo is let through: nudge the field and say so, nothing is counted yet */
+.type-field.input-retry { border-color: var(--action); animation: draw-shake 0.3s ease-in-out; }
+.type-hint { margin-top: 10px; font-size: 14px; font-weight: 800; color: var(--warn-text); text-align: center; }
+@media (prefers-reduced-motion: reduce) { .type-field.input-retry { animation: none; } }
 
 .options-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin-bottom: 22px; }
 .option-btn {
@@ -739,7 +792,7 @@ body {
   left: 10px;
   width: 20px;
   height: 20px;
-  display: flex;
+  display: none;
   align-items: center;
   justify-content: center;
   border: 1.5px solid currentColor;
@@ -749,6 +802,8 @@ body {
   font-weight: 900;
   opacity: 0.5;
 }
+/* the 1 to 4 keys only exist where there is a keyboard, a phone doesn't need the badges */
+@media (hover: hover) and (pointer: fine) { .opt-n { display: flex; } }
 .opt-mark {
   position: absolute;
   top: -11px;
@@ -990,8 +1045,8 @@ body {
 }
 .cc-kana { font-size: 24px; font-weight: 700; line-height: 1.15; }
 .cc-romaji { font-size: 12px; font-weight: 800; }
-.chart-cell.learning { background: var(--primary-soft); color: var(--ink); }
-.chart-cell.reviewing { background: var(--butter-soft); color: var(--ink); }
+.chart-cell.learning { background: var(--stage-learning); color: var(--ink); }
+.chart-cell.reviewing { background: var(--stage-reviewing); color: var(--ink); }
 .chart-cell.mastered { background: var(--good); color: var(--on-bright); }
 .chart-cell.due::after, .chart-cell.error::before { content: ''; position: absolute; top: 4px; width: 9px; height: 9px; border-radius: 50%; border: 1.5px solid var(--edge); }
 .chart-cell.due::after { right: 4px; background: var(--action); }
@@ -1133,7 +1188,7 @@ body {
 .credit { margin-top: 24px; font-size: 13px; font-weight: 600; line-height: 1.6; color: var(--ink-2); }
 .credit a { color: var(--primary-text); font-weight: 800; }
 
-.stroke-stage { display: flex; flex-direction: column; align-items: center; gap: 14px; }
+.stroke-stage { display: flex; flex-direction: column; align-items: center; gap: 14px; scroll-margin-top: 16px; }
 .stroke-stage .stroke-demo, .stroke-stage .stroke-canvas { width: 100%; }
 .stroke-stage .stroke-svg { width: min(100%, calc(var(--draw-size) * var(--w, 1))); }
 .stroke-stage .stroke-canvas { margin-bottom: 0; }
@@ -1304,9 +1359,10 @@ body.sheet-open { overflow: hidden; }
   font-weight: 800;
   box-shadow: 4px 4px 0 var(--primary);
 }
+.notice, .update-banner { display: flex; align-items: center; gap: 14px; }
 .notice { bottom: calc(var(--tabbar-h) + 20px + env(safe-area-inset-bottom)); }
-.update-banner { bottom: calc(100px + env(safe-area-inset-bottom)); display: flex; align-items: center; gap: 14px; }
-.update-banner button { min-height: 36px; padding: 0 14px; border: var(--bw) solid var(--edge); border-radius: 10px; background: var(--action); color: var(--on-action); font-weight: 900; cursor: pointer; }
+.update-banner { bottom: calc(100px + env(safe-area-inset-bottom)); }
+.notice button, .update-banner button { flex-shrink: 0; min-height: 44px; padding: 0 14px; border: var(--bw) solid var(--edge); border-radius: 10px; background: var(--action); color: var(--on-action); font-weight: 900; cursor: pointer; }
 
 /* ---------- tablets ---------- */
 

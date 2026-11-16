@@ -56,8 +56,6 @@ export function useStats() {
       .sort((a, b) => recentErrorCount(b.kana) - recentErrorCount(a.kana) || b.incorrect - a.incorrect)
   )
 
-  const maxErrorCount = computed(() => errorPairs.value[0]?.incorrect ?? 0)
-  const errorTabCount = computed(() => errorPairs.value.length)
   const statsTabCount = computed(() => Object.keys(statsData.value).length)
 
   const errorKanaSet = computed(() => new Set(errorPairs.value.map(e => e.kana)))
@@ -92,7 +90,7 @@ export function useStats() {
       for (const [fault, n] of Object.entries(a.strokes.faults) as Array<[StrokeFault, number]>)
         e.strokeFaults[fault] = (e.strokeFaults[fault] ?? 0) + n
     }
-    if (!a.typo && !a.timeout) Object.assign(e, review(e, a.correct, now))
+    if (!a.typo && !a.timeout && !a.holdBox) Object.assign(e, review(e, a.correct, now))
     // drawing takes far longer than reading, keep it out of the reaction times
     if (a.direction !== 'draw' && a.elapsedMs > 0 && a.elapsedMs < 30_000) {
       e.totalMs += a.elapsedMs
@@ -124,10 +122,6 @@ export function useStats() {
     statsData.value = data
   }
 
-  function resolveAllErrors(): void {
-    resolveErrors(errorPairs.value.map(e => e.kana))
-  }
-
   // the one real reset, everything goes
   function resetAll(): void {
     for (const key of [LS_STATS, LS_STATS_V2, LS_ANSWERS, LS_DAYS]) {
@@ -145,7 +139,7 @@ export function useStats() {
   }
 
   return {
-    statsData, answerLog, errorPairs, maxErrorCount, errorTabCount, statsTabCount, errorKanaSet, recentErrorCount, today,
-    recordAnswer, resolveErrors, resolveAllErrors, resetAll, refresh,
+    statsData, answerLog, errorPairs, statsTabCount, errorKanaSet, recentErrorCount, today,
+    recordAnswer, resolveErrors, resetAll, refresh,
   }
 }

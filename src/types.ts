@@ -81,6 +81,7 @@ export interface AnswerInput {
   elapsedMs: number
   typo?: boolean     // counts as wrong, but leaves the Leitner box alone
   timeout?: boolean  // too slow in a timed session, same treatment as a typo
+  holdBox?: boolean  // right after a miss in the same session: counts, but can't promote
   strokes?: StrokeTally  // draw answers only
 }
 

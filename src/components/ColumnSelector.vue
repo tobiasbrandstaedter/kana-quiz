@@ -68,7 +68,8 @@ const emit = defineEmits<{
             @click="emit('toggle', col.id)"
           >
             <span class="kana-sample">{{ col.sample }}</span>
-            <span class="romaji-label">{{ col.label }}</span>
+            <!-- romaji, so the rows can be told apart before the kana can be read -->
+            <span class="romaji-label">{{ col.romaji[0] }}</span>
             <span class="error-dot"></span>
             <span v-if="progress[col.id]?.seen" class="col-progress" aria-hidden="true">
               <span class="mastered" :style="{ width: pct(progress[col.id].mastered, col.kana.length) }"></span>

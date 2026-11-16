@@ -5,6 +5,7 @@ import { lookalikeHint } from '../data/lookalikes'
 import { kanaStrokes } from '../data/strokeGlyphs'
 import { matchesRomaji, normalizeRomaji, isTypo } from '../learning/romaji'
 import { pickDistractors, shuffle } from '../learning/distractors'
+import { reaskSlot } from '../learning/scheduler'
 import type { PlannedItem } from '../learning/scheduler'
 import { DEFAULT_LIMITS } from '../learning/progress'
 import type { FluencyLimits } from '../learning/progress'
@@ -31,9 +32,10 @@ function pickDirection(pair: KanaPair, mode: QuizMode, helpers: SessionHelpers):
   return mode
 }
 
-function makeQuestion(pair: KanaPair, mode: QuizMode, full: KanaPair[], helpers: SessionHelpers): QuizQuestion {
-  const direction = pickDirection(pair, mode, helpers)
-
+function makeQuestion(
+  pair: KanaPair, mode: QuizMode, full: KanaPair[], helpers: SessionHelpers,
+  direction: QuizDirection = pickDirection(pair, mode, helpers),
+): QuizQuestion {
   if (direction === 'draw') {
     return { direction, inputType: 'draw', question: pair.romaji, answer: pair.kana, kana: pair.kana, romaji: pair.romaji, script: pair.script, options: [], listen: mode === 'listen' }
   }
@@ -79,8 +81,9 @@ export function useSession() {
   // fluency mode: answer within this time or it counts as too slow. Drawing is never timed.
   const limits = ref<FluencyLimits>(DEFAULT_LIMITS)
   const gaveUp = ref(false)  // "don't know" on the current question
-  // first and latest answer per kana, so a miss fixed on the re-ask isn't scored twice
-  const kanaResults = ref<Record<string, { first: boolean; last: boolean }>>({})
+  const typoRetry = ref(false)  // one slip on the current question was let through
+  // per kana: missed at any point, and the latest answer. A kana asked several times is scored once.
+  const kanaResults = ref<Record<string, { missed: boolean; last: boolean }>>({})
 
   // kept from start() so re-asked questions are built the same way
   let sessionMode: QuizMode = 'kana-to-romaji'
@@ -103,8 +106,9 @@ export function useSession() {
 
   const roundSummary = computed(() => {
     const all = Object.values(kanaResults.value)
-    const first = all.filter(r => r.first).length
-    const fixed = all.filter(r => !r.first && r.last).length
+    // "first try" means never missed this round, right once and wrong later doesn't count
+    const first = all.filter(r => !r.missed).length
+    const fixed = all.filter(r => r.missed && r.last).length
     return { total: all.length, first, fixed, open: all.length - first - fixed }
   })
 
@@ -119,12 +123,12 @@ export function useSession() {
     const pct = Math.round((first / total) * 100)
     const [title, jp] =
       pct === 100 ? ['Perfect!', '完璧！'] :
-      open === 0  ? ['All fixed!', 'できた！'] :
+      open === 0  ? ['Got there!', 'できた！'] :
       pct >= 80   ? ['Great work', 'よくできました'] :
       pct >= 60   ? ['Keep practicing', 'もう少し'] :
                     ['Keep studying', '頑張って！']
     const parts = [`${first} of ${total} kana on the first try`]
-    if (fixed) parts.push(`${fixed} fixed on retry`)
+    if (fixed) parts.push(`${fixed} right on retry`)
     if (open) parts.push(`${open} still open`)
     return { title, jp, detail: parts.join(' · ') }
   })
@@ -141,6 +145,7 @@ export function useSession() {
     feedbackType.value = ''
     explanation.value = null
     gaveUp.value = false
+    typoRetry.value = false
     questionStartTime.value = Date.now()
   }
 
@@ -186,17 +191,23 @@ export function useSession() {
   function queueReask(q: QuizQuestion): void {
     const n = reaskCount[q.kana] ?? 0
     if (n >= MAX_REASKS) return
+    const qs = questions.value
+    const { index, pad } = reaskSlot(qs.map(x => x.kana), current.value, q.kana, 3 + Math.floor(Math.random() * 4))
+    // close to the end other kana of this round go in between. With none around,
+    // the kana is left for the next session, it is due there anyway.
+    const others = shuffle([...new Map(qs.filter(x => x.kana !== q.kana && x.inputType !== 'intro').map(x => [x.kana, x])).values()]).slice(0, pad)
+    if (others.length < pad) return
     reaskCount[q.kana] = n + 1
-    const offset = 3 + Math.floor(Math.random() * 4)
-    const idx = Math.min(current.value + offset, questions.value.length)
-    const pair = { kana: q.kana, romaji: q.romaji, script: q.script }
-    questions.value.splice(idx, 0, { ...makeQuestion(pair, sessionMode, fullPairs, helpers), reask: true })
+    const again = (x: QuizQuestion, direction?: QuizDirection) =>
+      makeQuestion({ kana: x.kana, romaji: x.romaji, script: x.script }, sessionMode, fullPairs, helpers, direction)
+    // the re-ask keeps the direction that was missed, mixed mode would fall back to the easiest one
+    qs.splice(index, 0, ...others.map(x => again(x)), { ...again(q, q.direction), reask: true })
   }
 
   function noteResult(kana: string, correct: boolean): void {
-    const r = kanaResults.value[kana]
-    if (r) r.last = correct
-    else kanaResults.value[kana] = { first: correct, last: correct }
+    const r = kanaResults.value[kana] ?? (kanaResults.value[kana] = { missed: false, last: correct })
+    r.last = correct
+    if (!correct) r.missed = true
   }
 
   function markCorrect(q: QuizQuestion, suffix = ''): void {
@@ -223,12 +234,20 @@ export function useSession() {
     const typed = normalizeRomaji(typedAnswer.value)
     if (!typed) return
 
-    answered.value = true
-    const elapsed = Date.now() - questionStartTime.value
     const wasCorrect = matchesRomaji(typed, q.kana, q.romaji)
     const typo = !wasCorrect && isTypo(typed, q.kana, q.romaji)
-    // a typo is still wrong, but it says nothing about which kana got mixed up
-    onRecord({ kana: q.kana, romaji: q.romaji, script: q.script, direction: q.direction, correct: wasCorrect, given: typo ? '' : typed, elapsedMs: elapsed, typo })
+    // the first slip gets one more go: the learner knew it, the finger didn't
+    if (typo && !typoRetry.value) {
+      typoRetry.value = true
+      focusTypeField()
+      return
+    }
+
+    answered.value = true
+    const elapsed = Date.now() - questionStartTime.value
+    // only the reading of another kana says something about what got mixed up, a typo or nonsense doesn't
+    const givenKana = typo ? null : kanaForRomaji(typed, q.script) ?? null
+    onRecord({ kana: q.kana, romaji: q.romaji, script: q.script, direction: q.direction, correct: wasCorrect, given: givenKana ? typed : '', elapsedMs: elapsed, typo })
 
     if (wasCorrect) {
       // show the Hepburn form when an alternate spelling was used
@@ -236,8 +255,6 @@ export function useSession() {
     } else if (typo) {
       markWrong(q, `Typo? Answer: ${q.answer}`, null)
     } else {
-      // only worth a side by side when the typed reading is a real kana
-      const givenKana = kanaForRomaji(typed, q.script) ?? null
       markWrong(q, `Answer: ${q.answer}`, givenKana ? {
         givenKana,
         givenLabel: typed,
@@ -334,8 +351,8 @@ export function useSession() {
 
   return {
     questions, current, correctCount, wrongCount, answered, selectedOption,
-    missedPairs, isErrorPractice, typedAnswer, feedbackText, feedbackType, explanation, startedAt, typeFieldEl, drawings,
-    timed, limits, timeLimit, gaveUp,
+    missedPairs, isErrorPractice, typedAnswer, feedbackText, feedbackType, explanation, startedAt, questionStartTime, typeFieldEl, drawings,
+    timed, limits, timeLimit, gaveUp, typoRetry,
     currentQuestion, progress, resultScore, resultLabel, roundSummary, uniqueMissedPairs,
     start, startPlanned, submitTyped, selectAnswer, submitDrawing, timeOut, giveUp, next,
   }

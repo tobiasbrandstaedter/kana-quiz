@@ -3,6 +3,7 @@ import { inject, computed, ref } from 'vue'
 import type { ActiveScript, QuizMode, SetupTab } from '../types'
 import { QUIZ_KEY } from '../composables/useQuiz'
 import { fromNow } from '../format'
+import { MAX_LEARNING } from '../learning/scheduler'
 import ColumnSelector from './ColumnSelector.vue'
 import ProgressTab from './ProgressTab.vue'
 import StrokesTab from './StrokesTab.vue'
@@ -12,7 +13,7 @@ import Icon from './Icon.vue'
 
 const {
   today,
-  activeTab, showTab, errorTabCount, selectedCount,
+  activeTab, showTab, errorPairs, selectedCount, pickedCols, statsTabCount,
   activeScript, setScript,
   selectorScripts, selectedCols, errorKanaSet, toggleCol, selectAll, selectNone, selectGroup,
   quizMode, setMode, timed, toggleTimed,
@@ -35,16 +36,22 @@ const caughtUp = computed(() => {
   return s.due + s.weak + s.fresh === 0
 })
 
+// nothing seen in this script yet: the hero explains what is about to happen instead of counting
+const firstRun = computed(() => smartSummary.value.seen === 0 && smartSummary.value.fresh > 0)
+const scriptWord = computed(() => activeScript.value === 'both' ? 'kana' : activeScript.value)
+
 // the most pressing part of the plan is the headline, the rest goes underneath
 const plan = computed(() => {
   const s = smartSummary.value
+  if (firstRun.value) return { headline: `Your first ${s.fresh} ${scriptWord.value}`, rest: '' }
   const parts: Array<[number, string, string]> = [
-    [s.due, 'kana due', 'due'],
+    // everything that is due, not just what fits into one session
+    [s.outlook.now, 'kana due', 'due'],
     [s.weak, 'weak kana to firm up', 'weak'],
     [s.fresh, 'new kana ready', 'new'],
   ]
   const live = parts.filter(([n]) => n > 0)
-  if (live.length === 0) return { headline: 'All caught up', rest: '' }
+  if (live.length === 0) return { headline: s.seen ? 'All caught up' : 'Nothing to practice yet', rest: '' }
   const [[n, long], ...others] = live
   return {
     headline: `${n} ${long}`,
@@ -59,11 +66,22 @@ const caughtUpText = computed(() => {
   return ''
 })
 
-// share of the kana in play that reached the mastered box
-const totalKana = computed(() => selectorScripts.value
-  .reduce((n, [, data]) => n + Object.values(data).reduce((m, cols) => m + cols.reduce((k, c) => k + c.kana.length, 0), 0), 0))
-const masteredPct = computed(() => totalKana.value ? Math.round((smartSummary.value.mastered / totalKana.value) * 100) : 0)
+// why no new kana come although some are left
+const NEW_BLOCKED = {
+  off: 'New kana are switched off in the session options.',
+  rows: 'You have seen every kana in the rows you picked.',
+  cap: `No new kana for now: ${MAX_LEARNING} or more are still settling, they come first.`,
+}
+
+// rows picked for the custom quiz also decide where new kana come from, so say it on the card
+const pickedText = computed(() => {
+  const names = pickedCols.value.map(c => c.romaji[0])
+  return names.length > 4 ? `${names.slice(0, 4).join(', ')} +${names.length - 4}` : names.join(', ')
+})
+
+// how far into the table the learner is: it moves from the first session on, mastered takes days
 const RING = 2 * Math.PI * 30
+const seenArc = computed(() => smartSummary.value.total ? (smartSummary.value.seen / smartSummary.value.total) * RING : 0)
 
 const SCRIPTS: Array<[ActiveScript, string]> = [
   ['hiragana', 'Hiragana'],
@@ -89,8 +107,8 @@ const SIZES = [10, 20, 30]
 const NEW_COUNTS = [0, 3, 5]
 
 function badge(tab: SetupTab): number {
-  if (tab === 'practice') return smartSummary.value.due
-  if (tab === 'progress') return errorTabCount.value
+  if (tab === 'practice') return smartSummary.value.outlook.now
+  if (tab === 'progress') return errorPairs.value.length
   return 0
 }
 </script>
@@ -126,22 +144,26 @@ function badge(tab: SetupTab): number {
       <section class="hero" aria-labelledby="hero-title">
         <div class="hero-top">
           <div class="hero-text">
-            <span class="eyebrow">{{ today.answers ? `Keep going · ${today.answers} today` : 'Practice now' }}</span>
+            <span class="eyebrow">{{ firstRun ? 'Start here' : today.answers ? `Keep going · ${today.answers} today` : 'Practice now' }}</span>
             <h2 id="hero-title" class="hero-title">{{ plan.headline }}</h2>
-            <span v-if="!caughtUp && plan.rest" class="hero-sub">plus {{ plan.rest }}</span>
+            <span v-if="firstRun" class="hero-sub">Watch each one, trace it, then get asked. About 3 minutes.</span>
+            <span v-else-if="!caughtUp && plan.rest" class="hero-sub">plus {{ plan.rest }}</span>
             <span v-else-if="caughtUp" class="hero-sub">{{ caughtUpText }}</span>
           </div>
-          <div class="ring" role="img" :aria-label="`${masteredPct} percent of these kana mastered`">
+          <div class="ring" role="img" :aria-label="`${smartSummary.seen} of ${smartSummary.total} kana seen`">
             <svg width="76" height="76" viewBox="0 0 76 76" aria-hidden="true">
               <circle class="ring-track" cx="38" cy="38" r="30" />
               <circle
-                v-if="masteredPct > 0"
+                v-if="seenArc > 0"
                 class="ring-fill" cx="38" cy="38" r="30"
-                :stroke-dasharray="`${(masteredPct / 100) * RING} ${RING}`"
+                :stroke-dasharray="`${seenArc} ${RING}`"
                 transform="rotate(-90 38 38)"
               />
             </svg>
-            <span class="ring-label">{{ masteredPct }}%</span>
+            <span class="ring-label" aria-hidden="true">
+              <span class="ring-num">{{ smartSummary.seen }}</span>
+              <span class="ring-of">of {{ smartSummary.total }}</span>
+            </span>
           </div>
         </div>
 
@@ -149,17 +171,24 @@ function badge(tab: SetupTab): number {
           <span class="hero-new-label">New</span>
           <span v-for="k in smartSummary.nextNew" :key="k" class="hero-kana kana">{{ k }}</span>
         </div>
-        <div v-else-if="!caughtUp && smartSummary.newHeldBack" class="hero-note">
-          No new kana for now: 10 or more are still shaky, they come first.
-        </div>
-        <div v-else-if="caughtUp && smartSummary.fill" class="hero-note">
+        <div v-if="smartSummary.newBlocked" class="hero-note">{{ NEW_BLOCKED[smartSummary.newBlocked] }}</div>
+        <div v-if="caughtUp && smartSummary.fill" class="hero-note">
           You can review early, it won't move anything up before it is due.
+        </div>
+        <!-- the app in one sentence, until there is something to show instead -->
+        <div v-if="statsTabCount === 0" class="hero-note">
+          What you learn comes back as short reviews, later and later the better you know it.
+        </div>
+
+        <div v-if="smartSummary.fromSelection && smartSummary.newBlocked !== 'off'" class="hero-scope">
+          <span>New kana only from the rows picked below: {{ pickedText }}</span>
+          <button class="btn btn-sm" @click="selectNone()">Use all rows</button>
         </div>
 
         <div class="hero-actions">
           <button class="btn btn-action btn-lg hero-start" :disabled="caughtUp && !smartSummary.fill" @click="startSmartPractice()">
-            {{ caughtUp ? 'Review early' : 'Practice now' }}
-            <span class="btn-badge">{{ smartSize }}</span>
+            {{ firstRun ? 'Start learning' : caughtUp && smartSummary.fill ? 'Review early' : 'Practice now' }}
+            <span v-if="smartSummary.cards" class="btn-badge">{{ smartSummary.cards }}</span>
           </button>
           <button class="hero-options" aria-label="Session options" @click="optionsOpen = true">
             <Icon name="sliders" :size="20" />
@@ -176,16 +205,14 @@ function badge(tab: SetupTab): number {
           <span class="stat-num">{{ smartSummary.seen - smartSummary.mastered }}</span>
           <span class="stat-label">learning</span>
         </div>
-        <button class="stat-tile bad" :aria-label="`${errorTabCount} kana to fix, show progress`" @click="showTab('progress')">
-          <span class="stat-num">{{ errorTabCount }}</span>
-          <span class="stat-label">to fix</span>
+        <button class="stat-tile bad" :aria-label="`${errorPairs.length} open errors, show progress`" @click="showTab('progress')">
+          <span class="stat-num">{{ errorPairs.length }}</span>
+          <span class="stat-label">errors</span>
         </button>
       </div>
 
-      <div class="section-head">
-        <h2 class="section-title">How to practice</h2>
-        <span class="section-aside">for both kinds of quiz</span>
-      </div>
+      <h2 class="section-title spaced">How to practice</h2>
+      <p class="section-note">Used by Practice now and by the custom quiz.</p>
       <div class="mode-grid">
         <button
           v-for="m in MODES" :key="m.mode"
@@ -198,12 +225,16 @@ function badge(tab: SetupTab): number {
           <span class="tile-hint">{{ m.hint }}</span>
           <span v-if="quizMode === m.mode" class="tile-check"><Icon name="check" :size="14" /></span>
         </button>
-        <button class="tile timed" :class="{ active: timed }" :aria-pressed="timed" @click="toggleTimed()">
-          <span class="tile-icon"><Icon name="timer" :size="20" /></span>
-          <span class="tile-name">Timed <span class="switch" :class="{ on: timed }" aria-hidden="true"></span></span>
-          <span class="tile-hint">at your usual pace, drawing is never timed</span>
-        </button>
       </div>
+      <!-- a switch on top of the mode, not a sixth mode, so it gets a row of its own -->
+      <button class="tile timed-row" role="switch" :aria-checked="timed" @click="toggleTimed()">
+        <span class="tile-icon"><Icon name="timer" :size="20" /></span>
+        <span class="timed-text">
+          <span class="tile-name">Timed</span>
+          <span class="tile-hint">at your usual pace, drawing is never timed</span>
+        </span>
+        <span class="switch" :class="{ on: timed }" aria-hidden="true"></span>
+      </button>
 
       <div class="section-head">
         <h2 class="section-title">Custom quiz</h2>
@@ -285,7 +316,7 @@ function badge(tab: SetupTab): number {
         </div>
         <p class="hint-line">
           New kana come {{ smartSummary.fromSelection ? 'from the rows you picked' : 'in table order' }},
-          and wait while 10 or more are still shaky.
+          and wait while {{ MAX_LEARNING }} or more are still settling.
         </p>
       </div>
       <button class="btn btn-primary btn-lg btn-block" @click="optionsOpen = false">Done</button>

@@ -6,7 +6,7 @@ import { detectPatterns, statsFromLog } from '../learning/patterns'
 import type { Pattern } from '../learning/patterns'
 import { pickSmart, orderSession, columnProgress, dueOutlook, mixedDirection, MASTERED_BOX, MAX_LEARNING } from '../learning/scheduler'
 import type { ColumnProgress } from '../learning/scheduler'
-import { fluencyLimits } from '../learning/progress'
+import { fluencyLimits, dayKey } from '../learning/progress'
 import { useStats } from './useStats'
 import type { BoxMove } from './useStats'
 import { useSetup } from './useSetup'
@@ -28,21 +28,55 @@ export function useQuiz() {
 
   // short message at the bottom of the screen, instead of alert()
   const notice = ref('')
+  // optional button on the toast, e.g. to take back what it reports
+  const noticeAction = ref<{ label: string; run: () => void } | null>(null)
   let noticeTimer: ReturnType<typeof setTimeout> | undefined
-  function notify(text: string): void {
+  function notify(text: string, action: { label: string; run: () => void } | null = null): void {
     notice.value = text
+    noticeAction.value = action
     clearTimeout(noticeTimer)
-    noticeTimer = setTimeout(() => { notice.value = '' }, 4000)
+    // a toast with a button stays longer, it has to be read and reached
+    noticeTimer = setTimeout(() => { notice.value = '' }, action ? 7000 : 4000)
+  }
+
+  function runNoticeAction(): void {
+    noticeAction.value?.run()
+    notice.value = ''
   }
 
   const scriptsInPlay = computed(() => setup.selectorScripts.value.map(([script]) => script))
 
+  // open errors follow the script toggle, like the tiles and the chart next to them
+  const openErrors = computed(() => stats.errorPairs.value.filter(e => scriptsInPlay.value.includes(e.script)))
+  const maxErrorCount = computed(() => Math.max(0, ...openErrors.value.map(e => e.incorrect)))
+
+  function resolveAllErrors(): void {
+    stats.resolveErrors(openErrors.value.map(e => e.kana))
+  }
+
+  function pairsInPlay(): KanaPair[] {
+    return setup.selectorScripts.value.flatMap(([script, data]) =>
+      Object.values(data).flatMap(cols => cols.flatMap(col => col.kana.map((k, i) => ({ kana: k, romaji: col.romaji[i], script })))))
+  }
+
   function smartPicks() {
     // new kana come from the selection, or from the whole table in order when nothing is selected
     const selected = setup.buildPairsFromSelected()
-    const candidates = selected.length > 0 ? selected : setup.selectorScripts.value.flatMap(([script, data]) =>
-      Object.values(data).flatMap(cols => cols.flatMap(col => col.kana.map((k, i) => ({ kana: k, romaji: col.romaji[i], script })))))
+    const candidates = selected.length > 0 ? selected : pairsInPlay()
     return pickSmart(stats.statsData.value, stats.answerLog.value, candidates, scriptsInPlay.value, setup.smartSize.value, Date.now(), setup.smartNew.value)
+  }
+
+  // why a session brings no new kana although some are left, so the hero can say it
+  function newBlocked(freshCount: number, learning: number): 'off' | 'rows' | 'cap' | null {
+    const isNew = (p: KanaPair) => {
+      const e = stats.statsData.value[p.kana]
+      return !e || e.correct + e.incorrect === 0
+    }
+    if (freshCount > 0 || !pairsInPlay().some(isNew)) return null
+    if (setup.smartNew.value === 0) return 'off'
+    const selected = setup.buildPairsFromSelected()
+    if (selected.length > 0 && !selected.some(isNew)) return 'rows'
+    return learning >= MAX_LEARNING ? 'cap' : null
   }
 
   const smartSummary = computed(() => {
@@ -50,14 +84,16 @@ export function useQuiz() {
     const now = Date.now()
     const inPlay = Object.values(stats.statsData.value).filter(e => scriptsInPlay.value.includes(e.script) && e.correct + e.incorrect > 0)
     return {
+      total: pairsInPlay().length,
       due: p.due.length, weak: p.weak.length, fresh: p.fresh.length, fill: p.fill.length,
+      // what the session counter will show: every review once, a new kana as intro plus two tests
+      cards: p.due.length + p.weak.length + p.fill.length + p.fresh.length * 3,
       nextNew: p.fresh.map(x => x.kana),
       fromSelection: setup.selectedCount.value > 0,
       outlook: dueOutlook(stats.statsData.value, scriptsInPlay.value, now),
       mastered: inPlay.filter(e => e.box >= MASTERED_BOX).length,
       seen: inPlay.length,
-      // the scheduler holds new kana back while too many are shaky, say so instead of just showing none
-      newHeldBack: setup.smartNew.value > 0 && inPlay.filter(e => e.box <= 1).length >= MAX_LEARNING,
+      newBlocked: newBlocked(p.fresh.length, inPlay.filter(e => e.box <= 1).length),
     }
   })
 
@@ -152,9 +188,12 @@ export function useQuiz() {
 
   // how each kana's Leitner box moved this round, first "from" and latest "to"
   const roundMoves = ref<Record<string, BoxMove>>({})
+  let missedThisRound = new Set<string>()
 
   function record(a: AnswerInput): void {
-    const move = stats.recordAnswer(a)
+    if (!a.correct) missedThisRound.add(a.kana)
+    // right on the re-ask, seconds after seeing the answer, is no reason to promote
+    const move = stats.recordAnswer({ ...a, holdBox: a.correct && missedThisRound.has(a.kana) })
     const prev = roundMoves.value[a.kana]
     roundMoves.value[a.kana] = { from: prev?.from ?? move.from, to: move.to }
   }
@@ -172,6 +211,7 @@ export function useQuiz() {
 
   function beforeStart(): void {
     roundMoves.value = {}
+    missedThisRound = new Set()
     session.limits.value = fluencyLimits(stats.statsData.value)
   }
 
@@ -184,13 +224,26 @@ export function useQuiz() {
 
   // fluency mode: one timer per question, cleared whenever the question changes
   let timer: ReturnType<typeof setTimeout> | undefined
-  watch([session.currentQuestion, screen], ([q, s]) => {
+  // bumped whenever the clock starts over on the same card, so the countdown bar can follow
+  const timerRun = ref(0)
+  function armTimer(): void {
     clearTimeout(timer)
+    const q = session.currentQuestion.value
     const limit = session.timeLimit.value
-    if (!q || s !== 'quiz' || !limit) return
+    if (!q || screen.value !== 'quiz' || !limit || session.answered.value) return
     timer = setTimeout(() => {
       if (screen.value === 'quiz' && session.currentQuestion.value === q) session.timeOut(record)
     }, limit)
+  }
+  watch([session.currentQuestion, screen], armTimer)
+
+  // a locked phone or another app is not a slow answer: stop the clock, start it over on return
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) { clearTimeout(timer); return }
+    if (screen.value !== 'quiz' || session.answered.value) return
+    session.questionStartTime.value = Date.now()
+    timerRun.value++
+    armTimer()
   })
 
   function startSmartPractice(): void {
@@ -280,7 +333,7 @@ export function useQuiz() {
     let total
 
     if (errorMode) {
-      const ep = stats.errorPairs.value
+      const ep = openErrors.value
       if (ep.length === 0) return
       // weight by recent errors, not lifetime ones, so old mistakes stop dominating
       pool = ep.flatMap(e =>
@@ -324,14 +377,25 @@ export function useQuiz() {
     session.giveUp(record)
   }
 
-  // writing from memory on the stroke order tab: a clean result is a real answer
-  function recordWritePractice(kana: string, result: DrawResult): void {
+  /**
+   * Writing from memory on the Writing tab: a clean result is a real answer, within limits.
+   * A kana that isn't part of practice yet stays out, it should still get its intro card.
+   * One write per kana and day counts, so "Again" can't pile up right answers.
+   * `peeked` (the kana was on screen just before) is saved but can't move the kana up.
+   */
+  function recordWritePractice(kana: string, result: DrawResult, peeked: boolean): 'saved' | 'repeat' | 'new' | null {
     const pair = pairFor(kana)
-    if (!pair || !result.correct) return
+    if (!pair || !result.correct) return null
+    const e = stats.statsData.value[kana]
+    if (!e || e.correct + e.incorrect === 0) return 'new'
+    const today = dayKey(Date.now())
+    // answers from this tab are the draw records without a time
+    if (stats.answerLog.value.some(r => r.kana === kana && r.direction === 'draw' && r.correct && r.ms === 0 && dayKey(r.t) === today)) return 'repeat'
     stats.recordAnswer({
-      ...pair, direction: 'draw', correct: true, given: '', elapsedMs: 0,
+      ...pair, direction: 'draw', correct: true, given: '', elapsedMs: 0, holdBox: peeked,
       strokes: { errors: result.errors, faults: result.faults },
     })
+    return 'saved'
   }
 
   function nextQuestion(): void {
@@ -339,12 +403,27 @@ export function useQuiz() {
   }
 
   function restartQuiz(): void {
+    const before = session.startedAt.value
     replay()
+    // errors fixed, kana sped up: the pool of the last session can be empty by now
+    if (session.startedAt.value === before) startSmartPractice()
+    if (session.startedAt.value === before) screen.value = 'setup'
   }
 
   function goHome(): void {
-    const answered = session.correctCount.value + session.wrongCount.value
-    if (screen.value === 'quiz' && answered > 0) notify(`Session ended, ${answered} answer${answered === 1 ? '' : 's'} saved`)
+    if (screen.value === 'quiz') {
+      const answered = session.correctCount.value + session.wrongCount.value
+      const id = session.startedAt.value
+      // the x is one tap in a corner, so leaving can be taken back for a moment
+      notify(answered ? `Session ended, ${answered} answer${answered === 1 ? '' : 's'} saved` : 'Session ended', {
+        label: 'Resume',
+        run: () => {
+          if (session.startedAt.value !== id) return
+          session.questionStartTime.value = Date.now()
+          screen.value = 'quiz'
+        },
+      })
+    }
     screen.value = 'setup'
     stats.refresh()
   }
@@ -369,7 +448,7 @@ export function useQuiz() {
 
   return {
     // orchestration
-    screen, activeTab, statsFilter, statsSort, notice, notify, detailKana, openKana, closeKana,
+    screen, activeTab, statsFilter, statsSort, notice, noticeAction, runNoticeAction, notify, detailKana, openKana, closeKana, timerRun,
     statsSummary, filteredStatsRows, allPatterns, roundPatterns, smartSummary, columnProgressMap, roundOutcome,
     weakPool, slowPool, scriptsInPlay,
     showTab, setStatsFilter, setStatsSort, startQuiz, startWorstPractice, startSlowestPractice, startPatternPractice, startSmartPractice, startKanaPractice,
@@ -377,14 +456,13 @@ export function useQuiz() {
     // stats
     statsData:          stats.statsData,
     answerLog:          stats.answerLog,
-    errorPairs:         stats.errorPairs,
-    maxErrorCount:      stats.maxErrorCount,
-    errorTabCount:      stats.errorTabCount,
+    errorPairs:         openErrors,
+    maxErrorCount,
+    resolveAllErrors,
     statsTabCount:      stats.statsTabCount,
     errorKanaSet:       stats.errorKanaSet,
     today:              stats.today,
     resolveErrors:      stats.resolveErrors,
-    resolveAllErrors:   stats.resolveAllErrors,
     // setup
     activeScript:       setup.activeScript,
     selectedCols:       setup.selectedCols,
@@ -399,7 +477,8 @@ export function useQuiz() {
     kanaFont:           setup.kanaFont,
     selectorScripts:    setup.selectorScripts,
     selectedCount:      setup.selectedCount,
-    strokeColumns:      setup.strokeColumns,
+    activeCols:         setup.activeCols,
+    pickedCols:         setup.pickedCols,
     countHint:          setup.countHint,
     headerTitle:        setup.headerTitle,
     setKanaFont:        setup.setKanaFont,
@@ -412,6 +491,7 @@ export function useQuiz() {
     // session
     questions:          session.questions,
     current:            session.current,
+    startedAt:          session.startedAt,
     correctCount:       session.correctCount,
     wrongCount:         session.wrongCount,
     answered:           session.answered,
@@ -430,6 +510,7 @@ export function useQuiz() {
     drawings:           session.drawings,
     timeLimit:          session.timeLimit,
     gaveUp:             session.gaveUp,
+    typoRetry:          session.typoRetry,
     roundSummary:       session.roundSummary,
   }
 }

@@ -162,6 +162,22 @@ export function orderSession(picks: SmartPicks, rng: () => number = Math.random)
   return slots.sort((a, b) => a.pos - b.pos).map(s => s.item)
 }
 
+// other cards between a miss and its re-ask, so it isn't answered from short term memory
+export const REASK_GAP = 2
+
+/**
+ * Where a missed kana comes back in the running session. `queue` is the kana per card,
+ * `current` the card that was just missed. Returns the index to insert at and how many
+ * other cards have to go in front of it: close to the end, or right behind another card
+ * of the same kana, the re-ask would come while the answer is still fresh.
+ */
+export function reaskSlot(queue: string[], current: number, kana: string, offset: number): { index: number; pad: number } {
+  let index = Math.min(current + offset, queue.length)
+  while (index < queue.length && (queue[index] === kana || queue[index - 1] === kana)) index++
+  const behindSameKana = index - 1 !== current && queue[index - 1] === kana
+  return { index, pad: Math.max(REASK_GAP - (index - current - 1), behindSameKana ? 1 : 0) }
+}
+
 export interface ColumnProgress {
   total: number
   seen: number

@@ -34,9 +34,19 @@ describe('pickDistractors', () => {
   })
 
   it('falls back to other scripts for tiny pools', () => {
-    const pool = [pairFor('あ')!, pairFor('ア')!, pairFor('イ')!, pairFor('ウ')!]
+    const pool = [pairFor('あ')!, pairFor('イ')!, pairFor('ウ')!, pairFor('エ')!]
     const picked = pickDistractors(pairFor('あ')!, pool, [], fixedRng)
-    expect(picked.sort()).toEqual(['ア', 'イ', 'ウ'])
+    expect(picked.sort()).toEqual(['イ', 'ウ', 'エ'])
+  })
+
+  it('never offers a kana with the same romaji', () => {
+    // ぢ and じ are both "ji", even a personal confusion must not put them side by side
+    for (let i = 0; i < 50; i++) {
+      expect(pickDistractors(pairFor('じ')!, FULL, ['ぢ'])).not.toContain('ぢ')
+      expect(pickDistractors(pairFor('づ')!, FULL, [])).not.toContain('ず')
+    }
+    const pool = [pairFor('か')!, pairFor('カ')!, pairFor('キ')!, pairFor('ク')!, pairFor('ケ')!]
+    expect(pickDistractors(pairFor('か')!, pool, [], fixedRng)).not.toContain('カ')
   })
 
   it('fills from known kana before unknown ones, lookalikes regardless', () => {
