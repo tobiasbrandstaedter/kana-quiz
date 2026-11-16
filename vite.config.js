@@ -6,7 +6,7 @@ export default defineConfig(({ command }) => ({
   plugins: [
     vue(),
     VitePWA({
-      registerType: 'autoUpdate',
+      registerType: 'prompt',
       workbox: {
         globPatterns: ['**/*.{js,css,html,svg,woff2}'],
         runtimeCaching: [
