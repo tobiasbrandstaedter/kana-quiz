@@ -7,7 +7,7 @@ describe('normalizeStats', () => {
     const out = normalizeStats(v2)
     expect(out['あ']).toEqual({
       kana: 'あ', romaji: 'a', script: 'hiragana', correct: 3, incorrect: 1, totalMs: 4000, count: 4,
-      lastSeen: 0, lastWrong: 0, streak: 0, confusions: {}, byDirection: {}, box: 1, due: 0,
+      lastSeen: 0, lastWrong: 0, resolvedAt: 0, streak: 0, confusions: {}, byDirection: {}, box: 1, due: 0,
       strokeErrors: [], strokeFaults: {},
     })
   })
@@ -28,7 +28,7 @@ describe('normalizeStats', () => {
   it('keeps v3 fields as they are', () => {
     const v3 = { 'ぬ': {
       kana: 'ぬ', romaji: 'nu', script: 'hiragana', correct: 1, incorrect: 2, totalMs: 0, count: 0,
-      lastSeen: 10, lastWrong: 9, streak: 1, confusions: { me: 2 }, byDirection: { 'kana-to-romaji': { correct: 1, incorrect: 2 } },
+      lastSeen: 10, lastWrong: 9, resolvedAt: 5, streak: 1, confusions: { me: 2 }, byDirection: { 'kana-to-romaji': { correct: 1, incorrect: 2 } },
       box: 3, due: 12345, strokeErrors: [0, 2], strokeFaults: { order: 1, shape: 1 },
     } }
     expect(normalizeStats(v3)).toEqual(v3)

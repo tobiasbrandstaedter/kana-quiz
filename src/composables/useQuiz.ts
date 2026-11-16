@@ -1,14 +1,17 @@
 import { ref, computed, watch } from 'vue'
 import type { InjectionKey } from 'vue'
-import type { AppScreen, SetupTab, StatsFilter, StatsSort, StatsSortCol, StatRow, AccClass, TimeClass, KanaPair, QuizMode, DrawResult } from '../types'
+import type { AppScreen, SetupTab, StatsFilter, StatsSort, StatsSortCol, StatRow, AccClass, TimeClass, KanaPair, QuizMode, DrawResult, AnswerInput } from '../types'
 import { pairFor, kanaForRomaji } from '../data/kana'
 import { detectPatterns, statsFromLog } from '../learning/patterns'
 import type { Pattern } from '../learning/patterns'
-import { pickSmart, orderSession, columnProgress } from '../learning/scheduler'
+import { pickSmart, orderSession, columnProgress, dueOutlook, mixedDirection, MASTERED_BOX, MAX_LEARNING } from '../learning/scheduler'
 import type { ColumnProgress } from '../learning/scheduler'
+import { fluencyLimits } from '../learning/progress'
 import { useStats } from './useStats'
+import type { BoxMove } from './useStats'
 import { useSetup } from './useSetup'
 import { useSession } from './useSession'
+import type { SessionHelpers } from './useSession'
 
 export function useQuiz() {
   const screen = ref<AppScreen>('setup')
@@ -23,21 +26,39 @@ export function useQuiz() {
   // what TRY AGAIN on the results screen should run
   let replay: () => void = () => startQuiz(false)
 
-  const SMART_SIZE = 20
+  // short message at the bottom of the screen, instead of alert()
+  const notice = ref('')
+  let noticeTimer: ReturnType<typeof setTimeout> | undefined
+  function notify(text: string): void {
+    notice.value = text
+    clearTimeout(noticeTimer)
+    noticeTimer = setTimeout(() => { notice.value = '' }, 4000)
+  }
+
+  const scriptsInPlay = computed(() => setup.selectorScripts.value.map(([script]) => script))
 
   function smartPicks() {
-    const scripts = setup.selectorScripts.value.map(([script]) => script)
     // new kana come from the selection, or from the whole table in order when nothing is selected
     const selected = setup.buildPairsFromSelected()
     const candidates = selected.length > 0 ? selected : setup.selectorScripts.value.flatMap(([script, data]) =>
       Object.values(data).flatMap(cols => cols.flatMap(col => col.kana.map((k, i) => ({ kana: k, romaji: col.romaji[i], script })))))
-    const size = parseInt(setup.questionCountText.value) || SMART_SIZE
-    return pickSmart(stats.statsData.value, stats.answerLog.value, candidates, scripts, size, Date.now())
+    return pickSmart(stats.statsData.value, stats.answerLog.value, candidates, scriptsInPlay.value, setup.smartSize.value, Date.now(), setup.smartNew.value)
   }
 
   const smartSummary = computed(() => {
     const p = smartPicks()
-    return { due: p.due.length, weak: p.weak.length, fresh: p.fresh.length, fill: p.fill.length }
+    const now = Date.now()
+    const inPlay = Object.values(stats.statsData.value).filter(e => scriptsInPlay.value.includes(e.script) && e.correct + e.incorrect > 0)
+    return {
+      due: p.due.length, weak: p.weak.length, fresh: p.fresh.length, fill: p.fill.length,
+      nextNew: p.fresh.map(x => x.kana),
+      fromSelection: setup.selectedCount.value > 0,
+      outlook: dueOutlook(stats.statsData.value, scriptsInPlay.value, now),
+      mastered: inPlay.filter(e => e.box >= MASTERED_BOX).length,
+      seen: inPlay.length,
+      // the scheduler holds new kana back while too many are shaky, say so instead of just showing none
+      newHeldBack: setup.smartNew.value > 0 && inPlay.filter(e => e.box <= 1).length >= MAX_LEARNING,
+    }
   })
 
   const columnProgressMap = computed(() => {
@@ -61,6 +82,7 @@ export function useQuiz() {
       : 0
     return {
       kanaCount: all.length,
+      mastered: all.filter(e => e.box >= MASTERED_BOX).length,
       accuracy: `${overallAcc}%`,
       totalErrors,
       avgTime: avgMs > 0 ? `${(avgMs / 1000).toFixed(1)}s` : '--',
@@ -90,6 +112,7 @@ export function useQuiz() {
       if (s.col === 'acc')    return sign * (a.acc - b.acc)
       if (s.col === 'seen')   return sign * (a.seen - b.seen)
       if (s.col === 'errors') return sign * (a.incorrect - b.incorrect)
+      if (s.col === 'box')    return sign * (a.box - b.box || a.due - b.due)
       // time: null (unseen) sorts to end regardless of direction
       const aMs = a.avgTime !== null ? parseFloat(a.avgTime) : (s.dir === 'asc' ? Infinity : -Infinity)
       const bMs = b.avgTime !== null ? parseFloat(b.avgTime) : (s.dir === 'asc' ? Infinity : -Infinity)
@@ -114,9 +137,48 @@ export function useQuiz() {
       .filter((k): k is string => !!k)
   }
 
+  function helpers(pool: KanaPair[]): SessionHelpers {
+    const data = stats.statsData.value
+    const known = new Set([
+      ...Object.values(data).filter(e => e.correct + e.incorrect > 0).map(e => e.kana),
+      ...pool.map(p => p.kana),
+    ])
+    return {
+      distractorsFor: confusedWith,
+      directionFor: (pair, canDraw) => mixedDirection(stats.statsData.value[pair.kana], canDraw),
+      known,
+    }
+  }
+
+  // how each kana's Leitner box moved this round, first "from" and latest "to"
+  const roundMoves = ref<Record<string, BoxMove>>({})
+
+  function record(a: AnswerInput): void {
+    const move = stats.recordAnswer(a)
+    const prev = roundMoves.value[a.kana]
+    roundMoves.value[a.kana] = { from: prev?.from ?? move.from, to: move.to }
+  }
+
+  const roundOutcome = computed(() => {
+    const moves = Object.entries(roundMoves.value)
+    const outlook = dueOutlook(stats.statsData.value, scriptsInPlay.value, Date.now())
+    return {
+      up: moves.filter(([, m]) => m.to > m.from).map(([k, m]) => ({ kana: k, box: m.to })),
+      down: moves.filter(([, m]) => m.to < m.from).map(([k]) => k),
+      mastered: moves.filter(([, m]) => m.from < MASTERED_BOX && m.to >= MASTERED_BOX).map(([k]) => k),
+      outlook,
+    }
+  })
+
+  function beforeStart(): void {
+    roundMoves.value = {}
+    session.limits.value = fluencyLimits(stats.statsData.value)
+  }
+
   function beginSession(pool: KanaPair[], total: number, mode: QuizMode, errorMode: boolean, timed = setup.timed.value): void {
+    beforeStart()
     session.timed.value = timed
-    session.start(pool, total, mode, errorMode, confusedWith)
+    session.start(pool, total, mode, errorMode, helpers(pool))
     screen.value = 'quiz'
   }
 
@@ -127,16 +189,18 @@ export function useQuiz() {
     const limit = session.timeLimit.value
     if (!q || s !== 'quiz' || !limit) return
     timer = setTimeout(() => {
-      if (screen.value === 'quiz' && session.currentQuestion.value === q) session.timeOut(stats.recordAnswer)
+      if (screen.value === 'quiz' && session.currentQuestion.value === q) session.timeOut(record)
     }, limit)
   })
 
   function startSmartPractice(): void {
     replay = startSmartPractice
-    const items = orderSession(smartPicks())
-    if (items.length === 0) { alert('Nothing to practice. Raise the question count or select some columns.'); return }
+    const picks = smartPicks()
+    const items = orderSession(picks)
+    if (items.length === 0) { notify('Nothing to practice yet. Pick some columns below.'); return }
+    beforeStart()
     session.timed.value = setup.timed.value
-    session.startPlanned(items, setup.quizMode.value, confusedWith)
+    session.startPlanned(items, setup.quizMode.value, helpers(items.map(i => i.pair)))
     screen.value = 'quiz'
   }
 
@@ -144,6 +208,14 @@ export function useQuiz() {
     if (p.practice.length === 0) return
     replay = () => startPatternPractice(p)
     beginSession(p.practice, Math.max(p.practice.length, 8), p.mode ?? setup.quizMode.value, false, p.timed ?? setup.timed.value)
+  }
+
+  // practice a handful of kana picked by hand, e.g. from the kana chart
+  function startKanaPractice(kana: string[]): void {
+    const pool = kana.map(pairFor).filter((p): p is KanaPair => !!p)
+    if (pool.length === 0) return
+    replay = () => startKanaPractice(kana)
+    beginSession(pool, Math.max(pool.length * 2, 6), setup.quizMode.value, false)
   }
 
   function showTab(tab: SetupTab): void {
@@ -170,30 +242,34 @@ export function useQuiz() {
     return all
   }
 
+  const weakPool = computed(() => filteredEntries()
+    .filter(e => {
+      const seen = e.correct + e.incorrect
+      return seen > 0 && (e.correct / seen) < 0.8
+    })
+    .sort((a, b) => {
+      const accA = a.correct / (a.correct + a.incorrect)
+      const accB = b.correct / (b.correct + b.incorrect)
+      return accA - accB
+    })
+    .map(e => ({ kana: e.kana, romaji: e.romaji, script: e.script })))
+
+  const slowPool = computed(() => filteredEntries()
+    .filter(e => e.count > 0 && (e.totalMs / e.count) > 3000)
+    .sort((a, b) => (b.totalMs / b.count) - (a.totalMs / a.count))
+    .map(e => ({ kana: e.kana, romaji: e.romaji, script: e.script })))
+
   function startWorstPractice(): void {
     replay = startWorstPractice
-    const pool = filteredEntries()
-      .filter(e => {
-        const seen = e.correct + e.incorrect
-        return seen > 0 && (e.correct / seen) < 0.8
-      })
-      .sort((a, b) => {
-        const accA = a.correct / (a.correct + a.incorrect)
-        const accB = b.correct / (b.correct + b.incorrect)
-        return accA - accB
-      })
-      .map(e => ({ kana: e.kana, romaji: e.romaji, script: e.script }))
-    if (pool.length === 0) { alert('No weak kana in this filter!'); return }
+    const pool = weakPool.value
+    if (pool.length === 0) return
     beginSession(pool, pool.length, setup.quizMode.value, false)
   }
 
   function startSlowestPractice(): void {
     replay = startSlowestPractice
-    const pool = filteredEntries()
-      .filter(e => e.count > 0 && (e.totalMs / e.count) > 3000)
-      .sort((a, b) => (b.totalMs / b.count) - (a.totalMs / a.count))
-      .map(e => ({ kana: e.kana, romaji: e.romaji, script: e.script }))
-    if (pool.length === 0) { alert('No slow kana in this filter!'); return }
+    const pool = slowPool.value
+    if (pool.length === 0) return
     // slow kana are a fluency problem, so this one always runs against the clock
     beginSession(pool, pool.length, setup.quizMode.value, false, true)
   }
@@ -205,7 +281,7 @@ export function useQuiz() {
 
     if (errorMode) {
       const ep = stats.errorPairs.value
-      if (ep.length === 0) { alert('No errors to practice yet!'); return }
+      if (ep.length === 0) return
       // weight by recent errors, not lifetime ones, so old mistakes stop dominating
       pool = ep.flatMap(e =>
         Array.from({ length: Math.min(3, Math.max(1, stats.recentErrorCount(e.kana))) }, () => ({ kana: e.kana, romaji: e.romaji, script: e.script }))
@@ -213,6 +289,7 @@ export function useQuiz() {
       total = pool.length
     } else {
       pool = setup.buildPairsFromSelected()
+      if (pool.length === 0) { notify('Pick at least one column first.'); return }
       const requested = setup.questionCountText.value ? parseInt(setup.questionCountText.value) : null
       total = (requested && requested > 0) ? requested : pool.length
     }
@@ -228,19 +305,33 @@ export function useQuiz() {
   }
 
   function submitTyped(): void {
-    session.submitTyped(stats.recordAnswer)
+    session.submitTyped(record)
     advanceSoon(350)
   }
 
   function selectAnswer(chosen: string): void {
-    session.selectAnswer(chosen, stats.recordAnswer)
+    session.selectAnswer(chosen, record)
     advanceSoon(400)
   }
 
   function submitDrawing(result: DrawResult): void {
-    session.submitDrawing(result, stats.recordAnswer)
-    // a bit longer than the others so the finished kana can be seen
-    advanceSoon(900)
+    session.submitDrawing(result, record)
+    // longer than the others so the finished kana can be compared with the reference
+    advanceSoon(1400)
+  }
+
+  function giveUp(): void {
+    session.giveUp(record)
+  }
+
+  // writing from memory on the stroke order tab: a clean result is a real answer
+  function recordWritePractice(kana: string, result: DrawResult): void {
+    const pair = pairFor(kana)
+    if (!pair || !result.correct) return
+    stats.recordAnswer({
+      ...pair, direction: 'draw', correct: true, given: '', elapsedMs: 0,
+      strokes: { errors: result.errors, faults: result.faults },
+    })
   }
 
   function nextQuestion(): void {
@@ -252,8 +343,24 @@ export function useQuiz() {
   }
 
   function goHome(): void {
+    const answered = session.correctCount.value + session.wrongCount.value
+    if (screen.value === 'quiz' && answered > 0) notify(`Session ended, ${answered} answer${answered === 1 ? '' : 's'} saved`)
     screen.value = 'setup'
     stats.refresh()
+  }
+
+  // kana detail sheet, opened from the chart, the stats table and the results
+  const detailKana = ref<string | null>(null)
+  function openKana(kana: string): void {
+    detailKana.value = kana
+  }
+  function closeKana(): void {
+    detailKana.value = null
+  }
+
+  function resetAll(): void {
+    stats.resetAll()
+    notify('All progress deleted')
   }
 
   function init(): void {
@@ -262,10 +369,11 @@ export function useQuiz() {
 
   return {
     // orchestration
-    screen, activeTab, statsFilter, statsSort,
-    statsSummary, filteredStatsRows, allPatterns, roundPatterns, smartSummary, columnProgressMap,
-    showTab, setStatsFilter, setStatsSort, startQuiz, startWorstPractice, startSlowestPractice, startPatternPractice, startSmartPractice,
-    submitTyped, selectAnswer, submitDrawing, nextQuestion, restartQuiz, goHome, init,
+    screen, activeTab, statsFilter, statsSort, notice, notify, detailKana, openKana, closeKana,
+    statsSummary, filteredStatsRows, allPatterns, roundPatterns, smartSummary, columnProgressMap, roundOutcome,
+    weakPool, slowPool, scriptsInPlay,
+    showTab, setStatsFilter, setStatsSort, startQuiz, startWorstPractice, startSlowestPractice, startPatternPractice, startSmartPractice, startKanaPractice,
+    submitTyped, selectAnswer, submitDrawing, giveUp, recordWritePractice, nextQuestion, restartQuiz, goHome, resetAll, init,
     // stats
     statsData:          stats.statsData,
     answerLog:          stats.answerLog,
@@ -274,15 +382,19 @@ export function useQuiz() {
     errorTabCount:      stats.errorTabCount,
     statsTabCount:      stats.statsTabCount,
     errorKanaSet:       stats.errorKanaSet,
-    removeErrorEntry:   stats.removeErrorEntry,
-    confirmClearErrors: stats.confirmClearErrors,
-    confirmClearStats:  stats.confirmClearStats,
+    today:              stats.today,
+    resolveErrors:      stats.resolveErrors,
+    resolveAllErrors:   stats.resolveAllErrors,
     // setup
     activeScript:       setup.activeScript,
     selectedCols:       setup.selectedCols,
     quizMode:           setup.quizMode,
     timed:              setup.timed,
     toggleTimed:        setup.toggleTimed,
+    smartSize:          setup.smartSize,
+    smartNew:           setup.smartNew,
+    setSmartSize:       setup.setSmartSize,
+    setSmartNew:        setup.setSmartNew,
     questionCountInput: setup.questionCountInput,
     kanaFont:           setup.kanaFont,
     selectorScripts:    setup.selectorScripts,
@@ -317,6 +429,8 @@ export function useQuiz() {
     uniqueMissedPairs:  session.uniqueMissedPairs,
     drawings:           session.drawings,
     timeLimit:          session.timeLimit,
+    gaveUp:             session.gaveUp,
+    roundSummary:       session.roundSummary,
   }
 }
 

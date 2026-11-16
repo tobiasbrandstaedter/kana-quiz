@@ -25,7 +25,7 @@ const emit = defineEmits<{
           <span v-if="p.kana.length > 12" class="more">+{{ p.kana.length - 12 }}</span>
         </div>
       </div>
-      <button class="pattern-practice-btn" @click="emit('practice', p)">PRACTICE</button>
+      <button class="btn btn-sm pattern-practice-btn" @click="emit('practice', p)">Practice</button>
     </div>
   </div>
 </template>

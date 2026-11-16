@@ -11,6 +11,8 @@ interface Prefs {
   mode?: QuizMode
   timed?: boolean
   questionCount?: string
+  smartSize?: number
+  smartNew?: number
 }
 
 function loadPrefs(): Prefs {
@@ -30,10 +32,13 @@ export function useSetup() {
   const selectedCols = ref<Set<string>>(new Set())
   const quizMode = ref<QuizMode>('kana-to-romaji')
   const timed = ref(false)
+  // smart practice: session length and how many new kana it may bring in
+  const smartSize = ref(20)
+  const smartNew = ref(5)
   // v-model on a type="number" input hands us a number once the user types, so read it through questionCountText
   const questionCountInput = ref<string | number>('')
   const questionCountText = computed(() => String(questionCountInput.value).trim())
-  const kanaFont = ref('Noto Sans JP')
+  const kanaFont = ref('Zen Maru Gothic')
 
   const selectorScripts = computed((): Array<[ScriptName, KanaData]> =>
     activeScript.value === 'both'
@@ -70,7 +75,7 @@ export function useSetup() {
     const val = questionCountText.value
     if (!val) return pool.length > 0 ? `Blank = all ${pool.length} kana from selection` : 'Leave blank to use all selected kana'
     const n = parseInt(val)
-    if (!isNaN(n) && pool.length > 0 && n > pool.length) return `${pool.length} unique kana — will repeat to fill ${n} questions`
+    if (!isNaN(n) && pool.length > 0 && n > pool.length) return `${pool.length} unique kana, repeated to fill ${n} questions`
     return `${n} question${n !== 1 ? 's' : ''} per session`
   })
 
@@ -125,6 +130,16 @@ export function useSetup() {
     savePrefs({ mode })
   }
 
+  function setSmartSize(n: number): void {
+    smartSize.value = n
+    savePrefs({ smartSize: n })
+  }
+
+  function setSmartNew(n: number): void {
+    smartNew.value = n
+    savePrefs({ smartNew: n })
+  }
+
   function toggleTimed(): void {
     timed.value = !timed.value
     savePrefs({ timed: timed.value })
@@ -141,6 +156,8 @@ export function useSetup() {
     if (prefs.mode) quizMode.value = prefs.mode
     if (prefs.timed) timed.value = true
     if (prefs.questionCount) questionCountInput.value = prefs.questionCount
+    if (prefs.smartSize) smartSize.value = prefs.smartSize
+    if (prefs.smartNew !== undefined) smartNew.value = prefs.smartNew
 
     try {
       const savedFont = localStorage.getItem(LS_FONT)
@@ -152,10 +169,10 @@ export function useSetup() {
   }
 
   return {
-    activeScript, selectedCols, quizMode, timed, questionCountInput, questionCountText, kanaFont,
+    activeScript, selectedCols, quizMode, timed, smartSize, smartNew, questionCountInput, questionCountText, kanaFont,
     selectorScripts, selectedCount, strokeColumns, countHint, headerTitle,
     buildPairsFromSelected,
-    setKanaFont, setScript, toggleCol, selectAll, selectNone, selectGroup, setMode, toggleTimed,
+    setKanaFont, setScript, toggleCol, selectAll, selectNone, selectGroup, setMode, toggleTimed, setSmartSize, setSmartNew,
     init,
   }
 }

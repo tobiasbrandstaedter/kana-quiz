@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, nextTick } from 'vue'
 import { kanaStrokes } from '../data/strokeGlyphs'
+import Icon from './Icon.vue'
 
 const props = defineProps<{ kana: string; controls?: boolean }>()
 
@@ -93,9 +94,9 @@ defineExpose({ replay })
     </svg>
 
     <div v-if="controls" class="stroke-controls">
-      <button class="stroke-ctl" :disabled="step === null || step <= 1" aria-label="Previous stroke" @click="stepBy(-1)">◀</button>
-      <button class="stroke-ctl replay" @click="replay()">↻ REPLAY</button>
-      <button class="stroke-ctl" :disabled="step === strokeCount" aria-label="Next stroke" @click="stepBy(1)">▶</button>
+      <button class="stroke-ctl" :disabled="step === null || step <= 1" aria-label="Previous stroke" @click="stepBy(-1)"><Icon name="left" :size="18" /></button>
+      <button class="stroke-ctl replay" @click="replay()"><Icon name="replay" :size="18" />Replay</button>
+      <button class="stroke-ctl" :disabled="step === strokeCount" aria-label="Next stroke" @click="stepBy(1)"><Icon name="right" :size="18" /></button>
     </div>
     <div v-if="controls" class="stroke-count">
       {{ step === null ? `${strokeCount} stroke${strokeCount === 1 ? '' : 's'}` : `Stroke ${step} of ${strokeCount}` }}

@@ -1,5 +1,6 @@
-import type { AnswerRecord, KanaPair, ScriptName, StatEntry, StatsMap } from '../types'
+import type { AnswerRecord, KanaPair, QuizDirection, ScriptName, StatEntry, StatsMap } from '../types'
 import { pairFor } from '../data/kana'
+import { lookalikesOf } from '../data/lookalikes'
 import { shuffle } from './distractors'
 
 // Leitner boxes. The interval is how long a kana rests after being promoted into that box.
@@ -11,9 +12,9 @@ export const MASTERED_BOX = 3
 // reviews done a few hours early still count, nobody studies at the exact same time every day
 const DUE_SLACK = 4 * 60 * 60 * 1000
 
-const NEW_PER_SESSION = 5
+export const NEW_PER_SESSION = 5
 // too many shaky kana: stop adding new ones until those settle
-const MAX_LEARNING = 10
+export const MAX_LEARNING = 10
 const RECENT_WINDOW = 10
 
 export interface Schedule {
@@ -61,10 +62,25 @@ function seen(e: StatEntry): boolean {
   return e.correct + e.incorrect > 0
 }
 
+// lookalikes that are both new go next to each other, so the second intro card
+// comes right after the first and the difference is fresh
+function groupLookalikes(pairs: KanaPair[]): KanaPair[] {
+  const out: KanaPair[] = []
+  for (const p of pairs) {
+    if (out.includes(p)) continue
+    out.push(p)
+    for (const k of lookalikesOf(p.kana)) {
+      const twin = pairs.find(q => q.kana === k)
+      if (twin && !out.includes(twin)) out.push(twin)
+    }
+  }
+  return out
+}
+
 /**
  * What a smart session should contain, in priority order: due reviews (lowest box,
- * most overdue first), kana with a high recent error rate, a few new kana from
- * `candidates` in table order, then the kana due next to fill up.
+ * most overdue first), kana with a high recent error rate, up to `newLimit` new kana
+ * from `candidates` in table order, then the kana due next to fill up.
  */
 export function pickSmart(
   stats: StatsMap,
@@ -73,6 +89,7 @@ export function pickSmart(
   scripts: ScriptName[],
   size: number,
   now: number,
+  newLimit: number = NEW_PER_SESSION,
 ): SmartPicks {
   const reviewable = Object.values(stats).filter(e => seen(e) && scripts.includes(e.script) && pairFor(e.kana))
   const toPair = (e: StatEntry) => pairFor(e.kana)!
@@ -101,11 +118,11 @@ export function pickSmart(
   // a new kana takes about two question slots (intro is free, it gets tested twice)
   const learning = reviewable.filter(e => e.box <= 1).length
   const room = size - due.length - weak.length
-  const freshLimit = learning >= MAX_LEARNING ? 0 : Math.min(NEW_PER_SESSION, Math.floor(room / 2))
-  const fresh = candidates
+  const freshLimit = learning >= MAX_LEARNING ? 0 : Math.min(newLimit, Math.floor(room / 2))
+  const fresh = groupLookalikes(candidates
     .filter(p => scripts.includes(p.script) && !(stats[p.kana] && seen(stats[p.kana])))
     .filter((p, i, arr) => arr.findIndex(q => q.kana === p.kana) === i)
-    .slice(0, freshLimit)
+    .slice(0, freshLimit))
 
   const fill = take(
     [...reviewable].sort((a, b) => a.due - b.due),
@@ -162,4 +179,36 @@ export function columnProgress(kana: string[], stats: StatsMap, now: number): Co
     if (isDue(e, now)) p.due++
   }
   return p
+}
+
+export interface DueOutlook {
+  now: number      // due right now
+  soon: number     // due within the next day, not yet due
+  nextAt: number   // ms epoch of the next review that isn't due yet, 0 if none
+}
+
+/** For the "all caught up" message: what comes back and when. */
+export function dueOutlook(stats: StatsMap, scripts: ScriptName[], now: number): DueOutlook {
+  const out = { now: 0, soon: 0, nextAt: 0 }
+  for (const e of Object.values(stats)) {
+    if (!seen(e) || !scripts.includes(e.script)) continue
+    if (isDue(e, now)) { out.now++; continue }
+    if (e.due - DUE_SLACK <= now + DAY) out.soon++
+    if (!out.nextAt || e.due < out.nextAt) out.nextAt = e.due
+  }
+  return out
+}
+
+/**
+ * Mixed mode picks the direction by how well a kana is known: recognize it first,
+ * then read it, then write it. Past box 2 it goes for a direction never answered right.
+ */
+export function mixedDirection(e: StatEntry | undefined, canDraw: boolean, rng: () => number = Math.random): QuizDirection {
+  const box = e && seen(e) ? e.box : 0
+  if (box <= 1) return 'romaji-to-kana'
+  if (box === 2) return 'kana-to-romaji'
+  const dirs: QuizDirection[] = canDraw ? ['draw', 'kana-to-romaji', 'romaji-to-kana'] : ['kana-to-romaji', 'romaji-to-kana']
+  const missing = dirs.filter(d => !e!.byDirection[d]?.correct)
+  if (missing.length) return missing[0]
+  return dirs[Math.floor(rng() * dirs.length)]
 }
