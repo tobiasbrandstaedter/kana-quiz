@@ -113,6 +113,12 @@ The results screen runs the detectors on this round's answers only, the stats ta
 - Stroke patterns run on the full stats only, the answer log has no stroke details.
 - `strokeErrors` counts rejects per stroke index, `strokeFaults` per fault kind. The "horizontal strokes right to left" idea became a general "strokes drawn backwards" habit, since the matcher doesn't classify stroke orientation.
 
+### How phase 5 turned out
+
+- Combos: the extraction also pulls the small ゃゅょャュョ. `kanaStrokes` places the small kana 75 units after the base kana instead of a full cell (109), because KanjiVG draws it in the lower part of its own cell and a full offset left a wide gap. Combos now work everywhere strokes are used: watch, trace, write, draw quiz, intro cards, result thumbnails. The order check also catches strokes of the small kana drawn before the base kana is done.
+- Fluency: a "Timed" toggle next to the direction. 3.5 s for typed answers, 3 s for choice, drawing and intro cards are never timed. A timeout counts as wrong in the session (re-asked like any miss) and in the stats, but leaves the Leitner box alone, the same as a typo: being slow means not automatic yet, not forgotten. "Practice slowest" and the "Correct but slow" pattern always run timed.
+- Listen → Write: its own direction button. Draw questions where the sound plays automatically and the prompt shows "?" until answered. The answers count as `draw` in the stats. Intro cards play the sound in this mode as well. Mixed mode leaves it out, since it needs sound on.
+
 ### Not planned
 
 Free handwriting recognition without stroke order. The matcher is order and direction based on purpose, because that is what should be learned.
@@ -128,7 +134,7 @@ Each phase is its own PR.
 | 2 | Leitner scheduling, Smart practice with intro cards, progress bar per column, recent-rate error practice | M | done |
 | 3 | Stroke data extraction, `StrokeDemo`, Stroke Order tab with watch mode, stroke animation on intro cards | M | done |
 | 4 | `StrokeCanvas`, matcher, trace and recall modes, draw quiz mode, stroke stats and stroke patterns, drawing thumbnails on results | L | done |
-| 5 | Fluency mode, audio-prompted draw, combos in draw mode | S | open |
+| 5 | Fluency mode, audio-prompted draw, combos in draw mode | S | done |
 
 Phase 3 ships before 4 on purpose: the animated stroke order alone is already useful and the drawing matcher is the riskiest part.
 

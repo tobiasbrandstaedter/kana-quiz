@@ -77,7 +77,7 @@ export function useStats() {
       for (const [fault, n] of Object.entries(a.strokes.faults) as Array<[StrokeFault, number]>)
         e.strokeFaults[fault] = (e.strokeFaults[fault] ?? 0) + n
     }
-    if (!a.typo) Object.assign(e, review(e, a.correct, now))
+    if (!a.typo && !a.timeout) Object.assign(e, review(e, a.correct, now))
     // drawing takes far longer than reading, keep it out of the reaction times
     if (a.direction !== 'draw' && a.elapsedMs > 0 && a.elapsedMs < 30_000) {
       e.totalMs += a.elapsedMs

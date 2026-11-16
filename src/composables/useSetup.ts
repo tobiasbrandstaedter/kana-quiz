@@ -9,6 +9,7 @@ const LS_PREFS  = 'kana_prefs'
 interface Prefs {
   cols?: string[]
   mode?: QuizMode
+  timed?: boolean
   questionCount?: string
 }
 
@@ -28,6 +29,7 @@ export function useSetup() {
   const activeScript = ref<ActiveScript>('hiragana')
   const selectedCols = ref<Set<string>>(new Set())
   const quizMode = ref<QuizMode>('kana-to-romaji')
+  const timed = ref(false)
   // v-model on a type="number" input hands us a number once the user types, so read it through questionCountText
   const questionCountInput = ref<string | number>('')
   const questionCountText = computed(() => String(questionCountInput.value).trim())
@@ -41,9 +43,9 @@ export function useSetup() {
 
   const selectedCount = computed(() => selectedCols.value.size)
 
-  // stroke order tab: the selected columns, or all of them when none is picked. No combos, those are two glyphs.
+  // stroke order tab: the selected columns, or all of them when none is picked
   const strokeColumns = computed(() => {
-    const cols = selectorScripts.value.flatMap(([, data]) => [...data.main, ...data.dakuten])
+    const cols = selectorScripts.value.flatMap(([, data]) => [...data.main, ...data.dakuten, ...data.combo])
     const picked = cols.filter(c => selectedCols.value.has(c.id))
     return picked.length > 0 ? picked : cols
   })
@@ -123,6 +125,11 @@ export function useSetup() {
     savePrefs({ mode })
   }
 
+  function toggleTimed(): void {
+    timed.value = !timed.value
+    savePrefs({ timed: timed.value })
+  }
+
   function init(): void {
     try {
       const saved = localStorage.getItem(LS_SCRIPT) as ActiveScript | null
@@ -132,6 +139,7 @@ export function useSetup() {
     const prefs = loadPrefs()
     if (prefs.cols?.length) selectedCols.value = new Set(prefs.cols)
     if (prefs.mode) quizMode.value = prefs.mode
+    if (prefs.timed) timed.value = true
     if (prefs.questionCount) questionCountInput.value = prefs.questionCount
 
     try {
@@ -144,10 +152,10 @@ export function useSetup() {
   }
 
   return {
-    activeScript, selectedCols, quizMode, questionCountInput, questionCountText, kanaFont,
+    activeScript, selectedCols, quizMode, timed, questionCountInput, questionCountText, kanaFont,
     selectorScripts, selectedCount, strokeColumns, countHint, headerTitle,
     buildPairsFromSelected,
-    setKanaFont, setScript, toggleCol, selectAll, selectNone, selectGroup, setMode,
+    setKanaFont, setScript, toggleCol, selectAll, selectNone, selectGroup, setMode, toggleTimed,
     init,
   }
 }

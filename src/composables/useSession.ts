@@ -1,8 +1,8 @@
 import { ref, computed, nextTick } from 'vue'
-import type { QuizQuestion, KanaPair, QuizMode, QuizDirection, FeedbackType, AnswerInput, DrawResult, Point } from '../types'
+import type { QuizQuestion, KanaPair, QuizMode, QuizDirection, FeedbackType, AnswerInput, DrawResult, Point, InputType } from '../types'
 import { allPairs, pairFor, kanaForRomaji } from '../data/kana'
 import { lookalikeHint } from '../data/lookalikes'
-import { STROKES } from '../data/strokes'
+import { kanaStrokes } from '../data/strokeGlyphs'
 import { matchesRomaji, normalizeRomaji, isTypo } from '../learning/romaji'
 import { pickDistractors, shuffle } from '../learning/distractors'
 import type { PlannedItem } from '../learning/scheduler'
@@ -14,13 +14,12 @@ function makeIntro(pair: KanaPair): QuizQuestion {
 }
 
 function pickDirection(pair: KanaPair, mode: QuizMode): QuizDirection {
-  // combos have no stroke data yet, so they can't be drawn
-  const canDraw = !!STROKES[pair.kana]
+  const canDraw = !!kanaStrokes(pair.kana)
   if (mode === 'mixed') {
     const dirs: QuizDirection[] = canDraw ? ['kana-to-romaji', 'romaji-to-kana', 'draw'] : ['kana-to-romaji', 'romaji-to-kana']
     return dirs[Math.floor(Math.random() * dirs.length)]
   }
-  if (mode === 'draw' && !canDraw) return 'romaji-to-kana'
+  if (mode === 'draw' || mode === 'listen') return canDraw ? 'draw' : 'romaji-to-kana'
   return mode
 }
 
@@ -28,7 +27,7 @@ function makeQuestion(pair: KanaPair, mode: QuizMode, full: KanaPair[], distract
   const direction = pickDirection(pair, mode)
 
   if (direction === 'draw') {
-    return { direction, inputType: 'draw', question: pair.romaji, answer: pair.kana, kana: pair.kana, romaji: pair.romaji, script: pair.script, options: [] }
+    return { direction, inputType: 'draw', question: pair.romaji, answer: pair.kana, kana: pair.kana, romaji: pair.romaji, script: pair.script, options: [], listen: mode === 'listen' }
   }
 
   if (direction === 'kana-to-romaji') {
@@ -50,6 +49,9 @@ export interface Explanation {
 
 const MAX_REASKS = 2
 
+// fluency mode: answer within this time or it counts as too slow. Drawing is never timed.
+const TIME_LIMITS: Partial<Record<InputType, number>> = { type: 3500, choice: 3000 }
+
 export function useSession() {
   const questions = ref<QuizQuestion[]>([])
   const current = ref(0)
@@ -68,6 +70,7 @@ export function useSession() {
   const typeFieldEl = ref<HTMLInputElement | null>(null)
   // what the user drew for kana they missed in draw mode, shown on the results screen
   const drawings = ref<Record<string, Array<Point[] | null>>>({})
+  const timed = ref(false)  // set by the caller before start
 
   // kept from start() so re-asked questions are built the same way
   let sessionMode: QuizMode = 'kana-to-romaji'
@@ -76,6 +79,11 @@ export function useSession() {
   let reaskCount: Record<string, number> = {}
 
   const currentQuestion = computed(() => questions.value[current.value] ?? null)
+
+  const timeLimit = computed(() => {
+    const q = currentQuestion.value
+    return timed.value && q ? TIME_LIMITS[q.inputType] ?? 0 : 0
+  })
 
   // intro cards aren't answered, so they don't count towards the score
   const scoredCount = computed(() => questions.value.filter(q => q.inputType !== 'intro').length)
@@ -256,6 +264,19 @@ export function useSession() {
     markWrong(q, `✗ ${q.kana}: ${why}`, null)
   }
 
+  function timeOut(onRecord: RecordFn): void {
+    if (answered.value) return
+    const q = currentQuestion.value
+    if (!q) return
+
+    answered.value = true
+    onRecord({
+      kana: q.kana, romaji: q.romaji, script: q.script, direction: q.direction,
+      correct: false, given: '', elapsedMs: timeLimit.value, timeout: true,
+    })
+    markWrong(q, `⏱ Too slow · ${q.answer}`, null)
+  }
+
   function next(onResults: () => void): void {
     current.value++
     if (current.value >= questions.value.length) {
@@ -269,7 +290,8 @@ export function useSession() {
   return {
     questions, current, correctCount, wrongCount, answered, selectedOption,
     missedPairs, isErrorPractice, typedAnswer, feedbackText, feedbackType, explanation, startedAt, typeFieldEl, drawings,
+    timed, timeLimit,
     currentQuestion, progress, resultScore, resultLabel, uniqueMissedPairs,
-    start, startPlanned, submitTyped, selectAnswer, submitDrawing, next,
+    start, startPlanned, submitTyped, selectAnswer, submitDrawing, timeOut, next,
   }
 }

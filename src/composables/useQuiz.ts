@@ -1,4 +1,4 @@
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import type { InjectionKey } from 'vue'
 import type { AppScreen, SetupTab, StatsFilter, StatsSort, StatsSortCol, StatRow, AccClass, TimeClass, KanaPair, QuizMode, DrawResult } from '../types'
 import { pairFor, kanaForRomaji } from '../data/kana'
@@ -114,15 +114,28 @@ export function useQuiz() {
       .filter((k): k is string => !!k)
   }
 
-  function beginSession(pool: KanaPair[], total: number, mode: QuizMode, errorMode: boolean): void {
+  function beginSession(pool: KanaPair[], total: number, mode: QuizMode, errorMode: boolean, timed = setup.timed.value): void {
+    session.timed.value = timed
     session.start(pool, total, mode, errorMode, confusedWith)
     screen.value = 'quiz'
   }
+
+  // fluency mode: one timer per question, cleared whenever the question changes
+  let timer: ReturnType<typeof setTimeout> | undefined
+  watch([session.currentQuestion, screen], ([q, s]) => {
+    clearTimeout(timer)
+    const limit = session.timeLimit.value
+    if (!q || s !== 'quiz' || !limit) return
+    timer = setTimeout(() => {
+      if (screen.value === 'quiz' && session.currentQuestion.value === q) session.timeOut(stats.recordAnswer)
+    }, limit)
+  })
 
   function startSmartPractice(): void {
     replay = startSmartPractice
     const items = orderSession(smartPicks())
     if (items.length === 0) { alert('Nothing to practice. Raise the question count or select some columns.'); return }
+    session.timed.value = setup.timed.value
     session.startPlanned(items, setup.quizMode.value, confusedWith)
     screen.value = 'quiz'
   }
@@ -130,7 +143,7 @@ export function useQuiz() {
   function startPatternPractice(p: Pattern): void {
     if (p.practice.length === 0) return
     replay = () => startPatternPractice(p)
-    beginSession(p.practice, Math.max(p.practice.length, 8), p.mode ?? setup.quizMode.value, false)
+    beginSession(p.practice, Math.max(p.practice.length, 8), p.mode ?? setup.quizMode.value, false, p.timed ?? setup.timed.value)
   }
 
   function showTab(tab: SetupTab): void {
@@ -181,7 +194,8 @@ export function useQuiz() {
       .sort((a, b) => (b.totalMs / b.count) - (a.totalMs / a.count))
       .map(e => ({ kana: e.kana, romaji: e.romaji, script: e.script }))
     if (pool.length === 0) { alert('No slow kana in this filter!'); return }
-    beginSession(pool, pool.length, setup.quizMode.value, false)
+    // slow kana are a fluency problem, so this one always runs against the clock
+    beginSession(pool, pool.length, setup.quizMode.value, false, true)
   }
 
   function startQuiz(errorMode: boolean): void {
@@ -267,6 +281,8 @@ export function useQuiz() {
     activeScript:       setup.activeScript,
     selectedCols:       setup.selectedCols,
     quizMode:           setup.quizMode,
+    timed:              setup.timed,
+    toggleTimed:        setup.toggleTimed,
     questionCountInput: setup.questionCountInput,
     kanaFont:           setup.kanaFont,
     selectorScripts:    setup.selectorScripts,
@@ -300,6 +316,7 @@ export function useQuiz() {
     resultLabel:        session.resultLabel,
     uniqueMissedPairs:  session.uniqueMissedPairs,
     drawings:           session.drawings,
+    timeLimit:          session.timeLimit,
   }
 }
 

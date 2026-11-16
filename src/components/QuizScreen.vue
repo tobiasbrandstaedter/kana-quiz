@@ -1,17 +1,17 @@
 <script setup lang="ts">
-import { inject, ref, computed } from 'vue'
+import { inject, ref, computed, watch } from 'vue'
 import { QUIZ_KEY } from '../composables/useQuiz'
 import { playKana } from '../audio'
 import { lookalikesOf, lookalikeHint } from '../data/lookalikes'
-import { STROKES } from '../data/strokes'
+import { kanaStrokes } from '../data/strokeGlyphs'
 import StrokeDemo from './StrokeDemo.vue'
 import StrokeCanvas from './StrokeCanvas.vue'
 
 const {
   isErrorPractice, progress, current, questions, correctCount, wrongCount,
   currentQuestion, answered, feedbackText, feedbackType, explanation,
-  typedAnswer, typeFieldEl, selectedOption,
-  submitTyped, selectAnswer, submitDrawing, nextQuestion, goHome,
+  typedAnswer, typeFieldEl, selectedOption, timeLimit,
+  submitTyped, selectAnswer, submitDrawing, nextQuestion, goHome, quizMode,
 } = inject(QUIZ_KEY)!
 
 const isIntro = computed(() => currentQuestion.value?.inputType === 'intro')
@@ -22,8 +22,18 @@ const LABELS = {
   'romaji-to-kana': 'Which kana is',
   draw: 'Write the kana for',
 }
-// first contact shows how the kana is written, combos have no stroke data and stay plain text
-const introStrokes = computed(() => isIntro.value && !!currentQuestion.value && !!STROKES[currentQuestion.value.kana])
+
+const isListen = computed(() => !!currentQuestion.value?.listen)
+const label = computed(() => {
+  const q = currentQuestion.value
+  if (!q) return ''
+  if (isIntro.value) return 'New kana'
+  return isListen.value ? 'Write what you hear' : LABELS[q.direction]
+})
+// listening hides the romaji until it is answered
+const prompt = computed(() => isListen.value && !answered.value ? '?' : currentQuestion.value?.question)
+// first contact shows how the kana is written
+const introStrokes = computed(() => isIntro.value && !!currentQuestion.value && !!kanaStrokes(currentQuestion.value.kana))
 
 // warn about lookalikes on first contact, before the mix-up gets learned
 const introWarning = computed(() => {
@@ -40,6 +50,11 @@ function onAudioClick(kana: string) {
   audioActive.value = true
   setTimeout(() => { audioActive.value = false }, 250)
 }
+
+// in listen mode the sound is the question, so it plays by itself, intro cards included
+watch(currentQuestion, q => {
+  if (q && (q.listen || (isIntro.value && quizMode.value === 'listen'))) onAudioClick(q.kana)
+}, { immediate: true })
 </script>
 
 <template>
@@ -65,11 +80,16 @@ function onAudioClick(kana: string) {
       <button class="home-btn" @click="goHome()">HOME</button>
     </div>
 
+    <!-- fluency countdown, restarts per question through :key and freezes once answered -->
+    <div v-if="timeLimit" :key="current" class="countdown" aria-hidden="true">
+      <div class="countdown-fill" :class="{ stopped: answered }" :style="{ animationDuration: `${timeLimit}ms` }"></div>
+    </div>
+
     <div class="question-card">
-      <div class="q-label">{{ isIntro ? 'New kana' : currentQuestion ? LABELS[currentQuestion.direction] : '' }}</div>
+      <div class="q-label">{{ label }}</div>
       <StrokeDemo v-if="introStrokes && currentQuestion" :kana="currentQuestion.kana" class="intro-strokes" />
       <div v-else class="q-main" :class="{ 'romaji-q': currentQuestion?.direction !== 'kana-to-romaji', 'draw-q': isDraw }">
-        {{ currentQuestion?.question }}
+        {{ prompt }}
       </div>
       <div v-if="isIntro" class="intro-romaji">{{ currentQuestion?.romaji }}</div>
       <button

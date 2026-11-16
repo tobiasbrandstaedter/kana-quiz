@@ -15,6 +15,7 @@ export interface Pattern {
   severity: number
   practice: KanaPair[]
   mode?: QuizMode  // override the user's mode when one direction targets the problem better
+  timed?: boolean  // practice against the clock
 }
 
 // 'round' looks at one session, 'all' at everything, so the bars differ
@@ -270,7 +271,7 @@ function slow(entries: StatEntry[]): Pattern[] {
   return [{
     kind: 'slow', title: 'Correct but slow',
     detail: `Not automatic yet: up to ${(worst / 1000).toFixed(1)}s vs your usual ${(median / 1000).toFixed(1)}s`,
-    kana, severity: 3 + kana.length, practice: pairs(kana), mode: 'kana-to-romaji',
+    kana, severity: 3 + kana.length, practice: pairs(kana), mode: 'kana-to-romaji', timed: true,
   }]
 }
 

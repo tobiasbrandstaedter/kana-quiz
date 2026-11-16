@@ -2,13 +2,17 @@
 import { inject } from 'vue'
 import type { Point } from '../types'
 import { QUIZ_KEY } from '../composables/useQuiz'
-import { STROKES } from '../data/strokes'
+import { kanaStrokes } from '../data/strokeGlyphs'
 import PatternCards from './PatternCards.vue'
 
 const {
   resultScore, resultLabel, uniqueMissedPairs, errorPairs, roundPatterns, drawings,
   restartQuiz, startQuiz, startPatternPractice, goHome,
 } = inject(QUIZ_KEY)!
+
+function at(dx: number): string {
+  return `translate(${dx} 0)`
+}
 
 function polyline(points: Point[]): string {
   return points.map(p => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ')
@@ -26,11 +30,14 @@ function polyline(points: Point[]): string {
       <div class="missed-grid">
         <div v-for="p in uniqueMissedPairs" :key="p.kana" class="missed-item">
           <!-- your drawing over the reference, strokes the app had to draw in red -->
-          <svg v-if="drawings[p.kana]" class="missed-drawing" viewBox="0 0 109 109" :aria-label="`Your drawing of ${p.kana}`">
-            <path v-for="(d, i) in STROKES[p.kana].paths" :key="`r${i}`" class="ref" :d="d" />
+          <svg
+            v-if="drawings[p.kana] && kanaStrokes(p.kana)" class="missed-drawing"
+            :viewBox="`0 0 ${kanaStrokes(p.kana)!.width} 109`" :style="{ '--w': kanaStrokes(p.kana)!.width / 109 }" :aria-label="`Your drawing of ${p.kana}`"
+          >
+            <path v-for="(s, i) in kanaStrokes(p.kana)!.strokes" :key="`r${i}`" class="ref" :d="s.d" :transform="at(s.dx)" />
             <template v-for="(stroke, i) in drawings[p.kana]" :key="i">
               <polyline v-if="stroke" class="ink" :points="polyline(stroke)" />
-              <path v-else class="given" :d="STROKES[p.kana].paths[i]" />
+              <path v-else class="given" :d="kanaStrokes(p.kana)!.strokes[i].d" :transform="at(kanaStrokes(p.kana)!.strokes[i].dx)" />
             </template>
           </svg>
           <span class="k">{{ p.kana }}</span>
