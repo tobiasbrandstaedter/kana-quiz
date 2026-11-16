@@ -16,9 +16,9 @@ export type QuizMode = 'kana-to-romaji' | 'romaji-to-kana' | 'draw' | 'listen' |
 export type QuizDirection = 'kana-to-romaji' | 'romaji-to-kana' | 'draw'
 export type InputType = 'type' | 'choice' | 'intro' | 'draw'
 export type AppScreen = 'setup' | 'quiz' | 'results'
-export type SetupTab = 'practice' | 'strokes' | 'errors' | 'stats'
+export type SetupTab = 'practice' | 'strokes' | 'progress'
 export type StatsFilter = 'all' | 'hiragana' | 'katakana'
-export type StatsSortCol = 'kana' | 'acc' | 'seen' | 'errors' | 'time'
+export type StatsSortCol = 'kana' | 'acc' | 'seen' | 'errors' | 'time' | 'box'
 export interface StatsSort { col: StatsSortCol; dir: 'asc' | 'desc' }
 export type FeedbackType = 'correct' | 'wrong' | ''
 export type AccClass = 'good' | 'ok' | 'bad'
@@ -40,6 +40,7 @@ export interface QuizQuestion {
   script: ScriptName
   options: string[]
   listen?: boolean  // prompt is the sound, the romaji shows only after answering
+  reask?: boolean   // missed earlier in this session
 }
 
 export interface DirectionStat {
@@ -57,6 +58,7 @@ export interface StatEntry {
   count: number
   lastSeen: number   // ms epoch, 0 = never
   lastWrong: number  // ms epoch, 0 = never
+  resolvedAt: number // ms epoch the user took it off the error list, 0 = never
   streak: number     // correct answers in a row
   // wrong answer given -> how often. Typed romaji or chosen kana.
   confusions: Record<string, number>

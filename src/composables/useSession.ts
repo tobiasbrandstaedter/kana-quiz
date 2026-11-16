@@ -1,21 +1,29 @@
 import { ref, computed, nextTick } from 'vue'
-import type { QuizQuestion, KanaPair, QuizMode, QuizDirection, FeedbackType, AnswerInput, DrawResult, Point, InputType } from '../types'
+import type { QuizQuestion, KanaPair, QuizMode, QuizDirection, FeedbackType, AnswerInput, DrawResult, Point } from '../types'
 import { allPairs, pairFor, kanaForRomaji } from '../data/kana'
 import { lookalikeHint } from '../data/lookalikes'
 import { kanaStrokes } from '../data/strokeGlyphs'
 import { matchesRomaji, normalizeRomaji, isTypo } from '../learning/romaji'
 import { pickDistractors, shuffle } from '../learning/distractors'
 import type { PlannedItem } from '../learning/scheduler'
+import { DEFAULT_LIMITS } from '../learning/progress'
+import type { FluencyLimits } from '../learning/progress'
 
-type DistractorsFor = (kana: string) => string[]
+// what the session needs to know about the learner, handed in so it doesn't depend on stats
+export interface SessionHelpers {
+  distractorsFor: (kana: string) => string[]   // past confusions, preferred as wrong options
+  directionFor?: (pair: KanaPair, canDraw: boolean) => QuizDirection  // mixed mode
+  known?: Set<string>                           // kana the user has met, for the other options
+}
 
 function makeIntro(pair: KanaPair): QuizQuestion {
   return { direction: 'kana-to-romaji', inputType: 'intro', question: pair.kana, answer: pair.romaji, kana: pair.kana, romaji: pair.romaji, script: pair.script, options: [] }
 }
 
-function pickDirection(pair: KanaPair, mode: QuizMode): QuizDirection {
+function pickDirection(pair: KanaPair, mode: QuizMode, helpers: SessionHelpers): QuizDirection {
   const canDraw = !!kanaStrokes(pair.kana)
   if (mode === 'mixed') {
+    if (helpers.directionFor) return helpers.directionFor(pair, canDraw)
     const dirs: QuizDirection[] = canDraw ? ['kana-to-romaji', 'romaji-to-kana', 'draw'] : ['kana-to-romaji', 'romaji-to-kana']
     return dirs[Math.floor(Math.random() * dirs.length)]
   }
@@ -23,8 +31,8 @@ function pickDirection(pair: KanaPair, mode: QuizMode): QuizDirection {
   return mode
 }
 
-function makeQuestion(pair: KanaPair, mode: QuizMode, full: KanaPair[], distractorsFor: DistractorsFor): QuizQuestion {
-  const direction = pickDirection(pair, mode)
+function makeQuestion(pair: KanaPair, mode: QuizMode, full: KanaPair[], helpers: SessionHelpers): QuizQuestion {
+  const direction = pickDirection(pair, mode, helpers)
 
   if (direction === 'draw') {
     return { direction, inputType: 'draw', question: pair.romaji, answer: pair.kana, kana: pair.kana, romaji: pair.romaji, script: pair.script, options: [], listen: mode === 'listen' }
@@ -34,7 +42,7 @@ function makeQuestion(pair: KanaPair, mode: QuizMode, full: KanaPair[], distract
     return { direction, inputType: 'type', question: pair.kana, answer: pair.romaji, kana: pair.kana, romaji: pair.romaji, script: pair.script, options: [] }
   }
 
-  const others = pickDistractors(pair, full, distractorsFor(pair.kana))
+  const others = pickDistractors(pair, full, helpers.distractorsFor(pair.kana), Math.random, helpers.known)
   return { direction, inputType: 'choice', question: pair.romaji, answer: pair.kana, kana: pair.kana, romaji: pair.romaji, script: pair.script, options: shuffle([pair.kana, ...others]) }
 }
 
@@ -48,9 +56,6 @@ export interface Explanation {
 }
 
 const MAX_REASKS = 2
-
-// fluency mode: answer within this time or it counts as too slow. Drawing is never timed.
-const TIME_LIMITS: Partial<Record<InputType, number>> = { type: 3500, choice: 3000 }
 
 export function useSession() {
   const questions = ref<QuizQuestion[]>([])
@@ -71,43 +76,57 @@ export function useSession() {
   // what the user drew for kana they missed in draw mode, shown on the results screen
   const drawings = ref<Record<string, Array<Point[] | null>>>({})
   const timed = ref(false)  // set by the caller before start
+  // fluency mode: answer within this time or it counts as too slow. Drawing is never timed.
+  const limits = ref<FluencyLimits>(DEFAULT_LIMITS)
+  const gaveUp = ref(false)  // "don't know" on the current question
+  // first and latest answer per kana, so a miss fixed on the re-ask isn't scored twice
+  const kanaResults = ref<Record<string, { first: boolean; last: boolean }>>({})
 
   // kept from start() so re-asked questions are built the same way
   let sessionMode: QuizMode = 'kana-to-romaji'
   let fullPairs: KanaPair[] = []
-  let distractorsFor: DistractorsFor = () => []
+  let helpers: SessionHelpers = { distractorsFor: () => [] }
   let reaskCount: Record<string, number> = {}
 
   const currentQuestion = computed(() => questions.value[current.value] ?? null)
 
   const timeLimit = computed(() => {
     const q = currentQuestion.value
-    return timed.value && q ? TIME_LIMITS[q.inputType] ?? 0 : 0
+    if (!timed.value || !q) return 0
+    return q.inputType === 'type' || q.inputType === 'choice' ? limits.value[q.inputType] : 0
   })
-
-  // intro cards aren't answered, so they don't count towards the score
-  const scoredCount = computed(() => questions.value.filter(q => q.inputType !== 'intro').length)
 
   const progress = computed(() => {
     const total = questions.value.length
     return total > 0 ? (current.value / total) * 100 : 0
   })
 
+  const roundSummary = computed(() => {
+    const all = Object.values(kanaResults.value)
+    const first = all.filter(r => r.first).length
+    const fixed = all.filter(r => !r.first && r.last).length
+    return { total: all.length, first, fixed, open: all.length - first - fixed }
+  })
+
   const resultScore = computed(() => {
-    const total = scoredCount.value
-    return total > 0 ? `${Math.round((correctCount.value / total) * 100)}%` : '0%'
+    const { total, first } = roundSummary.value
+    return total > 0 ? `${Math.round((first / total) * 100)}%` : '0%'
   })
 
   const resultLabel = computed(() => {
-    const total = scoredCount.value
-    if (!total) return ''
-    const pct = Math.round((correctCount.value / total) * 100)
-    const tag =
-      pct === 100 ? 'PERFECT — 完璧！' :
-      pct >= 80   ? 'GREAT WORK — よくできました' :
-      pct >= 60   ? 'KEEP PRACTICING — もう少し' :
-                    'KEEP STUDYING — 頑張って！'
-    return `${correctCount.value} / ${total} — ${tag}`
+    const { total, first, fixed, open } = roundSummary.value
+    if (!total) return { title: '', jp: '', detail: '' }
+    const pct = Math.round((first / total) * 100)
+    const [title, jp] =
+      pct === 100 ? ['Perfect!', '完璧！'] :
+      open === 0  ? ['All fixed!', 'できた！'] :
+      pct >= 80   ? ['Great work', 'よくできました'] :
+      pct >= 60   ? ['Keep practicing', 'もう少し'] :
+                    ['Keep studying', '頑張って！']
+    const parts = [`${first} of ${total} kana on the first try`]
+    if (fixed) parts.push(`${fixed} fixed on retry`)
+    if (open) parts.push(`${open} still open`)
+    return { title, jp, detail: parts.join(' · ') }
   })
 
   const uniqueMissedPairs = computed(() =>
@@ -121,6 +140,7 @@ export function useSession() {
     feedbackText.value = ''
     feedbackType.value = ''
     explanation.value = null
+    gaveUp.value = false
     questionStartTime.value = Date.now()
   }
 
@@ -128,11 +148,11 @@ export function useSession() {
     nextTick(() => typeFieldEl.value?.focus())
   }
 
-  function begin(build: () => QuizQuestion[], mode: QuizMode, errorMode: boolean, preferred: DistractorsFor): void {
+  function begin(build: () => QuizQuestion[], mode: QuizMode, errorMode: boolean, given: SessionHelpers): void {
     isErrorPractice.value = errorMode
     sessionMode = mode
     fullPairs = allPairs()
-    distractorsFor = preferred
+    helpers = given
     reaskCount = {}
     questions.value = build()
     current.value = 0
@@ -140,24 +160,25 @@ export function useSession() {
     wrongCount.value = 0
     missedPairs.value = []
     drawings.value = {}
+    kanaResults.value = {}
     startedAt.value = Date.now()
     resetQuestion()
     if (questions.value[0]?.inputType === 'type') focusTypeField()
   }
 
-  function start(pool: KanaPair[], total: number, mode: QuizMode, errorMode: boolean, preferred: DistractorsFor = () => []): void {
+  function start(pool: KanaPair[], total: number, mode: QuizMode, errorMode: boolean, given: SessionHelpers = { distractorsFor: () => [] }): void {
     begin(() => {
       let base = [...pool]
       while (base.length < total) base = [...base, ...pool]
-      return shuffle(base).slice(0, total).map(pair => makeQuestion(pair, sessionMode, fullPairs, distractorsFor))
-    }, mode, errorMode, preferred)
+      return shuffle(base).slice(0, total).map(pair => makeQuestion(pair, sessionMode, fullPairs, helpers))
+    }, mode, errorMode, given)
   }
 
   // keeps the given order, used by smart practice
-  function startPlanned(items: PlannedItem[], mode: QuizMode, preferred: DistractorsFor): void {
+  function startPlanned(items: PlannedItem[], mode: QuizMode, given: SessionHelpers): void {
     begin(
-      () => items.map(i => i.intro ? makeIntro(i.pair) : makeQuestion(i.pair, sessionMode, fullPairs, distractorsFor)),
-      mode, false, preferred,
+      () => items.map(i => i.intro ? makeIntro(i.pair) : makeQuestion(i.pair, sessionMode, fullPairs, helpers)),
+      mode, false, given,
     )
   }
 
@@ -169,16 +190,24 @@ export function useSession() {
     const offset = 3 + Math.floor(Math.random() * 4)
     const idx = Math.min(current.value + offset, questions.value.length)
     const pair = { kana: q.kana, romaji: q.romaji, script: q.script }
-    questions.value.splice(idx, 0, makeQuestion(pair, sessionMode, fullPairs, distractorsFor))
+    questions.value.splice(idx, 0, { ...makeQuestion(pair, sessionMode, fullPairs, helpers), reask: true })
   }
 
-  function markCorrect(suffix = ''): void {
+  function noteResult(kana: string, correct: boolean): void {
+    const r = kanaResults.value[kana]
+    if (r) r.last = correct
+    else kanaResults.value[kana] = { first: correct, last: correct }
+  }
+
+  function markCorrect(q: QuizQuestion, suffix = ''): void {
+    noteResult(q.kana, true)
     correctCount.value++
-    feedbackText.value = suffix ? `✓ CORRECT · ${suffix}` : '✓ CORRECT'
+    feedbackText.value = suffix ? `Correct · ${suffix}` : 'Correct'
     feedbackType.value = 'correct'
   }
 
   function markWrong(q: QuizQuestion, text: string, explain: Explanation | null): void {
+    noteResult(q.kana, false)
     wrongCount.value++
     missedPairs.value.push({ kana: q.kana, romaji: q.romaji, script: q.script })
     feedbackText.value = text
@@ -203,16 +232,17 @@ export function useSession() {
 
     if (wasCorrect) {
       // show the Hepburn form when an alternate spelling was used
-      markCorrect(typed === q.answer ? '' : q.answer)
+      markCorrect(q, typed === q.answer ? '' : q.answer)
     } else if (typo) {
-      markWrong(q, `✗ Typo? Answer: ${q.answer}`, null)
+      markWrong(q, `Typo? Answer: ${q.answer}`, null)
     } else {
+      // only worth a side by side when the typed reading is a real kana
       const givenKana = kanaForRomaji(typed, q.script) ?? null
-      markWrong(q, `✗ Answer: ${q.answer}`, {
+      markWrong(q, `Answer: ${q.answer}`, givenKana ? {
         givenKana,
         givenLabel: typed,
-        hint: givenKana ? lookalikeHint(q.kana, givenKana) : null,
-      })
+        hint: lookalikeHint(q.kana, givenKana),
+      } : null)
     }
   }
 
@@ -229,9 +259,9 @@ export function useSession() {
     onRecord({ kana: q.kana, romaji: q.romaji, script: q.script, direction: q.direction, correct: wasCorrect, given: chosen, elapsedMs: elapsed })
 
     if (wasCorrect) {
-      markCorrect()
+      markCorrect(q)
     } else {
-      markWrong(q, `✗ Answer: ${q.answer}`, {
+      markWrong(q, `Answer: ${q.answer}`, {
         givenKana: chosen,
         givenLabel: pairFor(chosen)?.romaji ?? '',
         hint: lookalikeHint(q.kana, chosen),
@@ -253,7 +283,7 @@ export function useSession() {
     })
 
     if (result.correct) {
-      markCorrect()
+      markCorrect(q)
       return
     }
     drawings.value[q.kana] = result.ink
@@ -261,7 +291,7 @@ export function useSession() {
       result.faults.order ? 'stroke order' :
       result.faults.direction ? 'stroke direction' :
       'needed a hint'
-    markWrong(q, `✗ ${q.kana}: ${why}`, null)
+    markWrong(q, `${q.kana}: ${why}`, null)
   }
 
   function timeOut(onRecord: RecordFn): void {
@@ -274,7 +304,22 @@ export function useSession() {
       kana: q.kana, romaji: q.romaji, script: q.script, direction: q.direction,
       correct: false, given: '', elapsedMs: timeLimit.value, timeout: true,
     })
-    markWrong(q, `⏱ Too slow · ${q.answer}`, null)
+    markWrong(q, `Too slow · ${q.answer}`, null)
+  }
+
+  // honest "don't know" instead of a guess: wrong, but nothing to learn about confusions
+  function giveUp(onRecord: RecordFn): void {
+    if (answered.value) return
+    const q = currentQuestion.value
+    if (!q || q.inputType === 'intro') return
+
+    answered.value = true
+    gaveUp.value = true
+    onRecord({
+      kana: q.kana, romaji: q.romaji, script: q.script, direction: q.direction,
+      correct: false, given: '', elapsedMs: Date.now() - questionStartTime.value,
+    })
+    markWrong(q, q.inputType === 'draw' ? `${q.kana} (${q.romaji})` : `Answer: ${q.answer}`, null)
   }
 
   function next(onResults: () => void): void {
@@ -290,8 +335,8 @@ export function useSession() {
   return {
     questions, current, correctCount, wrongCount, answered, selectedOption,
     missedPairs, isErrorPractice, typedAnswer, feedbackText, feedbackType, explanation, startedAt, typeFieldEl, drawings,
-    timed, timeLimit,
-    currentQuestion, progress, resultScore, resultLabel, uniqueMissedPairs,
-    start, startPlanned, submitTyped, selectAnswer, submitDrawing, timeOut, next,
+    timed, limits, timeLimit, gaveUp,
+    currentQuestion, progress, resultScore, resultLabel, roundSummary, uniqueMissedPairs,
+    start, startPlanned, submitTyped, selectAnswer, submitDrawing, timeOut, giveUp, next,
   }
 }

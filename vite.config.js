@@ -25,8 +25,8 @@ export default defineConfig(({ command }) => ({
         name: 'Kana Quiz',
         short_name: 'Kana Quiz',
         description: 'Hiragana and katakana practice quiz',
-        theme_color: '#12121a',
-        background_color: '#12121a',
+        theme_color: '#5b4bdb',
+        background_color: '#fffbf2',
         display: 'standalone',
         icons: [
           {

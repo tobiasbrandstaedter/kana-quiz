@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import type { AnswerRecord, StatEntry, StatsMap } from '../types'
-import { review, isDue, recentErrors, pickSmart, orderSession, columnProgress, MAX_BOX } from './scheduler'
+import { review, isDue, recentErrors, pickSmart, orderSession, columnProgress, dueOutlook, mixedDirection, MAX_BOX } from './scheduler'
 import { allPairs, pairFor, HIRAGANA } from '../data/kana'
 import { newEntry } from './statsMigration'
 
@@ -73,9 +73,14 @@ describe('pickSmart', () => {
     expect(p.weak.map(x => x.kana)).toEqual(['ね'])
   })
 
-  it('introduces new kana in table order, at most five', () => {
+  it('introduces new kana in table order, at most five, lookalikes side by side', () => {
     const p = pickSmart({}, [], table, ['hiragana'], 20, NOW)
-    expect(p.fresh.map(x => x.kana)).toEqual(['あ', 'い', 'う', 'え', 'お'])
+    expect(p.fresh.map(x => x.kana)).toEqual(['あ', 'お', 'い', 'う', 'え'])
+  })
+
+  it('takes the number of new kana from the caller', () => {
+    expect(pickSmart({}, [], table, ['hiragana'], 20, NOW, 0).fresh).toEqual([])
+    expect(pickSmart({}, [], table, ['hiragana'], 20, NOW, 3).fresh).toHaveLength(3)
   })
 
   it('holds back new kana while many are still shaky', () => {
@@ -126,5 +131,30 @@ describe('columnProgress', () => {
   it('counts seen, mastered and due kana', () => {
     const s = stats(entry('か', 3, NOW + DAY), entry('き', 1, NOW - DAY), entry('く', 0, 0, { correct: 0 }))
     expect(columnProgress(['か', 'き', 'く', 'け', 'こ'], s, NOW)).toEqual({ total: 5, seen: 2, mastered: 1, due: 1 })
+  })
+})
+
+describe('dueOutlook', () => {
+  it('splits due now, due within a day and the next review time', () => {
+    const s = stats(entry('か', 1, NOW - DAY), entry('き', 2, NOW + 10 * 60 * 60 * 1000), entry('く', 3, NOW + 5 * DAY))
+    expect(dueOutlook(s, ['hiragana'], NOW)).toEqual({ now: 1, soon: 1, nextAt: NOW + 10 * 60 * 60 * 1000 })
+  })
+
+  it('reports nothing coming when nothing was seen', () => {
+    expect(dueOutlook({}, ['hiragana'], NOW)).toEqual({ now: 0, soon: 0, nextAt: 0 })
+  })
+})
+
+describe('mixedDirection', () => {
+  it('recognizes new and shaky kana, reads box 2', () => {
+    expect(mixedDirection(undefined, true)).toBe('romaji-to-kana')
+    expect(mixedDirection(entry('か', 1, 0), true)).toBe('romaji-to-kana')
+    expect(mixedDirection(entry('か', 2, 0), true)).toBe('kana-to-romaji')
+  })
+
+  it('goes for a direction never answered right once known', () => {
+    const e = entry('か', 3, 0, { byDirection: { 'kana-to-romaji': { correct: 2, incorrect: 0 }, draw: { correct: 1, incorrect: 0 } } })
+    expect(mixedDirection(e, true)).toBe('romaji-to-kana')
+    expect(mixedDirection(entry('か', 4, 0), false)).toBe('kana-to-romaji')
   })
 })

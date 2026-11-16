@@ -30,23 +30,30 @@ const emit = defineEmits<{
 <template>
   <div class="selector-panel">
     <div class="quick-row">
-      <button class="quick-btn" @click="emit('selectAll')">ALL</button>
-      <button class="quick-btn" @click="emit('selectNone')">CLEAR</button>
-      <button class="quick-btn" @click="emit('selectGroup', 'main')">MAIN</button>
-      <button class="quick-btn" @click="emit('selectGroup', 'dakuten')">DAKUTEN</button>
-      <button class="quick-btn" @click="emit('selectGroup', 'combo')">COMBOS</button>
+      <button class="quick-btn" @click="emit('selectAll')">All</button>
+      <button class="quick-btn" @click="emit('selectNone')">None</button>
+      <button class="quick-btn" @click="emit('selectGroup', 'main')">Main</button>
+      <button class="quick-btn" @click="emit('selectGroup', 'dakuten')">Dakuten</button>
+      <button class="quick-btn" @click="emit('selectGroup', 'combo')">Combos</button>
+    </div>
+
+    <!-- touch screens have no tooltips, so the bar colors are spelled out here -->
+    <div class="selector-legend">
+      <span class="legend-item"><span class="legend-swatch mastered"></span>Mastered</span>
+      <span class="legend-item"><span class="legend-swatch learning"></span>Learning</span>
+      <span class="legend-item"><span class="legend-error"></span>Open errors</span>
     </div>
 
     <template v-for="([scriptName, columns], si) in selectorScripts" :key="scriptName">
-      <div v-if="selectorScripts.length > 1" class="group-title" :style="{ marginTop: si === 0 ? '0' : '20px' }">
+      <div v-if="selectorScripts.length > 1" class="script-title" :class="{ first: si === 0 }">
         {{ scriptName === 'hiragana' ? 'Hiragana (ひらがな)' : 'Katakana (カタカナ)' }}
       </div>
 
-      <template v-for="([group, cols], gi) in Object.entries(columns)" :key="group">
-        <div class="group-title" :style="{ marginTop: selectorScripts.length > 1 && gi === 0 ? '8px' : '' }">
+      <template v-for="[group, cols] in Object.entries(columns)" :key="group">
+        <div class="group-title">
           {{ GROUP_NAMES[group] }}
         </div>
-        <div class="column-grid" style="margin-bottom:4px">
+        <div class="column-grid">
           <button
             v-for="col in cols" :key="col.id"
             class="col-btn"
@@ -56,6 +63,8 @@ const emit = defineEmits<{
               mastered: progress[col.id]?.mastered === col.kana.length,
             }"
             :title="progressTitle(progress[col.id])"
+            :aria-pressed="selectedCols.has(col.id)"
+            :aria-label="`${col.label}, ${progressTitle(progress[col.id])}`"
             @click="emit('toggle', col.id)"
           >
             <span class="kana-sample">{{ col.sample }}</span>

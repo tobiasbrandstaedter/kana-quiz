@@ -1,14 +1,16 @@
 <script setup lang="ts">
-import { inject, ref, computed } from 'vue'
+import { inject, ref, computed, watch } from 'vue'
 import { QUIZ_KEY } from '../composables/useQuiz'
 import { pairFor } from '../data/kana'
 import { lookalikesOf } from '../data/lookalikes'
+import { mnemonicFor } from '../data/mnemonics'
 import { playKana } from '../audio'
 import type { DrawResult } from '../types'
 import StrokeDemo from './StrokeDemo.vue'
 import StrokeCanvas from './StrokeCanvas.vue'
+import Icon from './Icon.vue'
 
-const { strokeColumns } = inject(QUIZ_KEY)!
+const { strokeColumns, statsData, recordWritePractice, selectedCount } = inject(QUIZ_KEY)!
 
 const allKana = computed(() => strokeColumns.value.flatMap(c => c.kana))
 const picked = ref<string>('')
@@ -17,6 +19,7 @@ const picked = ref<string>('')
 const current = computed(() => allKana.value.includes(picked.value) ? picked.value : allKana.value[0] ?? '')
 const romaji = computed(() => pairFor(current.value)?.romaji ?? '')
 const lookalikes = computed(() => lookalikesOf(current.value).join('・'))
+const currentCol = computed(() => strokeColumns.value.find(c => c.kana.includes(current.value)))
 
 // watch the animation, trace over it, then write it from memory
 type View = 'watch' | 'trace' | 'recall'
@@ -38,65 +41,101 @@ function retry(): void {
   attempt.value++
 }
 
-const panelEl = ref<HTMLElement | null>(null)
+function onDone(result: DrawResult): void {
+  outcome.value = result
+  // only a clean write from memory counts as an answer, practice shouldn't cost a review box
+  if (view.value === 'recall') recordWritePractice(current.value, result)
+}
 
-// the grid can be long on a phone, bring the demo back into view
 function pick(k: string): void {
   picked.value = k
   outcome.value = null
-  panelEl.value?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+}
+
+function pickColumn(id: string): void {
+  const col = strokeColumns.value.find(c => c.id === id)
+  if (col) pick(col.kana[0])
 }
 
 function move(delta: number): void {
   const list = allKana.value
   const i = list.indexOf(current.value)
-  picked.value = list[(i + delta + list.length) % list.length]
-  outcome.value = null
+  pick(list[(i + delta + list.length) % list.length])
 }
+
+// ✓ once written cleanly from memory, anywhere in the app
+function written(k: string): boolean {
+  return (statsData.value[k]?.byDirection.draw?.correct ?? 0) > 0
+}
+
+// keep the active row chip in view when stepping through with prev and next
+const rowsEl = ref<HTMLElement | null>(null)
+watch(currentCol, col => {
+  if (!col) return
+  rowsEl.value?.querySelector<HTMLElement>(`[data-col="${col.id}"]`)?.scrollIntoView({ block: 'nearest', inline: 'center', behavior: 'smooth' })
+})
 </script>
 
 <template>
   <div>
-    <div v-if="current" ref="panelEl" class="stroke-panel">
+    <div class="stroke-rows" ref="rowsEl" role="tablist" aria-label="Rows">
+      <button
+        v-for="col in strokeColumns" :key="col.id" :data-col="col.id"
+        class="row-chip" :class="{ active: col.id === currentCol?.id }"
+        role="tab" :aria-selected="col.id === currentCol?.id"
+        @click="pickColumn(col.id)"
+      >{{ col.label }}</button>
+    </div>
+    <div v-if="currentCol" class="stroke-picks">
+      <button
+        v-for="k in currentCol.kana" :key="k"
+        class="stroke-pick kana" :class="{ active: k === current, written: written(k) }"
+        :aria-label="`${k}${written(k) ? ', written cleanly before' : ''}`"
+        @click="pick(k)"
+      >{{ k }}</button>
+    </div>
+
+    <div v-if="current" class="stroke-panel">
+      <div class="stroke-info">
+        <div class="stroke-kana kana" :class="{ hidden: hideKana }">{{ hideKana ? '?' : current }}</div>
+        <div class="stroke-romaji">{{ romaji }}</div>
+        <button class="icon-btn boxed butter" :aria-label="`Play ${romaji}`" @click="playKana(current)"><Icon name="speaker" :size="20" /></button>
+        <div class="stroke-nav">
+          <button class="icon-btn boxed" aria-label="Previous kana" @click="move(-1)"><Icon name="left" :size="20" /></button>
+          <button class="icon-btn boxed" aria-label="Next kana" @click="move(1)"><Icon name="right" :size="20" /></button>
+        </div>
+      </div>
+      <div v-if="!hideKana && (lookalikes || mnemonicFor(current))" class="stroke-tips">
+        <div v-if="mnemonicFor(current)" class="stroke-mnemonic">{{ mnemonicFor(current) }}</div>
+        <div v-if="lookalikes" class="stroke-lookalikes">Don't mix up with <span class="kana">{{ lookalikes }}</span></div>
+      </div>
+
       <div class="stroke-stage">
         <div class="stroke-views" role="group" aria-label="Practice mode">
           <button
             v-for="[v, label] in VIEWS" :key="v"
             class="stroke-view" :class="{ active: view === v }"
+            :aria-pressed="view === v"
             @click="setView(v)"
           >{{ label }}</button>
         </div>
         <StrokeDemo v-if="view === 'watch'" :kana="current" controls />
         <template v-else>
-          <StrokeCanvas :key="`${current}-${attempt}`" :kana="current" :mode="view" @done="outcome = $event" />
+          <StrokeCanvas :key="`${current}-${attempt}`" :kana="current" :mode="view" @done="onDone" />
           <div v-if="outcome" class="stroke-outcome" :class="{ good: outcome.correct }">
-            {{ outcome.correct ? '✓ Clean, every stroke in order' : 'Done, with some help. Once more?' }}
-            <button class="stroke-ctl" @click="retry()">AGAIN</button>
+            {{ outcome.correct ? (view === 'recall' ? 'Saved as a correct answer.' : 'Now try it from memory.') : 'Done, with some help. Once more?' }}
+            <button v-if="outcome.correct && view === 'trace'" class="stroke-ctl" @click="setView('recall')">Write it</button>
+            <button v-else-if="outcome.correct" class="stroke-ctl" @click="move(1)">Next kana</button>
+            <button class="stroke-ctl" @click="retry()">Again</button>
           </div>
         </template>
       </div>
-      <div class="stroke-info">
-        <div class="stroke-kana kana" :class="{ hidden: hideKana }">{{ hideKana ? '?' : current }}</div>
-        <div class="stroke-romaji">{{ romaji }}</div>
-        <button class="stroke-audio" :aria-label="`Play ${romaji}`" @click="playKana(current)">🔊</button>
-        <div v-if="lookalikes && !hideKana" class="stroke-lookalikes">Don't mix up with <span class="kana">{{ lookalikes }}</span></div>
-        <div class="stroke-nav">
-          <button class="stroke-ctl" @click="move(-1)">◀ PREV</button>
-          <button class="stroke-ctl" @click="move(1)">NEXT ▶</button>
-        </div>
-      </div>
     </div>
 
-    <div class="section-label">Pick a kana</div>
-    <div class="stroke-note">Shows the columns selected on the Practice tab, or all of them if none is selected. Combinations are written as the base kana followed by the small ya, yu or yo.</div>
-    <div v-for="col in strokeColumns" :key="col.id" class="stroke-row">
-      <span class="stroke-row-label">{{ col.label }}</span>
-      <button
-        v-for="k in col.kana" :key="k"
-        class="stroke-pick kana" :class="{ active: k === current }"
-        @click="pick(k)"
-      >{{ k }}</button>
-    </div>
+    <p class="stroke-note">
+      {{ selectedCount ? 'Shows the columns picked on the Practice tab.' : 'Shows every row. Pick columns on the Practice tab to narrow it down.' }}
+      ✓ marks kana you have written cleanly from memory. Combinations are the base kana followed by a small ya, yu or yo.
+    </p>
 
     <div class="credit">
       Stroke data from <a href="https://kanjivg.tagaini.net" target="_blank" rel="noopener">KanjiVG</a>

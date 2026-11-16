@@ -38,4 +38,11 @@ describe('pickDistractors', () => {
     const picked = pickDistractors(pairFor('あ')!, pool, [], fixedRng)
     expect(picked.sort()).toEqual(['ア', 'イ', 'ウ'])
   })
+
+  it('fills from known kana before unknown ones, lookalikes regardless', () => {
+    const known = new Set(['あ', 'い', 'う', 'え', 'か', 'き'])
+    const picked = pickDistractors(pairFor('あ')!, FULL, [], fixedRng, known)
+    expect(picked[0]).toBe('お')
+    expect(picked.slice(1).every(k => known.has(k))).toBe(true)
+  })
 })

@@ -11,7 +11,7 @@ function currentRomaji(kana: string): string | undefined {
 export function newEntry(pair: KanaPair): StatEntry {
   return {
     ...pair, correct: 0, incorrect: 0, totalMs: 0, count: 0,
-    lastSeen: 0, lastWrong: 0, streak: 0, confusions: {}, byDirection: {}, box: 0, due: 0,
+    lastSeen: 0, lastWrong: 0, resolvedAt: 0, streak: 0, confusions: {}, byDirection: {}, box: 0, due: 0,
     strokeErrors: [], strokeFaults: {},
   }
 }
@@ -49,6 +49,7 @@ export function normalizeStats(raw: unknown): StatsMap {
       count: e.count ?? 0,
       lastSeen: e.lastSeen ?? 0,
       lastWrong: e.lastWrong ?? 0,
+      resolvedAt: e.resolvedAt ?? 0,
       streak: e.streak ?? 0,
       confusions: e.confusions ?? {},
       byDirection: e.byDirection ?? {},
