@@ -1,3 +1,4 @@
+import type { Point } from '../types'
 import { STROKES } from './strokes'
 
 // One stroke placed in a row of glyphs. A combo like きゃ is the base kana plus the
@@ -11,6 +12,16 @@ export interface PlacedStroke {
 export interface KanaStrokes {
   width: number  // viewBox width, the height is always 109
   strokes: PlacedStroke[]
+}
+
+/** svg transform that puts a stroke into its glyph's cell */
+export function glyphShift(dx: number): string {
+  return `translate(${dx} 0)`
+}
+
+/** points attribute for a stroke the learner drew */
+export function polylinePoints(points: Point[]): string {
+  return points.map(p => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ')
 }
 
 const CELL = 109

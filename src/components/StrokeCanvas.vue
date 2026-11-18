@@ -1,13 +1,15 @@
 <script lang="ts">
-// Once a pen touched any canvas, finger touches are a resting palm, not a stroke.
-// Kept for the whole page so the next kana doesn't have to learn it again.
-let penSeen = false
+// A finger touch shortly after the pen is a resting palm, not a stroke. Kept across
+// canvases so the next kana doesn't have to learn it again, and dropped after a minute
+// without the pen, so someone who puts it away can go on with a finger.
+const PEN_HOLD_MS = 60_000
+let penAt = 0
 </script>
 
 <script setup lang="ts">
 import { ref, shallowRef, computed, onMounted } from 'vue'
 import type { Point, StrokeFault, DrawResult } from '../types'
-import { kanaStrokes } from '../data/strokeGlyphs'
+import { kanaStrokes, glyphShift, polylinePoints } from '../data/strokeGlyphs'
 import { checkStroke, SAMPLES } from '../learning/strokeMatch'
 import type { StrokeCheck } from '../learning/strokeMatch'
 import Icon from './Icon.vue'
@@ -38,6 +40,7 @@ const live = ref<Point[] | null>(null)
 let livePointer = -1
 const rejected = ref<Point[] | null>(null)
 const message = ref('')
+const clean = ref(false)
 const lastCheck = ref<StrokeCheck | null>(null)
 const finished = computed(() => count.value > 0 && next.value >= count.value)
 // only a stroke the user drew can be taken back, not one the app drew after three misses
@@ -67,8 +70,8 @@ function toSvg(e: PointerEvent): Point {
 
 function onDown(e: PointerEvent): void {
   if (finished.value) return
-  if (e.pointerType === 'pen') penSeen = true
-  if (penSeen && e.pointerType === 'touch') return
+  if (e.pointerType === 'pen') penAt = Date.now()
+  if (e.pointerType === 'touch' && Date.now() - penAt < PEN_HOLD_MS) return
   // a second finger while drawing is a hand resting on the screen
   if (live.value) return
   svgEl.value?.setPointerCapture(e.pointerId)
@@ -144,7 +147,8 @@ function advance(): void {
   showHint.value = false
   if (!finished.value) return
   const correct = hinted.size === 0 && !faults.order && !faults.direction
-  if (correct) message.value = props.mode === 'trace' ? '✓ Traced' : '✓ Clean, every stroke right'
+  clean.value = correct
+  if (correct) message.value = props.mode === 'trace' ? 'Traced' : 'Clean, every stroke right'
   emit('done', { correct, errors: [...errors.value], faults: { ...faults }, ink: [...ink.value] })
 }
 
@@ -160,14 +164,6 @@ function undo(): void {
 function revealHint(): void {
   hinted.add(next.value)
   showHint.value = true
-}
-
-function at(dx: number): string {
-  return `translate(${dx} 0)`
-}
-
-function polyline(points: Point[]): string {
-  return points.map(p => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ')
 }
 
 const nextStart = computed(() => {
@@ -196,26 +192,26 @@ const debugText = computed(() => {
       </g>
       <!-- reference strokes, also sampled by the matcher, hidden while recalling -->
       <g ref="refGroup" class="draw-ref" :class="{ hidden: mode === 'recall' && !finished, done: finished }">
-        <path v-for="(s, i) in strokes" :key="i" :d="s.d" :transform="at(s.dx)" />
+        <path v-for="(s, i) in strokes" :key="i" :d="s.d" :transform="glyphShift(s.dx)" />
       </g>
 
       <template v-for="(stroke, i) in ink" :key="i">
-        <polyline v-if="stroke" class="draw-ink" :points="polyline(stroke)" />
-        <path v-else-if="i < next" class="draw-given" :d="strokes[i].d" :transform="at(strokes[i].dx)" />
+        <polyline v-if="stroke" class="draw-ink" :points="polylinePoints(stroke)" />
+        <path v-else-if="i < next" class="draw-given" :d="strokes[i].d" :transform="glyphShift(strokes[i].dx)" />
       </template>
 
       <path
         v-if="showHint && !finished" :key="`hint${next}`" class="draw-hint"
-        :d="strokes[next].d" :transform="at(strokes[next].dx)" pathLength="1"
+        :d="strokes[next].d" :transform="glyphShift(strokes[next].dx)" pathLength="1"
       />
       <circle v-if="nextStart" class="draw-start" :cx="nextStart.x" :cy="nextStart.y" r="3" />
 
-      <polyline v-if="rejected" class="draw-ink rejected" :points="polyline(rejected)" />
-      <polyline v-if="live" class="draw-ink live" :points="polyline(live)" />
+      <polyline v-if="rejected" class="draw-ink rejected" :points="polylinePoints(rejected)" />
+      <polyline v-if="live" class="draw-ink live" :points="polylinePoints(live)" />
     </svg>
 
-    <div class="draw-status" :class="{ good: finished && message.startsWith('✓') }" role="status" aria-live="polite">
-      {{ message || (finished ? '' : `Stroke ${next + 1} of ${count}`) }}
+    <div class="draw-status" :class="{ good: clean }" role="status" aria-live="polite">
+      <Icon v-if="clean" name="check" :size="16" />{{ message || (finished ? '' : `Stroke ${next + 1} of ${count}`) }}
     </div>
     <div v-if="!finished" class="draw-tools">
       <button class="stroke-ctl" :disabled="!canUndo" @click="undo()"><Icon name="undo" :size="18" />Undo</button>

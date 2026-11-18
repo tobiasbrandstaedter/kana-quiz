@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, nextTick } from 'vue'
-import { kanaStrokes } from '../data/strokeGlyphs'
+import { kanaStrokes, glyphShift } from '../data/strokeGlyphs'
 import Icon from './Icon.vue'
 
 const props = defineProps<{ kana: string; controls?: boolean }>()
@@ -38,10 +38,6 @@ function stepBy(delta: number): void {
   step.value = Math.min(strokeCount.value, Math.max(1, current + delta))
 }
 
-function at(dx: number): string {
-  return `translate(${dx} 0)`
-}
-
 watch(() => props.kana, async () => {
   timings.value = []
   step.value = null
@@ -67,12 +63,12 @@ defineExpose({ replay })
         <line x1="2" :y1="54.5" :x2="layout.width - 2" y2="54.5" />
       </g>
       <g ref="ghostEl" class="stroke-ghost">
-        <path v-for="(s, i) in strokes" :key="i" :d="s.d" :transform="at(s.dx)" />
+        <path v-for="(s, i) in strokes" :key="i" :d="s.d" :transform="glyphShift(s.dx)" />
       </g>
 
       <g v-if="step === null && timings.length === strokeCount" :key="run" class="stroke-anim">
         <path
-          v-for="(s, i) in strokes" :key="i" :d="s.d" :transform="at(s.dx)" pathLength="1"
+          v-for="(s, i) in strokes" :key="i" :d="s.d" :transform="glyphShift(s.dx)" pathLength="1"
           :style="{ animationDelay: `${timings[i].delay}ms`, animationDuration: `${timings[i].duration}ms` }"
         />
         <text
@@ -83,7 +79,7 @@ defineExpose({ replay })
 
       <g v-else-if="step !== null" class="stroke-steps">
         <path
-          v-for="(s, i) in strokes.slice(0, step)" :key="i" :d="s.d" :transform="at(s.dx)"
+          v-for="(s, i) in strokes.slice(0, step)" :key="i" :d="s.d" :transform="glyphShift(s.dx)"
           :class="{ current: i === step - 1 }"
         />
         <text

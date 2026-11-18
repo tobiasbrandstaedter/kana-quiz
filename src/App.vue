@@ -9,22 +9,20 @@ import KanaSheet from './components/KanaSheet.vue'
 
 const quiz = useQuiz()
 provide(QUIZ_KEY, quiz)
-const { screen, notice, noticeAction, runNoticeAction } = quiz
+const { screen, activeTab, notice, noticeAction, runNoticeAction } = quiz
 
 const { needRefresh, apply } = useAppUpdate()
-// nothing to lose on the setup screen, so switch over right away;
-// mid-quiz the banner asks first and the reload happens once the round is over
-watch([needRefresh, screen], ([ready, s]) => {
-  if (ready && s === 'setup') apply()
+// Nothing to lose on the Practice tab, so switch over right away. Anywhere else a reload
+// would wipe something: a quiz, a drawing on the Writing tab, an open sheet. There the
+// banner asks, and the reload happens by itself once the learner is back on the Practice tab.
+watch([needRefresh, screen, activeTab], ([ready, s, tab]) => {
+  if (ready && s === 'setup' && tab === 'practice' && !document.body.classList.contains('sheet-open')) apply()
 })
 
 // a fresh screen starts at the top, not where the last one was scrolled to
 watch(screen, () => window.scrollTo(0, 0))
 
-onMounted(() => {
-  quiz.init()
-  caches.delete('kana-audio').catch(() => {})
-})
+onMounted(() => quiz.init())
 </script>
 
 <template>

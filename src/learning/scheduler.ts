@@ -22,8 +22,13 @@ export interface Schedule {
   due: number
 }
 
+/** When a kana starts to count as due. Texts like "next review in 3 h" use this too, so they agree with the due dots. */
+export function dueAt(s: Schedule): number {
+  return s.due - DUE_SLACK
+}
+
 export function isDue(s: Schedule, now: number): boolean {
-  return now >= s.due - DUE_SLACK
+  return now >= dueAt(s)
 }
 
 /**
@@ -58,8 +63,9 @@ export interface SmartPicks {
   fill: KanaPair[]
 }
 
-function seen(e: StatEntry): boolean {
-  return e.correct + e.incorrect > 0
+/** Answered at least once. An entry can exist without that, e.g. after a migration. */
+export function isSeen(e: StatEntry | undefined): e is StatEntry {
+  return !!e && e.correct + e.incorrect > 0
 }
 
 // lookalikes that are both new go next to each other, so the second intro card
@@ -91,7 +97,7 @@ export function pickSmart(
   now: number,
   newLimit: number = NEW_PER_SESSION,
 ): SmartPicks {
-  const reviewable = Object.values(stats).filter(e => seen(e) && scripts.includes(e.script) && pairFor(e.kana))
+  const reviewable = Object.values(stats).filter(e => isSeen(e) && scripts.includes(e.script) && pairFor(e.kana))
   const toPair = (e: StatEntry) => pairFor(e.kana)!
   const taken = new Set<string>()
   const take = (list: StatEntry[], limit: number) => {
@@ -120,7 +126,7 @@ export function pickSmart(
   const room = size - due.length - weak.length
   const freshLimit = learning >= MAX_LEARNING ? 0 : Math.min(newLimit, Math.floor(room / 2))
   const fresh = groupLookalikes(candidates
-    .filter(p => scripts.includes(p.script) && !(stats[p.kana] && seen(stats[p.kana])))
+    .filter(p => scripts.includes(p.script) && !isSeen(stats[p.kana]))
     .filter((p, i, arr) => arr.findIndex(q => q.kana === p.kana) === i)
     .slice(0, freshLimit))
 
@@ -189,7 +195,7 @@ export function columnProgress(kana: string[], stats: StatsMap, now: number): Co
   const p = { total: kana.length, seen: 0, mastered: 0, due: 0 }
   for (const k of kana) {
     const e = stats[k]
-    if (!e || !seen(e)) continue
+    if (!isSeen(e)) continue
     p.seen++
     if (e.box >= MASTERED_BOX) p.mastered++
     if (isDue(e, now)) p.due++
@@ -200,17 +206,18 @@ export function columnProgress(kana: string[], stats: StatsMap, now: number): Co
 export interface DueOutlook {
   now: number      // due right now
   soon: number     // due within the next day, not yet due
-  nextAt: number   // ms epoch of the next review that isn't due yet, 0 if none
+  nextAt: number   // ms epoch when the next kana becomes due, 0 if none is waiting
 }
 
 /** For the "all caught up" message: what comes back and when. */
 export function dueOutlook(stats: StatsMap, scripts: ScriptName[], now: number): DueOutlook {
   const out = { now: 0, soon: 0, nextAt: 0 }
   for (const e of Object.values(stats)) {
-    if (!seen(e) || !scripts.includes(e.script)) continue
+    if (!isSeen(e) || !scripts.includes(e.script)) continue
     if (isDue(e, now)) { out.now++; continue }
-    if (e.due - DUE_SLACK <= now + DAY) out.soon++
-    if (!out.nextAt || e.due < out.nextAt) out.nextAt = e.due
+    const at = dueAt(e)
+    if (at <= now + DAY) out.soon++
+    if (!out.nextAt || at < out.nextAt) out.nextAt = at
   }
   return out
 }
@@ -219,12 +226,11 @@ export function dueOutlook(stats: StatsMap, scripts: ScriptName[], now: number):
  * Mixed mode picks the direction by how well a kana is known: recognize it first,
  * then read it, then write it. Past box 2 it goes for a direction never answered right.
  */
-export function mixedDirection(e: StatEntry | undefined, canDraw: boolean, rng: () => number = Math.random): QuizDirection {
-  const box = e && seen(e) ? e.box : 0
-  if (box <= 1) return 'romaji-to-kana'
-  if (box === 2) return 'kana-to-romaji'
-  const dirs: QuizDirection[] = canDraw ? ['draw', 'kana-to-romaji', 'romaji-to-kana'] : ['kana-to-romaji', 'romaji-to-kana']
-  const missing = dirs.filter(d => !e!.byDirection[d]?.correct)
+export function mixedDirection(e: StatEntry | undefined, rng: () => number = Math.random): QuizDirection {
+  if (!isSeen(e) || e.box <= 1) return 'romaji-to-kana'
+  if (e.box === 2) return 'kana-to-romaji'
+  const dirs: QuizDirection[] = ['draw', 'kana-to-romaji', 'romaji-to-kana']
+  const missing = dirs.filter(d => !e.byDirection[d]?.correct)
   if (missing.length) return missing[0]
   return dirs[Math.floor(rng() * dirs.length)]
 }

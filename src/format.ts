@@ -1,4 +1,5 @@
 import { MASTERED_BOX } from './learning/scheduler'
+import type { AccClass } from './types'
 
 const HOUR = 60 * 60 * 1000
 const DAY = 24 * HOUR
@@ -11,6 +12,17 @@ export function fromNow(t: number, now: number = Date.now()): string {
   if (diff < DAY) return `in ${Math.round(diff / HOUR)} h`
   const days = Math.round(diff / DAY)
   return days === 1 ? 'tomorrow' : `in ${days} days`
+}
+
+/** Share of right answers in percent, 0 while nothing was answered. */
+export function accuracy(e: { correct: number; incorrect: number }): number {
+  const n = e.correct + e.incorrect
+  return n > 0 ? Math.round((e.correct / n) * 100) : 0
+}
+
+// one cut for every place a result gets a color
+export function accClass(pct: number): AccClass {
+  return pct >= 80 ? 'good' : pct >= 50 ? 'ok' : 'bad'
 }
 
 export type Stage = 'new' | 'learning' | 'reviewing' | 'mastered'

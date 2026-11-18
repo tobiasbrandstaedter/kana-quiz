@@ -204,6 +204,15 @@ Status: done. Decisions taken on the way:
 - D2 legend, D5 readable error rows, D6 sort icons, D7 one script filter, D8 fewer starts.
 - F2 focus handling in sheets, F3 kana sheet layout.
 
+Status: done. Decisions taken on the way:
+
+- D3: the chart folds dakuten and combinations until one of their kana is seen or the learner opens them. With five kana seen the tab is 2281 px tall on an iPhone instead of 3573. The order of the sections stays.
+- D5: the bar is gone, a row reads "1 miss, 67% right" with a labelled Resolve button.
+- D7: the table filter chips are gone. Cards, table and the weak and slow pools follow the script toggle like the chart and the errors already did.
+- D8: Practice weak and Practice slow only show once their pool has three kana, slow needs three timed answers per kana.
+- F2: the grabber bar is removed instead of made draggable.
+- F3: the stroke demo with its controls is wider than half a phone, so it stays on top. Under it one row carries audio, stage, next review and accuracy. A direction counts as good from 80% right, not from half.
+
 ### Phase 5: data safety, loading and offline (medium)
 
 - F1 export and import, hint to install.
@@ -211,10 +220,43 @@ Status: done. Decisions taken on the way:
 - I5 bundled audio, I4 status bar, I6 icons and manifest, I7 update timing.
 - Check on an iPhone and an iPad: F1, I4, B12, audio in Listen.
 
+Status: done except for bundled audio. Decisions taken on the way:
+
+- F1: the settings sheet has a Backup section. Export writes one JSON file with all six storage keys, import checks the file, asks before it replaces anything and then reloads. The note on adding the app to the home screen shows while it runs in a browser tab. The seven day claim about Safari is not stated in the UI, it is still unverified.
+- I2: `index.html` only loads Nunito and Zen Maru Gothic 700. A picked font is fetched at start, the other picker fonts when the settings sheet opens.
+- I3: eruda is out of the precache, which went from 773 KiB to 316 KiB.
+- I4: `black-translucent` stays. A strip in ink behind the status bar keeps the white clock readable on the light theme. This avoids guessing what `default` does on current iOS. **verify on device**
+- I5 is only half done. The speech fallback now reports when there is no Japanese voice and the listen card says "No sound available, you may be offline". The font cache holds 80 files. Bundling the clips is open: they are Tofugu's recordings, putting them into the repo needs a decision on the source (ask Tofugu, another licensed set, or generated speech).
+- I6: `scripts/make-icons.mjs` draws あ from its KanjiVG strokes on the primary purple and writes `icon.svg`, `icon-192.png`, `icon-512.png` and `apple-touch-icon.png`. The manifest lists the 512 as maskable too.
+- I7: a waiting update only reloads by itself on the Practice tab with no sheet open, everywhere else the banner asks.
+- Not checked here: I4, I7 and the installed icons need a device or a real update, the offline sound state needs a browser without a Japanese voice.
+
 ### Phase 6: dark mode look and cleanup (small)
 
 - G1 shadow and surface tokens for dark, G2 to G4, I8.
 - I9 leftovers, I10 duplicates, I11, H12 to H17, remaining low findings.
+
+Status: done except B12. Decisions taken on the way:
+
+- G1: a near black shadow tops out at about 1.5:1 on any dark ground, so in dark the shadow is the light part: `--drop` is a lilac (5.6:1 on the page), the page is deeper (`#1a1833`) and the surfaces stand off it. Outlines stay dark. Buttons on the purple hero keep an ink shadow, lilac on purple does not read. `--primary-soft` went up so the active tab and the pattern cards stand apart from a surface.
+- G2: script toggle, quick buttons and the Watch / Trace / Write switch are 44 px. The count field was already a 56 px target through its label, only the input inside measured 27 px.
+- G3: `--hero-dim` is 5.0:1 on the hero in dark. The label of a selected row was already white.
+- G4: the 11 px texts are 12 px, the debug line of the stroke matcher stays.
+- I8: chart cells joined the pressable block with a 2 px lift instead of going flat. Glyphs are icons. Raw colors are tokens (`--focus`, `--scrim` are new), except the check mark of a written kana, a data url can't read one. Kosugi Maru shows in its one real weight, `font-synthesis: none` on kana.
+- I9: the unused context keys, `headerTitle`, the `romaji-opt` branch, the `canDraw` and `hasStrokes` fallbacks and the stale cache cleanup in `App.vue` are gone, `statsTabCount` is `kanaTracked`, the README lists the files that exist. `kanaStrokes` still returns null for glyphs it doesn't know.
+- I10: `glyphShift` and `polylinePoints` in `strokeGlyphs.ts`, `accuracy` and `accClass` in `format.ts`, `isSeen` in `scheduler.ts`.
+- I11: number keys and Enter ignore modifiers and key repeat. Palm rejection now lasts a minute after the last pen contact instead of until reload. Per session was not an option, the Writing tab has none. **verify with a pencil**
+- H12: `dueAt` is the one moment a kana becomes due. The kana sheet, the stats table and "next review" on the hero and the results use it.
+- H13: `src/clock.ts` ticks once a minute and when the app comes back to the front. Plan, badges, due dots, today and the streak read it.
+- H14: the streak steps by calendar day. A test walks every hour of a year.
+- H15: "Practice this kana" asks the kana three times, each followed by a known kana of the script. The lone new kana in smart practice was left: it needs an empty profile and a selection of a single kana.
+- H16: `lookalikesOf` merges all groups, は gets ほ, ま and け.
+- H17: a count of 0 reads as blank, the auto advance checks the session, a Kunrei spelling given as a wrong answer is resolved to its kana (`kanaForTyped`) and stored in Hepburn.
+- A9: the start row of the custom quiz sticks above the tab bar while rows are picked. It sits in a section of its own, so it only shows once the rows are on screen.
+- B8: a `+1` next to the counter for a moment when a missed kana is queued again.
+- C3: the first button on the results says "Keep going" after smart practice, "Again" otherwise.
+- B12 is open: centering the block on a tall iPad moves the input toward the on-screen keyboard, which can't be checked without a device.
+- Checked in the browser emulation in light and dark, phone and tablet width. Still open on a device: everything listed under Phase 5, plus palm rejection.
 
 ## 4. Measurements
 

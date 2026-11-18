@@ -1,33 +1,40 @@
 <script setup lang="ts">
 import { inject } from 'vue'
-import type { StatsFilter, StatsSortCol } from '../types'
+import type { StatsSortCol } from '../types'
 import { QUIZ_KEY } from '../composables/useQuiz'
-import { fromNow, stageOf, STAGE_LABEL } from '../format'
+import { dueAt, isDue } from '../learning/scheduler'
+import { clock } from '../clock'
+import { fromNow, stageOf, accuracy, accClass, STAGE_LABEL } from '../format'
 import PatternCards from './PatternCards.vue'
 import KanaChart from './KanaChart.vue'
 import Icon from './Icon.vue'
 
 const {
-  statsSummary, filteredStatsRows, statsFilter, statsSort, allPatterns, today,
-  errorPairs, maxErrorCount, weakPool, slowPool,
-  setStatsFilter, setStatsSort, openKana, resolveErrors, resolveAllErrors,
+  statsSummary, filteredStatsRows, statsSort, allPatterns, today,
+  errorPairs, weakPool, slowPool,
+  setStatsSort, openKana, resolveErrors, resolveAllErrors,
   startQuiz, startWorstPractice, startSlowestPractice, startPatternPractice,
 } = inject(QUIZ_KEY)!
 
-const FILTERS: Array<[StatsFilter, string]> = [
-  ['all', 'All'],
-  ['hiragana', 'Hiragana'],
-  ['katakana', 'Katakana'],
+// a handful of kana is not a pool worth its own button
+const MIN_POOL = 3
+
+const COLUMNS: Array<[StatsSortCol, string]> = [
+  ['kana', 'Kana'],
+  ['acc', 'Accuracy'],
+  ['box', 'Stage'],
+  ['errors', 'Errors'],
+  ['time', 'Avg time'],
 ]
 
 function sortIcon(col: StatsSortCol): string {
-  if (statsSort.value?.col !== col) return '↕'
-  return statsSort.value.dir === 'asc' ? '↑' : '↓'
+  if (statsSort.value?.col !== col) return 'sort'
+  return statsSort.value.dir === 'asc' ? 'up' : 'down'
 }
 
-function accuracy(e: { correct: number; incorrect: number }): number {
-  const seen = e.correct + e.incorrect
-  return seen > 0 ? Math.round((e.correct / seen) * 100) : 0
+function sortState(col: StatsSortCol): 'ascending' | 'descending' | 'none' {
+  if (statsSort.value?.col !== col) return 'none'
+  return statsSort.value.dir === 'asc' ? 'ascending' : 'descending'
 }
 </script>
 
@@ -52,7 +59,7 @@ function accuracy(e: { correct: number; incorrect: number }): number {
       @practice="startPatternPractice"
     />
 
-    <div class="errors-header">
+    <div id="open-errors" class="errors-header">
       <h2 class="section-title">Open errors <span class="count-tag">{{ errorPairs.length }}</span></h2>
       <button v-if="errorPairs.length" class="btn btn-sm" @click="resolveAllErrors()">Mark all resolved</button>
     </div>
@@ -66,52 +73,42 @@ function accuracy(e: { correct: number; incorrect: number }): number {
         <div v-for="e in errorPairs" :key="e.kana" class="error-row">
           <button class="error-kana" :aria-label="`Details for ${e.kana}`" @click="openKana(e.kana)">{{ e.kana }}</button>
           <span class="error-romaji">{{ e.romaji }}</span>
-          <div class="error-bar-wrap">
-            <div class="error-bar-bg">
-              <div class="error-bar-fill" :style="{ width: maxErrorCount > 0 ? `${Math.round((e.incorrect / maxErrorCount) * 100)}%` : '0%' }"></div>
-            </div>
-            <span class="error-count-label">{{ e.incorrect }}</span>
-          </div>
-          <span class="error-accuracy" :class="{ good: accuracy(e) >= 80, ok: accuracy(e) >= 50 && accuracy(e) < 80 }">
-            {{ accuracy(e) }}%
+          <span class="error-facts">
+            {{ e.incorrect }} miss{{ e.incorrect === 1 ? '' : 'es' }}
+            <span class="error-accuracy" :class="accClass(accuracy(e))">{{ accuracy(e) }}% right</span>
           </span>
-          <button class="error-remove-btn" :aria-label="`Mark ${e.kana} as resolved`" title="Mark as resolved" @click="resolveErrors([e.kana])"><Icon name="check" :size="20" /></button>
+          <button class="btn btn-sm" :aria-label="`Mark ${e.kana} as resolved`" @click="resolveErrors([e.kana])">Resolve</button>
         </div>
       </div>
       <button class="btn btn-bad btn-lg btn-block" @click="startQuiz(true)">Practice errors</button>
     </template>
 
     <h2 class="section-title spaced">All kana</h2>
-    <div class="stats-filters">
-      <button
-        v-for="[val, label] in FILTERS" :key="val"
-        class="stats-filter-btn" :class="{ active: statsFilter === val }"
-        :aria-pressed="statsFilter === val"
-        @click="setStatsFilter(val)"
-      >{{ label }}</button>
-    </div>
 
-    <div class="stats-practice-row">
-      <button class="btn btn-sm" :disabled="weakPool.length === 0" @click="startWorstPractice()">
+    <!-- only once there is enough to practice, the errors and patterns above cover the rest -->
+    <div v-if="weakPool.length >= MIN_POOL || slowPool.length >= MIN_POOL" class="stats-practice-row">
+      <button v-if="weakPool.length >= MIN_POOL" class="btn btn-sm" @click="startWorstPractice()">
         Practice weak <span class="btn-badge">{{ weakPool.length }}</span>
       </button>
-      <button class="btn btn-sm" :disabled="slowPool.length === 0" @click="startSlowestPractice()">
+      <button v-if="slowPool.length >= MIN_POOL" class="btn btn-sm" @click="startSlowestPractice()">
         Practice slow <span class="btn-badge">{{ slowPool.length }}</span>
       </button>
     </div>
 
     <div v-if="filteredStatsRows.length === 0" class="no-stats-state">
-      <div class="big">{{ statsSummary.kanaCount === 0 ? '統' : '？' }}</div>
-      <div class="msg">{{ statsSummary.kanaCount === 0 ? 'No data yet, finish a session to see stats' : 'No data for this filter' }}</div>
+      <div class="big">統</div>
+      <div class="msg">No data yet, finish a session to see stats</div>
     </div>
     <div v-else class="stats-table">
       <div class="stats-table-header">
-        <button class="stats-th" @click="setStatsSort('kana')">Kana <span class="sort-icon">{{ sortIcon('kana') }}</span></button>
-        <span>Romaji</span>
-        <button class="stats-th" @click="setStatsSort('acc')">Accuracy <span class="sort-icon">{{ sortIcon('acc') }}</span></button>
-        <button class="stats-th" @click="setStatsSort('box')">Stage <span class="sort-icon">{{ sortIcon('box') }}</span></button>
-        <button class="stats-th" @click="setStatsSort('errors')">Errors <span class="sort-icon">{{ sortIcon('errors') }}</span></button>
-        <button class="stats-th" style="justify-content:flex-end" @click="setStatsSort('time')">Avg Time <span class="sort-icon">{{ sortIcon('time') }}</span></button>
+        <template v-for="[col, label] in COLUMNS" :key="col">
+          <button
+            class="stats-th" :class="{ active: statsSort?.col === col, end: col === 'time' }"
+            :aria-label="`Sort by ${label.toLowerCase()}, ${sortState(col) === 'none' ? 'not sorted' : sortState(col)}`"
+            @click="setStatsSort(col)"
+          >{{ label }} <Icon :name="sortIcon(col)" :size="14" /></button>
+          <span v-if="col === 'kana'">Romaji</span>
+        </template>
       </div>
       <button v-for="e in filteredStatsRows" :key="e.kana" class="stats-row" @click="openKana(e.kana)">
         <span class="stats-kana-cell">{{ e.kana }}</span>
@@ -122,7 +119,7 @@ function accuracy(e: { correct: number; incorrect: number }): number {
         </div>
         <span class="stats-stage" :class="stageOf(e.box, e.seen > 0)">
           {{ STAGE_LABEL[stageOf(e.box, e.seen > 0)] }}
-          <small>{{ fromNow(e.due) === 'now' ? 'due' : fromNow(e.due) }}</small>
+          <small>{{ isDue(e, clock) ? 'due' : fromNow(dueAt(e), clock) }}</small>
         </span>
         <span class="stats-num" :class="e.incorrect > 0 ? 'bad' : 'good'">{{ e.incorrect }}</span>
         <span class="time-badge" :class="e.timeClass">{{ e.avgTime !== null ? `${e.avgTime}s` : '--' }}</span>

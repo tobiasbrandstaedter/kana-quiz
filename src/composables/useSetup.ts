@@ -1,8 +1,12 @@
 import { ref, computed, watch } from 'vue'
 import type { ActiveScript, QuizMode, KanaPair, KanaData, ScriptName } from '../types'
 import { HIRAGANA, KATAKANA } from '../data/kana'
+import { loadKanaFont } from '../fonts'
+import { themeById, applyTheme } from '../theme'
+import type { ThemeId } from '../theme'
 
 const LS_FONT   = 'hiragana_kana_font'
+const LS_THEME  = 'kana_theme'
 const LS_SCRIPT = 'kana_script'
 const LS_PREFS  = 'kana_prefs'
 
@@ -39,6 +43,7 @@ export function useSetup() {
   const questionCountInput = ref<string | number>('')
   const questionCountText = computed(() => String(questionCountInput.value).trim())
   const kanaFont = ref('Zen Maru Gothic')
+  const theme = ref<ThemeId>('playground')
 
   const selectorScripts = computed((): Array<[ScriptName, KanaData]> =>
     activeScript.value === 'both'
@@ -50,10 +55,6 @@ export function useSetup() {
   const activeCols = computed(() => selectorScripts.value.flatMap(([, data]) => [...data.main, ...data.dakuten, ...data.combo]))
   const pickedCols = computed(() => activeCols.value.filter(c => selectedCols.value.has(c.id)))
   const selectedCount = computed(() => pickedCols.value.length)
-
-  const headerTitle = computed(() =>
-    ({ hiragana: 'ひらがな', katakana: 'カタカナ', both: 'かなカナ' } satisfies Record<ActiveScript, string>)[activeScript.value]
-  )
 
   function buildPairsFromSelected(): KanaPair[] {
     const pairs: KanaPair[] = []
@@ -68,19 +69,29 @@ export function useSetup() {
 
   const countHint = computed(() => {
     const pool = buildPairsFromSelected()
-    const val = questionCountText.value
-    if (!val) return pool.length > 0 ? `Blank = all ${pool.length} kana from selection` : 'Leave blank to use all selected kana'
-    const n = parseInt(val)
-    if (!isNaN(n) && pool.length > 0 && n > pool.length) return `${pool.length} unique kana, repeated to fill ${n} questions`
+    const n = parseInt(questionCountText.value)
+    // 0 and nonsense start the quiz with every picked kana, so say that
+    if (!(n > 0)) return pool.length > 0 ? `Blank = all ${pool.length} kana from selection` : 'Leave blank to use all selected kana'
+    if (pool.length > 0 && n > pool.length) return `${pool.length} unique kana, repeated to fill ${n} questions`
     return `${n} question${n !== 1 ? 's' : ''} per session`
   })
 
   watch(questionCountText, val => savePrefs({ questionCount: val }))
 
   function setKanaFont(family: string): void {
+    loadKanaFont(family)
     kanaFont.value = family
     document.documentElement.style.setProperty('--kana-font', `'${family}', sans-serif`)
     try { localStorage.setItem(LS_FONT, family) } catch {}
+  }
+
+  // a theme brings its own kana font along, the font picker can change it afterwards
+  function setTheme(id: ThemeId): void {
+    const t = themeById(id)
+    theme.value = t.id
+    applyTheme(t)
+    setKanaFont(t.kanaFont)
+    try { localStorage.setItem(LS_THEME, t.id) } catch {}
   }
 
   function setScript(script: ActiveScript): void {
@@ -159,17 +170,21 @@ export function useSetup() {
     try {
       const savedFont = localStorage.getItem(LS_FONT)
       if (savedFont) {
+        loadKanaFont(savedFont)
         kanaFont.value = savedFont
         document.documentElement.style.setProperty('--kana-font', `'${savedFont}', sans-serif`)
       }
+      const savedTheme = themeById(localStorage.getItem(LS_THEME))
+      theme.value = savedTheme.id
+      applyTheme(savedTheme)
     } catch {}
   }
 
   return {
-    activeScript, selectedCols, quizMode, timed, smartSize, smartNew, questionCountInput, questionCountText, kanaFont,
-    selectorScripts, activeCols, pickedCols, selectedCount, countHint, headerTitle,
+    activeScript, selectedCols, quizMode, timed, smartSize, smartNew, questionCountInput, questionCountText, kanaFont, theme,
+    selectorScripts, activeCols, pickedCols, selectedCount, countHint,
     buildPairsFromSelected,
-    setKanaFont, setScript, toggleCol, selectAll, selectNone, selectGroup, setMode, toggleTimed, setSmartSize, setSmartNew,
+    setKanaFont, setTheme, setScript, toggleCol, selectAll, selectNone, selectGroup, setMode, toggleTimed, setSmartSize, setSmartNew,
     init,
   }
 }

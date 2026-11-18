@@ -1,7 +1,5 @@
 import type { StatsMap } from '../types'
 
-const DAY = 24 * 60 * 60 * 1000
-
 // local date, so a session at 00:30 counts for the day the user thinks it is
 export function dayKey(t: number): string {
   const d = new Date(t)
@@ -14,11 +12,14 @@ export function dayKey(t: number): string {
  * counts the days up to yesterday.
  */
 export function streak(days: Record<string, number>, now: number): number {
-  let t = days[dayKey(now)] ? now : now - DAY
+  // steps by calendar day from noon: 24 h steps skip or repeat a day around a clock change
+  const d = new Date(now)
+  d.setHours(12, 0, 0, 0)
+  if (!days[dayKey(d.getTime())]) d.setDate(d.getDate() - 1)
   let n = 0
-  while (days[dayKey(t)]) {
+  while (days[dayKey(d.getTime())]) {
     n++
-    t -= DAY
+    d.setDate(d.getDate() - 1)
   }
   return n
 }

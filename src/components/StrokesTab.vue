@@ -86,7 +86,7 @@ function move(delta: number): void {
   pick(list[(i + delta + list.length) % list.length])
 }
 
-// ✓ once written cleanly from memory, anywhere in the app
+// checked once written cleanly from memory, anywhere in the app
 function written(k: string): boolean {
   return (statsData.value[k]?.byDirection.draw?.correct ?? 0) > 0
 }
@@ -156,7 +156,7 @@ watch(currentCol, col => {
     </div>
 
     <p class="stroke-note">
-      ✓ marks kana you have written cleanly from memory. Combinations are the base kana followed by a small ya, yu or yo.
+      <Icon name="check" :size="14" /> marks kana you have written cleanly from memory. Combinations are the base kana followed by a small ya, yu or yo.
     </p>
 
     <div class="credit">

@@ -32,6 +32,9 @@ const ICONS: Record<string, string[]> = {
   replay: ['M3 12a9 9 0 1 0 3-6.7L3 8', 'M3 3v5h5'],
   left: ['M15 18l-6-6 6-6'],
   right: ['M9 18l6-6-6-6'],
+  up: ['M6 15l6-6 6 6'],
+  down: ['M6 9l6 6 6-6'],
+  sort: ['M8 9l4-4 4 4', 'M8 15l4 4 4-4'],
 }
 
 const FILLED = new Set(['flame'])

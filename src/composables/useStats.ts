@@ -3,6 +3,7 @@ import type { StatsMap, StatEntry, AnswerInput, AnswerRecord, StrokeFault } from
 import { normalizeStats, newEntry } from '../learning/statsMigration'
 import { review, recentErrors, MASTERED_BOX } from '../learning/scheduler'
 import { dayKey, streak } from '../learning/progress'
+import { clock } from '../clock'
 
 const LS_STATS = 'kana_stats_v3'
 const LS_STATS_V2 = 'kana_stats_v2'
@@ -56,12 +57,12 @@ export function useStats() {
       .sort((a, b) => recentErrorCount(b.kana) - recentErrorCount(a.kana) || b.incorrect - a.incorrect)
   )
 
-  const statsTabCount = computed(() => Object.keys(statsData.value).length)
+  const kanaTracked = computed(() => Object.keys(statsData.value).length)
 
   const errorKanaSet = computed(() => new Set(errorPairs.value.map(e => e.kana)))
 
   const today = computed(() => {
-    const now = Date.now()
+    const now = clock.value
     return { answers: days.value[dayKey(now)] ?? 0, streak: streak(days.value, now) }
   })
 
@@ -139,7 +140,7 @@ export function useStats() {
   }
 
   return {
-    statsData, answerLog, errorPairs, statsTabCount, errorKanaSet, recentErrorCount, today,
+    statsData, answerLog, errorPairs, kanaTracked, errorKanaSet, recentErrorCount, today,
     recordAnswer, resolveErrors, resetAll, refresh,
   }
 }

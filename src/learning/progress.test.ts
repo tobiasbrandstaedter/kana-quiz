@@ -26,6 +26,20 @@ describe('streak', () => {
   })
 })
 
+describe('streak around the clock', () => {
+  it('counts by calendar day, whatever the hour and across clock changes', () => {
+    // every hour of a year: today and yesterday practiced is a streak of 2
+    const start = new Date(2026, 0, 2).getTime()
+    for (let h = 0; h < 365 * 24; h++) {
+      const t = start + h * 60 * 60 * 1000
+      const yesterday = new Date(t)
+      yesterday.setDate(yesterday.getDate() - 1)
+      const practiced = { [dayKey(t)]: 1, [dayKey(yesterday.getTime())]: 1 }
+      if (streak(practiced, t) !== 2) expect.fail(`streak ${streak(practiced, t)} at ${new Date(t)}`)
+    }
+  })
+})
+
 describe('fluencyLimits', () => {
   function timed(avgMs: number[]): StatsMap {
     const kana = ['あ', 'い', 'う', 'え', 'お', 'か', 'き']

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import type { AnswerRecord, StatEntry, StatsMap } from '../types'
-import { review, isDue, recentErrors, pickSmart, orderSession, reaskSlot, columnProgress, dueOutlook, mixedDirection, MAX_BOX } from './scheduler'
+import { review, isDue, dueAt, recentErrors, pickSmart, orderSession, reaskSlot, columnProgress, dueOutlook, mixedDirection, MAX_BOX } from './scheduler'
 import { allPairs, pairFor, HIRAGANA } from '../data/kana'
 import { newEntry } from './statsMigration'
 
@@ -158,7 +158,14 @@ describe('columnProgress', () => {
 describe('dueOutlook', () => {
   it('splits due now, due within a day and the next review time', () => {
     const s = stats(entry('か', 1, NOW - DAY), entry('き', 2, NOW + 10 * 60 * 60 * 1000), entry('く', 3, NOW + 5 * DAY))
-    expect(dueOutlook(s, ['hiragana'], NOW)).toEqual({ now: 1, soon: 1, nextAt: NOW + 10 * 60 * 60 * 1000 })
+    // the next review is announced for when it starts to count as due, slack included
+    expect(dueOutlook(s, ['hiragana'], NOW)).toEqual({ now: 1, soon: 1, nextAt: NOW + 6 * 60 * 60 * 1000 })
+  })
+
+  it('agrees with isDue on when a kana is due', () => {
+    const e = entry('か', 1, NOW + DAY)
+    expect(isDue(e, dueAt(e))).toBe(true)
+    expect(isDue(e, dueAt(e) - 1)).toBe(false)
   })
 
   it('reports nothing coming when nothing was seen', () => {
@@ -168,14 +175,14 @@ describe('dueOutlook', () => {
 
 describe('mixedDirection', () => {
   it('recognizes new and shaky kana, reads box 2', () => {
-    expect(mixedDirection(undefined, true)).toBe('romaji-to-kana')
-    expect(mixedDirection(entry('か', 1, 0), true)).toBe('romaji-to-kana')
-    expect(mixedDirection(entry('か', 2, 0), true)).toBe('kana-to-romaji')
+    expect(mixedDirection(undefined)).toBe('romaji-to-kana')
+    expect(mixedDirection(entry('か', 1, 0))).toBe('romaji-to-kana')
+    expect(mixedDirection(entry('か', 2, 0))).toBe('kana-to-romaji')
   })
 
   it('goes for a direction never answered right once known', () => {
     const e = entry('か', 3, 0, { byDirection: { 'kana-to-romaji': { correct: 2, incorrect: 0 }, draw: { correct: 1, incorrect: 0 } } })
-    expect(mixedDirection(e, true)).toBe('romaji-to-kana')
-    expect(mixedDirection(entry('か', 4, 0), false)).toBe('kana-to-romaji')
+    expect(mixedDirection(e)).toBe('romaji-to-kana')
+    expect(mixedDirection(entry('か', 4, 0))).toBe('draw')
   })
 })
