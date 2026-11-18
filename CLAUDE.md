@@ -28,6 +28,7 @@ Small shared helpers outside the pure modules:
 - **`src/clock.ts`**: `clock`, a ref with the current time that ticks once a minute and when the app comes back to the front. Computeds that depend on the time (the plan, due counts, today, the streak) read it instead of `Date.now()`, which a computed never sees change
 - **`src/audio.ts`**: one shared `Audio` element for the whole app. `unlockAudio()` runs on the first click or keydown (wired in `main.ts`) so iOS lets later plays start without a tap. `playKana(kana)` resolves to `played`, `blocked` (the browser refused, show a "tap to hear" state) or `none` (no sound to be had); it falls back to `speechSynthesis` when the clip can't load (offline, the clips come from another host and aren't cached) and reports `none` when there is no Japanese voice either
 - **`src/fonts.ts`**: `KANA_FONTS` for the picker and `loadKanaFont(family)`. Only Nunito and the default kana font are in `index.html`, a picked font is fetched at start and the rest when the settings sheet opens
+- **`src/theme.ts`**: `THEMES` (Playground, Sumi, Yoru), `themeById`, `applyTheme` sets `data-theme` on `<html>` (none for Playground), loads the theme's UI fonts and updates the `theme-color` metas. `useSetup` keeps the pick in `theme` (key `kana_theme`), `setTheme` also switches to the theme's kana font
 - **`src/backup.ts`**: `buildBackup`, `parseBackup` (throws with a message for the user), `kanaInBackup`, `restoreBackup` over the localStorage keys in `BACKUP_KEYS`. A new storage key has to be added there
 
 ### Pure modules (`src/learning/`)
@@ -63,7 +64,7 @@ Responsibilities are split across three composables and one orchestrator:
 - **`KanaChart.vue`**: gojūon grid per script colored by stage, dots for due and open errors, tap opens the kana sheet (the cells are pressable controls with `--lift-1`). Dakuten and combinations stay folded until one of their kana is seen or the learner opens them
 - **`KanaSheet.vue`**: kana detail in a `BottomSheet`: stroke demo on top, one row with audio, stage, next review and accuracy, mnemonic, per-direction results as a flat list, confusions, lookalike hint, practice button
 - **`BottomSheet.vue`**: prop `title`, emits `close`, default slot; teleports to body, closes on Escape and backdrop tap, locks page scroll, keeps Tab inside and gives the focus back to what opened it. Parents mount it with `v-if`
-- **`SettingsSheet.vue`**: kana font picker, backup (export as a JSON file, import with a confirming step and a reload) and the reset with a second confirming tap
+- **`SettingsSheet.vue`**: theme picker, kana font picker, backup (export as a JSON file, import with a confirming step and a reload) and the reset with a second confirming tap
 - **`PatternCards.vue`**: prop-based (`patterns`, `title`, `emptyText`), emits `practice`; used by `ResultsScreen` and `ProgressTab`
 - **`Icon.vue`**: props `name`, `size`; stroke icons as path data on a 24 grid (`flame` is filled). Use it instead of emoji or arrow glyphs
 - **`StrokeDemo.vue`**: prop `kana` (combos too), optional `controls`; svg width scales with the `--w` css variable (viewBox width / 109); animated stroke order with numbers (css `stroke-dashoffset` on `pathLength="1"`, duration by measured path length), click or Replay restarts, prev/next step through strokes; respects `prefers-reduced-motion`
@@ -81,6 +82,8 @@ One global stylesheet, no scoped styles. Design "Playground": Nunito for the UI,
 - pressed and selected controls sink by exactly their `--lift` (translate, shadow gone); the segmented controls are the exception, there the picked segment pops up
 
 On phones the quiz sizes the drawing canvas from the height that is left: `--draw-size` uses `--draw-chrome`, the sum of everything else on the screen, set per card type (`.quiz`, `.q-trace`, `.q-listen`). Adjust those when the card or the action bar changes height.
+
+Two more themes sit at the end of the file under `:root[data-theme="sumi"]` and `:root[data-theme="yoru"]`, each with its own dark variant. Both are flat: the lifts are 0, nothing sinks, pressed controls dim. Sumi is paper, ink and hairlines with vermilion (`--shu`) as the only accent and Mincho for titles and numbers. Yoru is navy with neon: magenta for actions and errors, cyan (`--cyan`) for progress, amber (`--amber`) for learning, glows through `--glow-*` tokens that are `none` in its light variant. A new pressable goes into the shared lists of the theme block too, and a new component needs a look in both themes.
 
 `body::before` is a strip in ink as tall as `env(safe-area-inset-top)`: the installed iOS app draws under the status bar with white text, the strip keeps it readable on the light theme.
 

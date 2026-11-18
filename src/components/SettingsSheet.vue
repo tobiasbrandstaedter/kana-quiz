@@ -2,13 +2,14 @@
 import { inject, ref, onMounted } from 'vue'
 import { QUIZ_KEY } from '../composables/useQuiz'
 import { KANA_FONTS, loadKanaFont } from '../fonts'
+import { THEMES } from '../theme'
 import { buildBackup, parseBackup, kanaInBackup, restoreBackup } from '../backup'
 import type { Backup } from '../backup'
 import { dayKey } from '../learning/progress'
 import BottomSheet from './BottomSheet.vue'
 
 const emit = defineEmits<{ close: [] }>()
-const { kanaFont, setKanaFont, resetAll, kanaTracked } = inject(QUIZ_KEY)!
+const { kanaFont, setKanaFont, theme, setTheme, resetAll, kanaTracked } = inject(QUIZ_KEY)!
 
 // the picker shows each font, so now is the time to fetch them
 onMounted(() => KANA_FONTS.forEach(f => loadKanaFont(f.family)))
@@ -63,6 +64,27 @@ function reset(): void {
 
 <template>
   <BottomSheet title="Settings" @close="emit('close')">
+    <div class="option-title">Theme</div>
+    <div class="theme-switcher">
+      <button
+        v-for="t in THEMES" :key="t.id"
+        class="theme-btn" :class="{ active: theme === t.id }"
+        :aria-pressed="theme === t.id"
+        @click="setTheme(t.id)"
+      >
+        <!-- the colors of the other themes can't come from tokens, those belong to the one on screen -->
+        <span class="theme-swatch" :style="{ background: t.swatch[0] }" aria-hidden="true">
+          <span :style="{ background: t.swatch[1] }"></span>
+          <span :style="{ background: t.swatch[2] }"></span>
+        </span>
+        <span class="theme-text">
+          <span class="theme-name">{{ t.label }}</span>
+          <span class="theme-hint">{{ t.hint }}</span>
+        </span>
+      </button>
+    </div>
+    <p class="hint-line theme-note">A theme also picks its kana font, you can change that below.</p>
+
     <div class="option-title">Kana font</div>
     <div class="font-switcher">
       <button

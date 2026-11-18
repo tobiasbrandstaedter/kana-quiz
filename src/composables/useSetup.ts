@@ -2,8 +2,11 @@ import { ref, computed, watch } from 'vue'
 import type { ActiveScript, QuizMode, KanaPair, KanaData, ScriptName } from '../types'
 import { HIRAGANA, KATAKANA } from '../data/kana'
 import { loadKanaFont } from '../fonts'
+import { themeById, applyTheme } from '../theme'
+import type { ThemeId } from '../theme'
 
 const LS_FONT   = 'hiragana_kana_font'
+const LS_THEME  = 'kana_theme'
 const LS_SCRIPT = 'kana_script'
 const LS_PREFS  = 'kana_prefs'
 
@@ -40,6 +43,7 @@ export function useSetup() {
   const questionCountInput = ref<string | number>('')
   const questionCountText = computed(() => String(questionCountInput.value).trim())
   const kanaFont = ref('Zen Maru Gothic')
+  const theme = ref<ThemeId>('playground')
 
   const selectorScripts = computed((): Array<[ScriptName, KanaData]> =>
     activeScript.value === 'both'
@@ -79,6 +83,15 @@ export function useSetup() {
     kanaFont.value = family
     document.documentElement.style.setProperty('--kana-font', `'${family}', sans-serif`)
     try { localStorage.setItem(LS_FONT, family) } catch {}
+  }
+
+  // a theme brings its own kana font along, the font picker can change it afterwards
+  function setTheme(id: ThemeId): void {
+    const t = themeById(id)
+    theme.value = t.id
+    applyTheme(t)
+    setKanaFont(t.kanaFont)
+    try { localStorage.setItem(LS_THEME, t.id) } catch {}
   }
 
   function setScript(script: ActiveScript): void {
@@ -161,14 +174,17 @@ export function useSetup() {
         kanaFont.value = savedFont
         document.documentElement.style.setProperty('--kana-font', `'${savedFont}', sans-serif`)
       }
+      const savedTheme = themeById(localStorage.getItem(LS_THEME))
+      theme.value = savedTheme.id
+      applyTheme(savedTheme)
     } catch {}
   }
 
   return {
-    activeScript, selectedCols, quizMode, timed, smartSize, smartNew, questionCountInput, questionCountText, kanaFont,
+    activeScript, selectedCols, quizMode, timed, smartSize, smartNew, questionCountInput, questionCountText, kanaFont, theme,
     selectorScripts, activeCols, pickedCols, selectedCount, countHint,
     buildPairsFromSelected,
-    setKanaFont, setScript, toggleCol, selectAll, selectNone, selectGroup, setMode, toggleTimed, setSmartSize, setSmartNew,
+    setKanaFont, setTheme, setScript, toggleCol, selectAll, selectNone, selectGroup, setMode, toggleTimed, setSmartSize, setSmartNew,
     init,
   }
 }

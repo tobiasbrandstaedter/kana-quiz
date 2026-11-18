@@ -8,6 +8,8 @@ export const KANA_FONTS = [
   { family: 'M PLUS Rounded 1c', label: 'Round' },
   { family: 'Kosugi Maru',       label: 'Soft' },
   { family: 'BIZ UDGothic',      label: 'Gothic' },
+  // the kana font of the Sumi theme
+  { family: 'Shippori Mincho',   label: 'Mincho' },
 ]
 
 // kana are always drawn bold, Kosugi Maru only exists in regular

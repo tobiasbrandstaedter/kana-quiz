@@ -1,5 +1,5 @@
 // everything the app keeps in localStorage, so a backup carries progress and preferences
-export const BACKUP_KEYS = ['kana_stats_v3', 'kana_answers_v1', 'kana_days_v1', 'kana_prefs', 'kana_script', 'hiragana_kana_font']
+export const BACKUP_KEYS = ['kana_stats_v3', 'kana_answers_v1', 'kana_days_v1', 'kana_prefs', 'kana_script', 'hiragana_kana_font', 'kana_theme']
 const STATS_KEY = 'kana_stats_v3'
 
 export interface Backup {
