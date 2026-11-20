@@ -226,8 +226,10 @@ function createKanji() {
   const card = computed(() => cards.value[current.value] ?? null)
   const progress = computed(() => cards.value.length ? (current.value / cards.value.length) * 100 : 0)
 
+  // a pattern session asks the type its card is about, re-ask padding included
+  let sessionMode: KanjiMode | null = null
   const buildCard = (item: PlannedCard): KanjiCard =>
-    makeCard(item, { stats: stats.value, mode: mode.value, knownKanji, knownWords })
+    makeCard(item, { stats: stats.value, mode: sessionMode ?? mode.value, knownKanji, knownWords })
 
   function resetCard(): void {
     answered.value = false
@@ -242,7 +244,8 @@ function createKanji() {
     questionStart = Date.now()
   }
 
-  function begin(items: PlannedCard[]): void {
+  function begin(items: PlannedCard[], forcedMode: KanjiMode | null = null): void {
+    sessionMode = forcedMode
     const ids = [...seenStats.value.map(stat => stat.id), ...seenWords.value.map(stat => stat.id), ...items.map(i => i.id)]
     knownKanji = new Set(ids.map(kanjiOfId).filter((k): k is string => !!k))
     knownWords = new Set(ids.filter(id => planWords.has(id)))
@@ -309,7 +312,7 @@ function createKanji() {
     const items = patternCards(p, stats.value)
     if (items.length === 0) return false
     remember(() => startPattern(p), 'Again')
-    begin(items)
+    begin(items, p.mode ?? null)
     return true
   }
 
@@ -342,7 +345,7 @@ function createKanji() {
     saveStats(data)
 
     const nextLog = loadLog()
-    nextLog.push({ id: a.id, type: a.type, correct: a.correct, given: a.given, ms, t: now, ...(a.mistake ? { mistake: a.mistake } : {}) })
+    nextLog.push({ id: a.id, type: a.type, correct: a.correct, given: a.given, ms, t: now, box: from, ...(a.mistake ? { mistake: a.mistake } : {}) })
     if (nextLog.length > MAX_ANSWERS) nextLog.splice(0, nextLog.length - MAX_ANSWERS)
     writeJson(KANJI_ANSWERS_KEY, nextLog)
     log.value = nextLog
@@ -484,7 +487,7 @@ function createKanji() {
 
   const roundPatterns = computed(() => {
     const round = recallLog.value.filter(r => r.t >= startedAt.value)
-    return detectKanjiPatterns(kanjiStatsFromLog(round), round, 'round', PATTERN_COURSE)
+    return detectKanjiPatterns(kanjiStatsFromLog(round), round, 'round', PATTERN_COURSE, Date.now(), stats.value)
   })
 
   const roundOutcome = computed(() => {

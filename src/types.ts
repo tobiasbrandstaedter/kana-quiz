@@ -344,9 +344,12 @@ export interface KanjiAnswerRecord {
   given: string
   ms: number
   t: number
-  // the kind of a wrong reading, so the patterns of one round can count reading habits.
+  // the kind of a wrong reading, the reading habits are counted from typed ones.
   // Records written before P6 don't have it
   mistake?: ReadingKind
+  // the Leitner box before this answer, so Slipping knows the item was mastered when it was
+  // missed. Records written before it was added don't have it
+  box?: number
 }
 
 export interface KanjiCard {

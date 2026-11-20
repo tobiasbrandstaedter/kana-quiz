@@ -1,6 +1,8 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, inject } from 'vue'
 import { useKanji } from '../composables/useKanji'
+import { QUIZ_KEY } from '../composables/useQuiz'
+import type { KanjiPattern } from '../learning/kanjiPatterns'
 import { fromNow } from '../format'
 import { openKanji } from '../kanjiShell'
 import { kanjiStrokes } from '../data/kanjiData'
@@ -9,6 +11,11 @@ import KanjiPatternCards from './KanjiPatternCards.vue'
 import Icon from './Icon.vue'
 
 const { resultScore, resultLabel, missed, drawings, roundOutcome, roundPatterns, startPattern, restart, restartLabel, goHome } = useKanji()
+const { notify } = inject(QUIZ_KEY)!
+
+function practice(p: KanjiPattern): void {
+  if (!startPattern(p)) notify('Nothing of this pattern to practice yet, its kanji and words come in Practice now.')
+}
 
 // a missed write shows what was drawn over the kanji, as missed kana do
 const missedItems = computed(() => missed.value.map(item => {
@@ -84,7 +91,7 @@ const outlookText = computed(() => {
       v-if="roundPatterns.length > 0"
       :patterns="roundPatterns"
       title="Patterns this round"
-      @practice="startPattern"
+      @practice="practice"
     />
 
     <div class="result-btns">

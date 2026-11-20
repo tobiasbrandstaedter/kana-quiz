@@ -32,9 +32,14 @@ const entry = (id: string, correct: number, incorrect: number, patch: Partial<Ka
   ({ ...newKanjiEntry(id), correct, incorrect, lastSeen: NOW - DAY, ...patch })
 const statsOf = (...entries: KanjiStatEntry[]): KanjiStatsMap => Object.fromEntries(entries.map(e => [e.id, e]))
 const text = (pieces: Piece[]) => pieces.map(p => p.text).join('')
-const detect = (stats: KanjiStatsMap, scope: 'round' | 'all' = 'all', log: KanjiAnswerRecord[] = []) =>
-  detectKanjiPatterns(stats, log, scope, COURSE, NOW)
+const detect = (stats: KanjiStatsMap, scope: 'round' | 'all' = 'all', log: KanjiAnswerRecord[] = [], all: KanjiStatsMap = stats) =>
+  detectKanjiPatterns(stats, log, scope, COURSE, NOW, all)
 const ofKind = (patterns: KanjiPattern[], kind: KanjiPattern['kind']) => patterns.filter(p => p.kind === kind)
+const rec = (id: string, patch: Partial<KanjiAnswerRecord> = {}): KanjiAnswerRecord =>
+  ({ id, type: 'meaning', correct: true, given: '', ms: 1000, t: NOW - DAY, ...patch })
+// a typed reading that went wrong in a named way
+const typedMiss = (id: string, mistake: KanjiAnswerRecord['mistake'], t = NOW - DAY) =>
+  rec(id, { type: 'read-type', correct: false, mistake, t })
 
 describe('confused kanji (KR37)', () => {
   it('merges both ways and gives the lookalike hint with its Japanese marked', () => {
@@ -48,7 +53,7 @@ describe('confused kanji (KR37)', () => {
   })
 
   it('needs two mix-ups over everything but one in a round', () => {
-    const s = statsOf(entry('k:C', 2, 1, { confusions: { 'k:D': 1 } }))
+    const s = statsOf(entry('k:C', 2, 1, { confusions: { 'k:D': 1 } }), entry('k:D', 2, 0))
     expect(ofKind(detect(s), 'confusion')).toEqual([])
     const [p] = ofKind(detect(s, 'round'), 'confusion')
     expect(text(p.detail)).toBe('Mixed up 1×')
@@ -60,52 +65,84 @@ describe('confused kanji (KR37)', () => {
     expect(found.map(p => text(p.title))).toEqual(['C vs D'])
     // a word id picked for a meaning is no kanji mix-up
     expect(found[0].practice).toEqual(['k:C', 'k:D'])
-    const round = ofKind(detect(s, 'round'), 'confusion').find(p => text(p.title) === 'B vs C')!
-    expect(round.practice).toEqual(['k:B', 'k:C', 'k:A'])
+    const round = ofKind(detect(s, 'round', [], statsOf(entry('k:B', 1, 0), entry('k:C', 2, 0))), 'confusion')
+    expect(round.find(p => text(p.title) === 'B vs C')!.practice).toEqual(['k:B', 'k:C', 'k:A'])
   })
 
   it('ignores answers on a meaning question that were not kanji', () => {
     const s = statsOf(entry('k:A', 1, 3, { confusions: { 'w:a': 3 } }))
     expect(ofKind(detect(s), 'confusion')).toEqual([])
   })
+
+  it('lets a mix-up go once both kanji sit again and neither was missed for 30 days', () => {
+    const old = { box: 7, lastWrong: NOW - 400 * DAY }
+    const both = statsOf(entry('k:A', 20, 2, { ...old, confusions: { 'k:B': 2 } }), entry('k:B', 20, 0, old))
+    expect(ofKind(detect(both), 'confusion')).toEqual([])
+    // one of them still learning, or one missed lately: it counts
+    const learning = statsOf(entry('k:A', 20, 2, { ...old, confusions: { 'k:B': 2 } }), entry('k:B', 2, 0, { box: 1 }))
+    expect(ofKind(detect(learning), 'confusion')).toHaveLength(1)
+    const missed = statsOf(entry('k:A', 20, 2, { ...old, confusions: { 'k:B': 2 } }), entry('k:B', 20, 1, { box: 4, lastWrong: NOW - 10 * DAY }))
+    expect(ofKind(detect(missed), 'confusion')).toHaveLength(1)
+    // a kanji never met was only a wrong option, it keeps nothing alive
+    const unmet = statsOf(entry('k:A', 20, 2, { ...old, confusions: { 'k:B': 2 } }))
+    expect(ofKind(detect(unmet), 'confusion')).toEqual([])
+  })
+
+  it('in a round only counts a pair that looks alike or that the learner has met both of', () => {
+    const round = statsOf(entry('k:C', 0, 1, { confusions: { 'k:E': 1 } }), entry('k:A', 0, 1, { confusions: { 'k:B': 1 } }))
+    const all = statsOf(entry('k:C', 3, 1), entry('k:A', 3, 1))
+    expect(ofKind(detect(round, 'round', [], all), 'confusion').map(p => text(p.title))).toEqual(['A vs B'])
+    const met = { ...all, 'k:E': entry('k:E', 2, 0) }
+    expect(ofKind(detect(round, 'round', [], met), 'confusion')).toHaveLength(2)
+  })
 })
 
 describe('reading habits (KR38)', () => {
-  it('counts a kind over all words and names the words', () => {
-    const s = statsOf(
-      entry('w:a', 2, 2, { mistakes: { 'long-vowel': 2 } }),
-      entry('w:c', 3, 1, { mistakes: { 'long-vowel': 1 } }),
-      entry('w:d', 3, 1, { mistakes: { voicing: 1 } }),
-    )
-    const found = ofKind(detect(s), 'reading-habit')
+  it('counts a kind over the typed readings of all words and names the words', () => {
+    const log = [typedMiss('w:a', 'long-vowel'), typedMiss('w:a', 'long-vowel'), typedMiss('w:c', 'long-vowel'), typedMiss('w:d', 'voicing')]
+    const found = ofKind(detect(statsOf(entry('w:a', 2, 2)), 'all', log), 'reading-habit')
     expect(found).toHaveLength(1)
     expect(text(found[0].title)).toBe('Long vowels')
-    expect(text(found[0].detail)).toBe('A vowel held too long or too short. 3× so far, in 2 words.')
+    expect(text(found[0].detail)).toBe('A vowel held too long or too short. 3× in the last 30 days, in 2 words.')
     expect(found[0].chips).toEqual(['A', 'C'])
     expect(found[0].practice).toEqual(['w:a', 'w:c'])
     expect(found[0].mode).toBe('read-choice')
   })
 
+  it('does not count wrong picks on a choice card, they are guesses among near misses', () => {
+    const log = ['w:a', 'w:c', 'w:d'].map(id => rec(id, { type: 'read-choice', correct: false, mistake: 'long-vowel' }))
+    expect(ofKind(detect(statsOf(entry('w:a', 1, 1)), 'all', log), 'reading-habit')).toEqual([])
+  })
+
+  it('ignores the lifetime counters on the entries, and records from before the field', () => {
+    const s = statsOf(entry('w:a', 1, 5, { mistakes: { 'long-vowel': 5 } }), entry('w:c', 1, 5, { mistakes: { 'long-vowel': 5 } }))
+    const log = ['w:a', 'w:c', 'w:a'].map(id => rec(id, { type: 'read-type', correct: false }))
+    expect(ofKind(detect(s, 'all', log), 'reading-habit')).toEqual([])
+  })
+
+  it('forgets typed misses older than 30 days', () => {
+    const log = [typedMiss('w:a', 'voicing', NOW - 40 * DAY), typedMiss('w:c', 'voicing', NOW - 31 * DAY), typedMiss('w:d', 'voicing')]
+    expect(ofKind(detect(statsOf(entry('w:a', 1, 1)), 'all', log), 'reading-habit')).toEqual([])
+  })
+
   it('is about one word, not a habit, when only one word has it', () => {
-    const s = statsOf(entry('w:a', 1, 5, { mistakes: { 'small-tsu': 5 } }))
-    expect(ofKind(detect(s), 'reading-habit')).toEqual([])
+    const log = [1, 2, 3].map(() => typedMiss('w:a', 'small-tsu'))
+    expect(ofKind(detect(statsOf(entry('w:a', 1, 3)), 'all', log), 'reading-habit')).toEqual([])
   })
 
   it('never makes a habit of another reading of a kanji', () => {
-    const s = statsOf(entry('w:a', 1, 3, { mistakes: { 'other-reading': 3 } }), entry('w:c', 1, 3, { mistakes: { 'other-reading': 3 } }))
-    expect(ofKind(detect(s), 'reading-habit')).toEqual([])
+    const log = [typedMiss('w:a', 'other-reading'), typedMiss('w:c', 'other-reading'), typedMiss('w:d', 'other-reading')]
+    expect(ofKind(detect(statsOf(entry('w:a', 1, 1)), 'all', log), 'reading-habit')).toEqual([])
   })
 
   it('marks the small tsu in the title as Japanese', () => {
-    const s = statsOf(entry('w:a', 1, 2, { mistakes: { 'small-tsu': 2 } }), entry('w:c', 1, 1, { mistakes: { 'small-tsu': 1 } }))
-    const [p] = ofKind(detect(s), 'reading-habit')
+    const log = [typedMiss('w:a', 'small-tsu'), typedMiss('w:a', 'small-tsu'), typedMiss('w:c', 'small-tsu')]
+    const [p] = ofKind(detect(statsOf(entry('w:a', 1, 2)), 'all', log), 'reading-habit')
     expect(p.title).toEqual([{ text: 'Small ' }, { text: 'っ', ja: true }])
   })
 
-  it('reads one round from the log, mistakes included', () => {
-    const at = (t: number, id: string, mistake?: KanjiAnswerRecord['mistake']): KanjiAnswerRecord =>
-      ({ id, type: 'read-choice', correct: !mistake, given: mistake ? 'x' : '', ms: 1500, t, ...(mistake ? { mistake } : {}) })
-    const log = [at(NOW, 'w:a', 'voicing'), at(NOW + 1, 'w:c', 'voicing'), at(NOW + 2, 'w:d')]
+  it('reads one round from the log', () => {
+    const log = [typedMiss('w:a', 'voicing', NOW), typedMiss('w:c', 'voicing', NOW + 1), rec('w:d', { type: 'read-type', t: NOW + 2 })]
     const [p] = ofKind(detectKanjiPatterns(kanjiStatsFromLog(log), log, 'round', COURSE, NOW), 'reading-habit')
     expect(text(p.detail)).toBe('A sound voiced or unvoiced where the word has it the other way. 2× this round, in 2 words.')
   })
@@ -137,41 +174,78 @@ describe('meaning known, reading weak (KR39)', () => {
     const one = entry('w:a', 0, 1, { byType: { 'read-choice': { correct: 0, incorrect: 1 } } })
     expect(ofKind(detect(statsOf(entry('k:A', 6, 0, { box: 3 }), one)), 'reading-gap')).toEqual([])
   })
+
+  it('never shows for one round', () => {
+    const s = statsOf(entry('k:C', 3, 0, { box: 3, byType: { meaning: { correct: 3, incorrect: 0 } } }), weakWord('w:c'))
+    expect(ofKind(detect(s), 'reading-gap')).toHaveLength(1)
+    expect(ofKind(detect(s, 'round'), 'reading-gap')).toEqual([])
+  })
+
+  it('names at most four kanji, then says how many more', () => {
+    const s = statsOf(...['A', 'C', 'D', 'E', 'F'].flatMap(k => [entry(`k:${k}`, 6, 0, { box: 3 }), weakWord(`w:${k.toLowerCase()}`)]))
+    const [p] = ofKind(detect(s), 'reading-gap')
+    expect(p.detail).toEqual([
+      { text: 'You know what ' }, { text: 'A・C・D・E', ja: true }, { text: ' and 1 more' },
+      { text: ' mean, but their words are not read right yet' },
+    ])
+    expect(p.practice).toHaveLength(5)
+  })
 })
 
 describe('weak set (KR40)', () => {
-  const good = ['k:D', 'k:E', 'k:F', 'w:d', 'w:e', 'w:f'].map(id => entry(id, 5, 0))
+  const good = ['k:D', 'k:E', 'k:F', 'w:d', 'w:e', 'w:f'].map(id => entry(id, 5, 0, { box: 3 }))
 
   it('flags a set clearly worse than the rest, kanji and words together', () => {
-    const s = statsOf(...good, entry('k:A', 1, 2), entry('w:ab', 1, 2), entry('k:C', 2, 1))
+    const s = statsOf(...good, entry('k:A', 1, 2, { box: 2 }), entry('w:ab', 1, 2, { box: 2 }), entry('k:C', 2, 1, { box: 1 }))
     const [p] = ofKind(detect(s), 'weak-set')
     expect(text(p.title)).toBe('Weak set: First set')
-    expect(text(p.detail)).toBe('5 of 9 wrong (44%), overall 87%')
+    expect(text(p.detail)).toBe('5 of 9 answers wrong, 44% right against 87% overall')
     expect(p.practice).toEqual(['k:A', 'w:ab', 'k:C'])
     expect(p.mode).toBeUndefined()
   })
 
+  it('waits while half or more of the set is still in box 0 or 1', () => {
+    const s = statsOf(...good, entry('k:A', 1, 2, { box: 2 }), entry('w:ab', 1, 2, { box: 1 }), entry('k:C', 2, 1, { box: 0 }))
+    expect(ofKind(detect(s), 'weak-set')).toEqual([])
+    // in a round the boxes come from the full stats
+    const round = statsOf(entry('k:A', 0, 2), entry('w:ab', 0, 2), entry('k:C', 1, 1), entry('k:D', 4, 0))
+    const all = statsOf(...good, entry('k:A', 3, 2, { box: 2 }), entry('w:ab', 3, 2, { box: 2 }), entry('k:C', 3, 1, { box: 2 }))
+    expect(ofKind(detect(round, 'round', [], all), 'weak-set')).toHaveLength(1)
+    expect(ofKind(detect(round, 'round', [], statsOf(...good)), 'weak-set')).toEqual([])
+  })
+
   it('does not call one bad item a weak set', () => {
-    const s = statsOf(...good, entry('k:A', 2, 4), entry('k:B', 5, 0))
+    const s = statsOf(...good, entry('k:A', 2, 4, { box: 2 }), entry('k:B', 5, 0, { box: 3 }))
     expect(ofKind(detect(s), 'weak-set')).toEqual([])
   })
 
   it('stays quiet when everything is equally bad', () => {
-    const s = statsOf(entry('k:A', 1, 2), entry('k:B', 1, 2), entry('k:D', 1, 2), entry('k:E', 1, 2))
+    const s = statsOf(...['k:A', 'k:B', 'k:D', 'k:E'].map(id => entry(id, 1, 2, { box: 2 })))
     expect(ofKind(detect(s), 'weak-set')).toEqual([])
   })
 })
 
 describe('slipping (KR41)', () => {
-  const miss = (id: string, t: number): KanjiAnswerRecord => ({ id, type: 'meaning', correct: false, given: '', ms: 1000, t })
+  const miss = (id: string, t: number, box?: number) => rec(id, { correct: false, t, ...(box === undefined ? {} : { box }) })
 
-  it('finds an item usually right and missed this week, over everything only', () => {
+  it('finds an item missed this week while it was mastered, over everything only', () => {
     const s = statsOf(entry('k:A', 8, 1), entry('w:d', 8, 1), entry('k:B', 2, 1))
-    const log = [miss('k:A', NOW - DAY), miss('w:d', NOW - 10 * DAY), miss('k:B', NOW - DAY)]
+    const log = [miss('k:A', NOW - DAY, 5), miss('w:d', NOW - 10 * DAY, 4), miss('k:B', NOW - DAY, 3), miss('k:B', NOW - DAY, 0)]
     const [p] = ofKind(detect(s, 'all', log), 'slipping')
-    expect(p.practice).toEqual(['k:A'])
-    expect(text(p.detail)).toBe('Usually right, but missed again this week')
+    expect(p.practice).toEqual(['k:A', 'k:B'])
+    expect(text(p.detail)).toBe('Mastered before, but missed again this week')
     expect(ofKind(detect(s, 'round', log), 'slipping')).toEqual([])
+  })
+
+  it('does not fire for an item that never was mastered, nor for records without the box', () => {
+    const s = statsOf(entry('k:A', 9, 1), entry('k:C', 9, 1))
+    const log = [miss('k:A', NOW - DAY, 2), miss('k:C', NOW - DAY)]
+    expect(ofKind(detect(s, 'all', log), 'slipping')).toEqual([])
+  })
+
+  it('catches a mastered item with an early miss in its history', () => {
+    const s = statsOf(entry('k:A', 3, 2))
+    expect(ofKind(detect(s, 'all', [miss('k:A', NOW - DAY, 5)]), 'slipping')).toHaveLength(1)
   })
 })
 
@@ -182,10 +256,12 @@ describe('detectKanjiPatterns', () => {
       entry('k:A', 3, 3, { confusions: { 'k:B': 3 } }),
       entry('k:C', 3, 2, { confusions: { 'k:D': 2 } }),
       entry('k:E', 9, 1),
-      entry('w:a', 2, 2, { mistakes: { 'long-vowel': 2, voicing: 1, 'small-tsu': 1, 'vowel-kana': 1 } }),
-      entry('w:c', 2, 2, { mistakes: { 'long-vowel': 2, voicing: 2, 'small-tsu': 2, 'vowel-kana': 2 } }),
+      entry('w:a', 2, 2),
+      entry('w:c', 2, 2),
     )
-    const found = detect(s, 'all', [{ id: 'k:E', type: 'meaning', correct: false, given: '', ms: 1, t: NOW }])
+    const kinds = ['long-vowel', 'voicing', 'small-tsu', 'vowel-kana'] as const
+    const log = [rec('k:E', { correct: false, t: NOW, box: 4 }), ...kinds.flatMap(k => [typedMiss('w:a', k), typedMiss('w:c', k), typedMiss('w:c', k)])]
+    const found = detect(s, 'all', log)
     expect(found).toHaveLength(6)
     expect(found.flatMap(p => p.practice)).not.toContain('k:Z')
     expect(text(found[0].title)).toBe('A vs B')

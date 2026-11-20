@@ -41,12 +41,17 @@ export type PatternScope = 'round' | 'all'
 // Where a rule is the same idea as for kana, the bar is the kana one. A round has few
 // answers per item, so its bars are lower, as for kana.
 const THRESHOLDS = {
-  round: { confusions: 1, habit: 2, setSeen: 3, setErrors: 2, typeSeen: 2 },
-  all:   { confusions: 2, habit: 3, setSeen: 5, setErrors: 3, typeSeen: 3 },
+  round: { confusions: 1, habit: 2, setSeen: 3, setErrors: 2 },
+  all:   { confusions: 2, habit: 3, setSeen: 5, setErrors: 3 },
 }
 
-const WEEK_MS = 7 * 24 * 60 * 60 * 1000
+const DAY_MS = 24 * 60 * 60 * 1000
+const WEEK_MS = 7 * DAY_MS
+// a mix-up of two kanji that both sit again, or a reading habit, is history after this long without a miss
+const FRESH_MS = 30 * DAY_MS
 const MAX_PATTERNS = 6
+// the reading gap sentence names this many kanji, then "and n more"
+const MAX_NAMED = 4
 // pattern practice asks every item twice while that stays this short, else once
 const MAX_CARDS = 16
 
@@ -80,8 +85,19 @@ export function kanjiStatsFromLog(records: KanjiAnswerRecord[]): KanjiStatsMap {
 }
 
 // KR37: a kanji picked for another, both ways merged. A wrong written form counts too, it
-// swaps one kanji for another
-function confusions(entries: KanjiStatEntry[], course: PatternCourse, min: number): KanjiPattern[] {
+// swaps one kanji for another. A pair counts while one of the two (met by the learner) is
+// below the mastered box or was missed in the last 30 days, else it is history. In a round a pair needs a lookalike
+// group or two kanji the learner has met: one stray wrong option is no mix-up
+function confusions(
+  entries: KanjiStatEntry[], all: KanjiStatsMap, course: PatternCourse, scope: PatternScope, now: number,
+): KanjiPattern[] {
+  const min = THRESHOLDS[scope].confusions
+  // a kanji never met doesn't keep a pair alive, it was only a wrong option
+  const live = (id: string) => {
+    const e = all[id]
+    return isSeen(e) && (e.box < MASTERED_BOX || e.lastWrong >= now - FRESH_MS)
+  }
+  const related = (a: string, b: string) => course.lookalikes(a).includes(b) || (isSeen(all[a]) && isSeen(all[b]))
   const merged = new Map<string, { a: string; b: string; count: number }>()
   const add = (x: string, y: string, n: number) => {
     if (x === y) return
@@ -103,7 +119,8 @@ function confusions(entries: KanjiStatEntry[], course: PatternCourse, min: numbe
   const out: KanjiPattern[] = []
   for (const { a, b, count } of merged.values()) {
     const [ta, tb] = [course.text(a), course.text(b)]
-    if (count < min || !ta || !tb) continue
+    if (count < min || !ta || !tb || !(live(a) || live(b))) continue
+    if (scope === 'round' && !related(a, b)) continue
     const hint = course.hint(a, b)
     out.push({
       kind: 'confusion',
@@ -126,19 +143,22 @@ const HABITS: Array<[Exclude<ReadingKind, 'other-reading'>, Piece[], string]> = 
   ['voicing', [en('Voicing marks')], 'A sound voiced or unvoiced where the word has it the other way.'],
 ]
 
-// counted over all words, and only a habit once it shows in two words or more
-function readingHabits(entries: KanjiStatEntry[], course: PatternCourse, scope: PatternScope): KanjiPattern[] {
+// Counted over all words from the typed readings of the last 30 days in the log, and only a
+// habit once it shows in two words or more. A wrong pick on a choice card doesn't count: its
+// options are near misses by construction, that is a guess, not a habit
+function readingHabits(log: KanjiAnswerRecord[], course: PatternCourse, scope: PatternScope, now: number): KanjiPattern[] {
   const out: KanjiPattern[] = []
+  const typed = log.filter(r => r.type === 'read-type' && r.mistake && r.t >= now - FRESH_MS && course.text(r.id) !== null)
   for (const [kind, title, sentence] of HABITS) {
-    const words = entries.filter(e => !isKanji(e.id) && (e.mistakes[kind] ?? 0) > 0)
-    const total = words.reduce((n, e) => n + (e.mistakes[kind] ?? 0), 0)
-    if (words.length < 2 || total < THRESHOLDS[scope].habit) continue
+    const hits = typed.filter(r => r.mistake === kind)
+    const words = [...new Set(hits.map(r => r.id))]
+    if (words.length < 2 || hits.length < THRESHOLDS[scope].habit) continue
     out.push({
       kind: 'reading-habit', title,
-      detail: [en(`${sentence} ${total}× ${scope === 'round' ? 'this round' : 'so far'}, in ${words.length} words.`)],
-      chips: words.map(e => course.text(e.id)!),
-      severity: 5 + total,
-      practice: words.map(e => e.id),
+      detail: [en(`${sentence} ${hits.length}× ${scope === 'round' ? 'this round' : 'in the last 30 days'}, in ${words.length} words.`)],
+      chips: words.map(id => course.text(id)!),
+      severity: 5 + hits.length,
+      practice: words,
       mode: 'read-choice',
     })
   }
@@ -149,7 +169,9 @@ const readingOf = (e: KanjiStatEntry | undefined) => sum([e?.byType['read-choice
 
 // KR39: the meaning of a kanji sits (mastered, or its meaning and recognize questions mostly
 // right) while the readings of its words mostly go wrong
-function readingGap(stats: KanjiStatsMap, entries: KanjiStatEntry[], course: PatternCourse, typeSeen: number): KanjiPattern[] {
+function readingGap(stats: KanjiStatsMap, entries: KanjiStatEntry[], course: PatternCourse): KanjiPattern[] {
+  // answers per side, the kana direction gap bar over everything
+  const typeSeen = 3
   const kanji: string[] = []
   const words = new Set<string>()
   for (const k of entries) {
@@ -164,11 +186,13 @@ function readingGap(stats: KanjiStatsMap, entries: KanjiStatEntry[], course: Pat
   }
   if (!kanji.length) return []
   const one = kanji.length === 1
+  const more = kanji.length - MAX_NAMED
   return [{
     kind: 'reading-gap',
     title: [en('Meaning sits, reading not yet')],
     detail: [
-      en('You know what '), ja(kanji.join('・')),
+      en('You know what '), ja(kanji.slice(0, MAX_NAMED).join('・')),
+      ...(more > 0 ? [en(` and ${more} more`)] : []),
       en(one ? ' means, but its words are not read right yet' : ' mean, but their words are not read right yet'),
     ],
     chips: [...words].map(id => course.text(id)!),
@@ -179,8 +203,11 @@ function readingGap(stats: KanjiStatsMap, entries: KanjiStatEntry[], course: Pat
 }
 
 // KR40: a set clearly worse than the learner's level, kanji and words of it together; one
-// bad item alone is not a weak set
-function weakSets(entries: KanjiStatEntry[], course: PatternCourse, t: typeof THRESHOLDS.all, overall: number): KanjiPattern[] {
+// bad item alone is not a weak set. A set still being learned (half its items or more in box
+// 0 or 1) always looks bad against the lifetime average, it waits
+function weakSets(
+  entries: KanjiStatEntry[], all: KanjiStatsMap, course: PatternCourse, t: typeof THRESHOLDS.all, overall: number,
+): KanjiPattern[] {
   const sets = new Map<string, { title: string; items: KanjiStatEntry[] }>()
   for (const e of entries) {
     const set = course.setOf(e.id)
@@ -191,56 +218,61 @@ function weakSets(entries: KanjiStatEntry[], course: PatternCourse, t: typeof TH
   }
   const out: KanjiPattern[] = []
   for (const { title, items } of sets.values()) {
-    const all = sum(items)
-    const n = seenCount(all)
-    if (n < t.setSeen || all.incorrect < t.setErrors || items.filter(e => e.incorrect > 0).length < 2 || acc(all) > overall - 0.15) continue
+    const answers = sum(items)
+    const n = seenCount(answers)
+    const learning = items.filter(e => (all[e.id]?.box ?? 0) <= 1).length
+    if (n < t.setSeen || answers.incorrect < t.setErrors || items.filter(e => e.incorrect > 0).length < 2) continue
+    if (acc(answers) > overall - 0.15 || learning * 2 >= items.length) continue
     out.push({
       kind: 'weak-set',
       title: [en(`Weak set: ${title}`)],
-      detail: [en(`${all.incorrect} of ${n} wrong (${pct(acc(all))}), overall ${pct(overall)}`)],
+      detail: [en(`${answers.incorrect} of ${n} answers wrong, ${pct(acc(answers))} right against ${pct(overall)} overall`)],
       chips: items.map(e => course.text(e.id)!),
-      severity: 5 + all.incorrect,
+      severity: 5 + answers.incorrect,
       practice: items.map(e => e.id),
     })
   }
   return out
 }
 
-// KR41: usually right and missed again this week. Five answers at 80 % is about what an item
-// has once it reached the mastered box. One miss is enough: a kanji or word that sits only
-// comes up every few days, a second miss within the week is rare
-function slipping(entries: KanjiStatEntry[], log: KanjiAnswerRecord[], course: PatternCourse, now: number): KanjiPattern[] {
-  const missed = new Set(log.filter(r => !r.correct && r.t >= now - WEEK_MS).map(r => r.id))
-  const hits = entries.filter(e => seenCount(e) >= 5 && acc(e) >= 0.8 && missed.has(e.id))
-  if (!hits.length) return []
+// KR41: missed this week while it sat in the mastered box or above, by the box the log
+// record keeps. One miss is enough: an item that sits comes up every few days at most.
+// Records from before the box was kept don't count
+function slipping(log: KanjiAnswerRecord[], course: PatternCourse, now: number): KanjiPattern[] {
+  const ids = [...new Set(log
+    .filter(r => !r.correct && r.t >= now - WEEK_MS && (r.box ?? -1) >= MASTERED_BOX && course.text(r.id) !== null)
+    .map(r => r.id))]
+  if (!ids.length) return []
   return [{
     kind: 'slipping',
     title: [en('Slipping')],
-    detail: [en('Usually right, but missed again this week')],
-    chips: hits.map(e => course.text(e.id)!),
-    severity: 7 + hits.length,
-    practice: hits.map(e => e.id),
+    detail: [en('Mastered before, but missed again this week')],
+    chips: ids.map(id => course.text(id)!),
+    severity: 7 + ids.length,
+    practice: ids,
   }]
 }
 
 /**
- * Up to six pattern cards, most useful first. `stats` is everything for the scope 'all', or
- * built by kanjiStatsFromLog from the answers of one round for 'round'. Slipping looks at the
- * last week and needs the full stats, it only runs for 'all', as for kana.
+ * Up to six pattern cards, most useful first. For the scope 'all' `stats` and `log` are
+ * everything. For 'round' they are the answers of one round (`stats` built by
+ * kanjiStatsFromLog), and `all` is the full stats: boxes and what the learner has met. The
+ * reading gap and Slipping only run for 'all': one round can't show either.
  */
 export function detectKanjiPatterns(
   stats: KanjiStatsMap, log: KanjiAnswerRecord[], scope: PatternScope, course: PatternCourse, now: number = Date.now(),
+  all: KanjiStatsMap = stats,
 ): KanjiPattern[] {
   const t = THRESHOLDS[scope]
   const entries = Object.values(stats).filter(e => isSeen(e) && course.text(e.id) !== null)
   if (!entries.length) return []
   const overall = acc(sum(entries))
   const found = [
-    ...confusions(entries, course, t.confusions),
-    ...readingHabits(entries, course, scope),
-    ...readingGap(stats, entries, course, t.typeSeen),
-    ...weakSets(entries, course, t, overall),
-    ...(scope === 'all' ? slipping(entries, log, course, now) : []),
+    ...confusions(entries, all, course, scope, now),
+    ...readingHabits(log, course, scope, now),
+    ...(scope === 'all' ? readingGap(stats, entries, course) : []),
+    ...weakSets(entries, all, course, t, overall),
+    ...(scope === 'all' ? slipping(log, course, now) : []),
   ]
   return found.sort((a, b) => b.severity - a.severity).slice(0, MAX_PATTERNS)
 }

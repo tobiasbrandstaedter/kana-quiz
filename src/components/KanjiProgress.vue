@@ -1,7 +1,9 @@
 <script setup lang="ts">
-import { onMounted, nextTick } from 'vue'
+import { inject, onMounted, nextTick } from 'vue'
 import type { KanjiSortCol } from '../types'
 import { useKanji } from '../composables/useKanji'
+import { QUIZ_KEY } from '../composables/useQuiz'
+import type { KanjiPattern } from '../learning/kanjiPatterns'
 import { dueAt, isDue } from '../learning/scheduler'
 import { clock } from '../clock'
 import { fromNow, stageOf, accuracy, accClass, STAGE_LABEL } from '../format'
@@ -14,6 +16,11 @@ const {
   summary, openErrors, resolveErrors, resolveAllErrors, startErrors,
   rows, tableShow, tableSort, setTableSort, errorsScrollPending, allPatterns, startPattern,
 } = useKanji()
+const { notify } = inject(QUIZ_KEY)!
+
+function practice(p: KanjiPattern): void {
+  if (!startPattern(p)) notify('Nothing of this pattern to practice yet, its kanji and words come in Practice now.')
+}
 
 // the errors tile on the Practice tab led here
 onMounted(() => {
@@ -60,7 +67,7 @@ function sortState(col: KanjiSortCol): string {
       :patterns="allPatterns"
       title="Detected patterns"
       empty-text="No patterns yet. Keep practicing, this fills in as errors pile up."
-      @practice="startPattern"
+      @practice="practice"
     />
 
     <div id="open-errors" class="errors-header">

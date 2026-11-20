@@ -131,6 +131,10 @@ Every new kanji is shown being written and traced once on its intro card, and th
 
 Why: one trace forces a look at every stroke, which is what makes lookalikes (人 and 入, 日 and 目) tell apart later. Writing a 14 stroke kanji from memory in a five minute phone session is heavy and the exam does not ask for it, so it is an offer, not a gate. It also depends on the stroke check working for dense kanji, which has to be measured first.
 
+What "an offer, not a gate" means once it is built: a written answer never moves a Leitner box, up or down. The box of a kanji says how well its meaning and shape are known on sight, and a learner who can't write 曜 yet has not forgotten what it means. Written answers are counted by themselves (per kanji, with the strokes that went wrong), count for the day and the streak, and stay out of the open errors and the pattern cards.
+
+What the stroke check does not see, as measured: about 3 of 100 order mistakes inside dense kanji (a stroke drawn in place of the one before it, where the two lie close together) and short strokes drawn backwards pass as right. It never calls a correct stroke wrong, which matters more.
+
 ### KD12: no lock on kana progress
 
 Kanji can be started at any time. While fewer than the 46 basic hiragana have been seen, the kanji start card says that readings are in hiragana and recommends finishing those first.
