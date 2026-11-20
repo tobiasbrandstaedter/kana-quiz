@@ -1,6 +1,10 @@
 import { describe, it, expect } from 'vitest'
 import { seeded } from './seeded'
-import { itemInfo, itemOrder, makeCard, optionText, spellDiff, storedAnswer, wordReadingMistake, PLAN_COURSE } from './kanjiCards'
+import { itemInfo, itemOrder, makeCard, optionText, spellDiff, storedAnswer, wordReadingMistake, wordTypedVerdict, PLAN_COURSE } from './kanjiCards'
+import { toKana } from './kanaInput'
+import { looksLikeReading } from './readings'
+import { acceptedRomaji } from './romaji'
+import { allPairs } from '../data/kana'
 import type { CardContext } from './kanjiCards'
 import { orderKanjiSession, planKanji } from './kanjiPlan'
 import { newKanjiEntry } from './kanjiStats'
@@ -12,6 +16,8 @@ import type { KanjiCard, KanjiStatsMap, WordQuestionType } from '../types'
 const NOW = 1_800_000_000_000
 const KANJI = allKanji()
 const WORDS = courseWords()
+// homographs in the data with kana a romaji keyboard can't give (ー, ぃ, ぢゅ), the test counts them so a data update that changes this shows up
+const KANA_ONLY_HOMOGRAPHS = 13
 
 // a learner who has met every kanji and word
 const everything: CardContext = {
@@ -137,10 +143,94 @@ describe('makeCard for words', () => {
   it('asks a word by its box in mixed mode and keeps the plan\'s intro and needs', () => {
     const w = WORDS[0]
     const stats: KanjiStatsMap = { [w.id]: { ...newKanjiEntry(w.id), correct: 1, box: 2 } }
-    expect(makeCard({ id: w.id }, { ...nothing, stats }).type).toBe('read-choice')
+    expect(makeCard({ id: w.id }, { ...nothing, stats }).type).toBe('read-type')
+    expect(makeCard({ id: w.id }, { ...nothing, stats: {} }).type).toMatch(/^(read-choice|word-meaning)$/)
     expect(makeCard({ id: w.id, type: 'intro', needs: 'k:x' }, nothing)).toEqual({
       id: w.id, home: w.home, type: 'intro', options: [], answer: w.form, needs: 'k:x',
     })
+  })
+
+  it('asks a typed reading without options, the reading shown first is the answer', () => {
+    for (const w of WORDS) expect(makeCard({ id: w.id, type: 'read-type' }, everything)).toEqual({ id: w.id, home: w.home, type: 'read-type', options: [], answer: w.reading })
+  })
+
+  it('keeps the type of a re-ask, typed included', () => {
+    const w = WORDS[0]
+    const stats: KanjiStatsMap = { [w.id]: { ...newKanjiEntry(w.id), correct: 1, box: 0 } }
+    expect(makeCard({ id: w.id, type: 'read-type' }, { ...nothing, stats }).type).toBe('read-type')
+  })
+})
+
+// Hepburn romaji for hiragana, built from the kana table: what a learner types for a
+// reading. Null for kana the table lacks (ー, ぃ, ぢゅ), a Japanese keyboard sends those as kana
+const HIRAGANA = allPairs().filter(p => p.script === 'hiragana')
+function romajiOf(kana: string): string | null {
+  let out = ''
+  for (let i = 0; i < kana.length;) {
+    if (kana[i] === 'っ') {
+      const rest = romajiOf(kana.slice(i + 1))
+      return rest && out + rest[0] + rest
+    }
+    if (kana[i] === 'ん') {
+      const next = romajiOf(kana.slice(i + 1, i + 2)) ?? ''
+      out += /^[aeiouy]/.test(next) ? "n'" : 'n'
+      i++
+      continue
+    }
+    const p = HIRAGANA.find(x => x.kana === kana.slice(i, i + 2)) ?? HIRAGANA.find(x => x.kana === kana[i])
+    if (!p) return null
+    out += acceptedRomaji(p.kana, p.romaji).find(r => toKana(r) === p.kana)
+    i += p.kana.length
+  }
+  return out
+}
+
+describe('wordTypedVerdict over the course words', () => {
+  it('takes every accepted reading typed in romaji and in kana', () => {
+    for (const w of WORDS) {
+      for (const r of w.readings) {
+        const typed = romajiOf(r)!
+        expect(wordTypedVerdict(w.id, typed, false), `${w.id} ${typed}`).toEqual({ result: 'right', kana: r })
+        expect(wordTypedVerdict(w.id, r, false)).toEqual({ result: 'right', kana: r })
+        expect(looksLikeReading(r), r).toBe(true)
+      }
+    }
+  })
+
+  it('asks again for a homograph', () => {
+    let typedInRomaji = 0
+    let kanaOnly = 0
+    for (const w of WORDS) {
+      for (const h of w.homographs) {
+        expect(wordTypedVerdict(w.id, h, false)).toEqual({ result: 'homograph', kana: h })
+        const typed = romajiOf(h)
+        if (!typed) {
+          kanaOnly++
+          continue
+        }
+        expect(wordTypedVerdict(w.id, typed, false)).toEqual({ result: 'homograph', kana: h })
+        typedInRomaji++
+      }
+    }
+    expect(typedInRomaji).toBeGreaterThan(0)
+    expect(kanaOnly).toBe(KANA_ONLY_HOMOGRAPHS)
+  })
+
+  it('lets one slip through, then counts it as a typo with nothing stored', () => {
+    for (const w of WORDS) {
+      const typed = romajiOf(w.reading)!
+      const oneOff = typed[0] + 'q' + typed.slice(1)
+      expect(wordTypedVerdict(w.id, oneOff, false), `${w.id} ${oneOff}`).toEqual({ result: 'slip' })
+      expect(wordTypedVerdict(w.id, oneOff, true)).toMatchObject({ result: 'wrong', given: '', typo: true })
+    }
+  })
+
+  it('stores the reading of another course word as given', () => {
+    for (const w of WORDS) {
+      const other = WORDS.find(o => !w.readings.includes(o.reading) && !w.homographs.includes(o.reading))!
+      const v = wordTypedVerdict(w.id, romajiOf(other.reading)!, false)
+      expect(v, w.id).toMatchObject({ result: 'wrong', given: other.reading, typo: false })
+    }
   })
 })
 

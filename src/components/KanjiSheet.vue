@@ -12,6 +12,7 @@ import { fromNow, stageOf, accuracy, accClass, STAGE_LABEL } from '../format'
 import BottomSheet from './BottomSheet.vue'
 import StrokeDemo from './StrokeDemo.vue'
 import Icon from './Icon.vue'
+import SpeakButton from './SpeakButton.vue'
 
 const { statOf, lockOf, startKanji } = useKanji()
 
@@ -139,6 +140,7 @@ function practice(): void {
               <span class="kd-word-form" lang="ja">{{ w.word.form }}</span>
               <span class="kd-word-reading" lang="ja">{{ w.word.reading }}</span>
               <span class="kd-word-gloss">{{ w.word.gloss }}</span>
+              <SpeakButton :reading="w.word.reading" />
               <span class="kd-word-stage stats-stage" :class="w.stage">{{ STAGE_LABEL[w.stage] }}</span>
             </div>
             <div v-if="w.note" class="kd-word-note">

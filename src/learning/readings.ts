@@ -1,10 +1,12 @@
 import type { KanjiReading, ReadingKind, ReadingPart } from '../types'
 import { shuffle } from './distractors'
+import { hasKanji, isAllKana, isRomajiSlip, kanaWays } from './kanaInput'
 
 // Near misses of a reading, compared in kana. Two sides: `readingMistake` names the mistake
 // in a wrong answer (KR22, KR33), `nearMisses` and `otherReadings` build wrong options for a
 // reading question (KR17). They encode the rules separately; options and feedback agree
-// because the options are sorted by kind through `readingMistake` itself.
+// because the options are sorted by kind through `readingMistake` itself. A typed reading is
+// judged by `typedVerdict` with the same detector.
 
 export type ReadingMistake =
   | { kind: Exclude<ReadingKind, 'other-reading'> }
@@ -89,6 +91,62 @@ export function readingMistake(
   return swap ? { kind: 'other-reading', kanji: swap.kanji, reading: swap.other.reading, right: swap.right, word: swap.other.word } : null
 }
 
+// A typed reading (R2) can go wrong in two ways that don't count as knowing it wrong:
+// - slip: one keystroke off an accepted reading. The first slip on a card gets one more try
+//   and counts nothing.
+// - typo: a second slip on the card whose input still has letters left over after
+//   conversion, visibly a typing accident. It counts as wrong but leaves the box alone, the
+//   same meaning `typo` has for kana.
+// A second slip that converts to clean kana is a plain miss, the box moves.
+export type TypedVerdict =
+  | { result: 'right'; kana: string }
+  // a reading another word gives this spelling: not counted, the card asks again
+  | { result: 'homograph'; kana: string }
+  // kanji from a Japanese keyboard: not judged, the card asks for hiragana
+  | { result: 'kanji' }
+  | { result: 'slip' }
+  // `given` is the kana when they are a known reading, else ''
+  | { result: 'wrong'; kana: string; given: string; mistake: ReadingMistake | null; typo: boolean }
+
+// readings this short have too many neighbours one key away for a slip to mean anything
+const SHORT_READING = 2
+
+/**
+ * Judges a typed reading (KR20 to KR23), in this order: kanji in the input, an accepted
+ * reading, a homograph, a named mistake against any accepted reading (only for kana a
+ * reading could be), one keystroke off in romaji (`slipped` says one slip was let through
+ * on this card already), anything else. An n the learner may have meant as ん is read both
+ * ways, the better one counts. `isKnownReading` says whether kana are a reading somewhere;
+ * those are a mix-up, never a slip, and the only thing stored as given.
+ */
+export function typedVerdict(
+  typed: string,
+  word: { reading: string; readings: string[]; homographs: string[]; split: ReadingPart[] },
+  readingsOf: (kanji: string) => KanjiReading[], isKnownReading: (kana: string) => boolean, slipped: boolean,
+): TypedVerdict {
+  if (hasKanji(typed)) return { result: 'kanji' }
+  const ways = kanaWays(typed)
+  const right = ways.find(k => word.readings.includes(k))
+  if (right) return { result: 'right', kana: right }
+  const homograph = ways.find(k => word.homographs.includes(k))
+  if (homograph) return { result: 'homograph', kana: homograph }
+
+  for (const kana of ways.filter(looksLikeReading)) {
+    for (const r of word.readings) {
+      const mistake = readingMistake(kana, r, r === word.reading ? word.split : [], readingsOf)
+      if (mistake) return { result: 'wrong', kana, given: isKnownReading(kana) ? kana : '', mistake, typo: false }
+    }
+  }
+
+  const kana = ways.find(isKnownReading) ?? ways[0]
+  const known = isKnownReading(kana)
+  const clean = isAllKana(kana)
+  const slipFrom = clean ? word.readings.filter(r => r.length > SHORT_READING) : word.readings
+  const slip = !known && isRomajiSlip(typed, slipFrom)
+  if (slip && !slipped) return { result: 'slip' }
+  return { result: 'wrong', kana, given: known ? kana : '', mistake: null, typo: slip && !clean }
+}
+
 // near misses of a reading, the way the exam builds them
 function nearMisses(s: string): string[] {
   const out: string[] = []
@@ -114,9 +172,27 @@ function nearMisses(s: string): string[] {
   return out
 }
 
-// something a reading could be: no small kana or ん up front, no っ at the end
-const looksLikeReading = (s: string) =>
-  s.length > 0 && !SMALL.includes(s[0]) && s[0] !== 'ん' && !s.endsWith('っ') && !s.includes('っっ')
+const SMALL_Y = 'ゃゅょ'
+// the kana a small ゃゅょ can follow
+const Y_BASE = 'きしちにひみりぎじぢびぴ'
+const PURE_VOWELS = 'あいうえお'
+
+/**
+ * Whether kana could be a reading at all: no small kana or ん up front, a small っ only
+ * before a kana it can double (so not at the end, not twice), ゃゅょ only after an i kana,
+ * and no vowel held three times (きゅうう). A bounced key gives kana like that.
+ */
+export function looksLikeReading(s: string): boolean {
+  if (!s || SMALL.includes(s[0]) || s[0] === 'ん') return false
+  for (let i = 0; i < s.length; i++) {
+    const ch = s[i]
+    const next = s[i + 1]
+    if (ch === 'っ' && !(next && DOUBLES.includes(next))) return false
+    if (SMALL_Y.includes(ch) && !Y_BASE.includes(s[i - 1])) return false
+    if (i >= 2 && PURE_VOWELS.includes(ch) && ch === s[i - 1] && vowelOf(s[i - 2]) === vowelOf(ch)) return false
+  }
+  return true
+}
 
 /**
  * Three wrong readings for a reading question (KR17): near misses of the right one and the

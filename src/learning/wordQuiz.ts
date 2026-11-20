@@ -3,18 +3,22 @@ import { isSeen } from './scheduler'
 import { shuffle } from './distractors'
 import { readingOptions } from './readings'
 
-export const isWordType = (t: string): t is WordQuestionType => t === 'word-meaning' || t === 'read-choice' || t === 'spell'
+export const isWordType = (t: string): t is WordQuestionType =>
+  t === 'word-meaning' || t === 'read-choice' || t === 'read-type' || t === 'spell'
 
 /**
- * Which question a word gets (KR25). The modes Words, Reading and Spelling ask their type,
- * every other mode goes by how well the word is known: while new and in box 1 its reading or
- * its meaning, whichever has fewer right answers, its reading in box 2 (typed in a later
- * release), from box 3 of spelling, meaning and reading the one with the fewest right answers.
+ * Which question a word gets (KR25). The modes Words and Spelling ask their type, Reading
+ * asks by choice in box 0 and 1 and typed from box 2. Every other mode goes by the box:
+ * - box 0 and 1: reading by choice or meaning, whichever has fewer right answers
+ * - box 2: reading typed
+ * - box 3 and up: spelling, meaning or reading typed, whichever has the fewest right answers
  */
 export function wordQuestionType(e: KanjiStatEntry | undefined, mode: KanjiMode, rng: () => number = Math.random): WordQuestionType {
+  const box = isSeen(e) ? e.box : 0
+  if (mode === 'read-choice') return box >= 2 ? 'read-type' : 'read-choice'
   if (isWordType(mode)) return mode
-  if (isSeen(e) && e.box === 2) return 'read-choice'
-  const types: WordQuestionType[] = isSeen(e) && e.box >= 3 ? ['spell', 'word-meaning', 'read-choice'] : ['read-choice', 'word-meaning']
+  if (box === 2) return 'read-type'
+  const types: WordQuestionType[] = box >= 3 ? ['spell', 'word-meaning', 'read-type'] : ['read-choice', 'word-meaning']
   const right = (t: WordQuestionType) => e?.byType[t]?.correct ?? 0
   const fewest = Math.min(...types.map(right))
   const tied = types.filter(t => right(t) === fewest)

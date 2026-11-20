@@ -9,45 +9,57 @@ const never = () => false
 
 describe('isWordType', () => {
   it('knows the word question types', () => {
-    expect(['word-meaning', 'read-choice', 'spell'].every(isWordType)).toBe(true)
+    expect(['word-meaning', 'read-choice', 'read-type', 'spell'].every(isWordType)).toBe(true)
     expect(['meaning', 'recognize', 'mixed'].some(isWordType)).toBe(false)
   })
 })
 
 describe('wordQuestionType', () => {
-  const at = (box: number, right: { reading?: number; meaning?: number; spell?: number } = {}) => ({
+  // reading counts the right answers of both reading types, the box 3 rule only looks at typed
+  const at = (box: number, right: { choice?: number; typed?: number; meaning?: number; spell?: number } = {}) => ({
     ...newKanjiEntry('w:a'), correct: 1, box,
     byType: {
-      'read-choice': { correct: right.reading ?? 0, incorrect: 0 },
+      'read-choice': { correct: right.choice ?? 0, incorrect: 0 },
+      'read-type': { correct: right.typed ?? 0, incorrect: 0 },
       'word-meaning': { correct: right.meaning ?? 0, incorrect: 0 },
       spell: { correct: right.spell ?? 0, incorrect: 0 },
     },
   })
 
-  it('follows the word modes', () => {
-    for (const mode of ['word-meaning', 'read-choice', 'spell'] as KanjiMode[]) expect(wordQuestionType(at(4), mode)).toBe(mode)
+  it('follows the modes Words and Spelling', () => {
+    for (const mode of ['word-meaning', 'spell'] as KanjiMode[]) {
+      for (const box of [0, 2, 4]) expect(wordQuestionType(at(box), mode)).toBe(mode)
+    }
+  })
+
+  it('asks the reading by choice in box 0 and 1 and typed from box 2 in the mode Reading', () => {
+    expect(wordQuestionType(undefined, 'read-choice')).toBe('read-choice')
+    expect(wordQuestionType(at(1), 'read-choice')).toBe('read-choice')
+    expect(wordQuestionType(at(2), 'read-choice')).toBe('read-type')
+    expect(wordQuestionType(at(5), 'read-choice')).toBe('read-type')
   })
 
   it('asks reading or meaning while new and in box 1, the one with fewer right answers (KR25)', () => {
-    expect(wordQuestionType(at(1, { reading: 2, meaning: 1 }), 'mixed')).toBe('word-meaning')
-    expect(wordQuestionType(at(0, { reading: 0, meaning: 3 }), 'mixed')).toBe('read-choice')
+    expect(wordQuestionType(at(1, { choice: 2, meaning: 1 }), 'mixed')).toBe('word-meaning')
+    expect(wordQuestionType(at(0, { choice: 0, meaning: 3 }), 'mixed')).toBe('read-choice')
     expect(wordQuestionType(undefined, 'mixed', () => 0.1)).toBe('read-choice')
     expect(wordQuestionType(undefined, 'mixed', () => 0.9)).toBe('word-meaning')
   })
 
-  it('asks the reading in box 2', () => {
-    expect(wordQuestionType(at(2, { reading: 9 }), 'mixed')).toBe('read-choice')
+  it('asks the reading typed in box 2', () => {
+    expect(wordQuestionType(at(2, { typed: 9 }), 'mixed')).toBe('read-type')
   })
 
-  it('from box 3 asks the type with the fewest right answers, spelling included', () => {
-    expect(wordQuestionType(at(3, { reading: 2, meaning: 2, spell: 0 }), 'mixed')).toBe('spell')
-    expect(wordQuestionType(at(4, { reading: 1, meaning: 2, spell: 3 }), 'mixed')).toBe('read-choice')
-    expect(wordQuestionType(at(3, { reading: 1, meaning: 0, spell: 1 }), 'mixed')).toBe('word-meaning')
+  it('from box 3 asks the one of typed reading, spelling and meaning with the fewest right answers', () => {
+    expect(wordQuestionType(at(3, { typed: 2, meaning: 2, spell: 0 }), 'mixed')).toBe('spell')
+    expect(wordQuestionType(at(4, { typed: 1, choice: 0, meaning: 2, spell: 3 }), 'mixed')).toBe('read-type')
+    expect(wordQuestionType(at(3, { typed: 1, meaning: 0, spell: 1 }), 'mixed')).toBe('word-meaning')
+    for (let seed = 1; seed < 20; seed++) expect(wordQuestionType(at(3, { choice: 0 }), 'mixed', seeded(seed))).not.toBe('read-choice')
   })
 
   it('leaves words to the box rules in the kanji modes', () => {
-    expect(wordQuestionType(at(2), 'meaning')).toBe('read-choice')
-    expect(wordQuestionType(at(3, { reading: 1, meaning: 1 }), 'recognize')).toBe('spell')
+    expect(wordQuestionType(at(2), 'meaning')).toBe('read-type')
+    expect(wordQuestionType(at(3, { typed: 1, meaning: 1 }), 'recognize')).toBe('spell')
   })
 })
 

@@ -75,7 +75,7 @@ const MODES: Array<{ mode: KanjiMode; label: string; hint: string; icon: string;
   { mode: 'meaning', label: 'Meaning', hint: 'kanji, pick its meaning', icon: 'eye', tint: 'lilac' },
   { mode: 'recognize', label: 'Recognize', hint: 'meaning, pick the kanji', icon: 'pick', tint: 'mint' },
   { mode: 'word-meaning', label: 'Words', hint: 'word, pick its meaning', icon: 'bulb', tint: 'peach' },
-  { mode: 'read-choice', label: 'Reading', hint: 'word, pick its reading', icon: 'speaker', tint: 'butter' },
+  { mode: 'read-choice', label: 'Reading', hint: 'word, pick or type its reading', icon: 'speaker', tint: 'butter' },
   { mode: 'spell', label: 'Spelling', hint: 'reading, pick the kanji', icon: 'pen', tint: 'mint' },
   { mode: 'mixed', label: 'Mixed', hint: 'by how well you know each', icon: 'shuffle', tint: 'sky' },
 ]

@@ -7,6 +7,7 @@ import { openKanji } from '../kanjiShell'
 import StrokeDemo from './StrokeDemo.vue'
 import StrokeCanvas from './StrokeCanvas.vue'
 import Icon from './Icon.vue'
+import SpeakButton from './SpeakButton.vue'
 
 const { sets } = useKanji()
 
@@ -110,6 +111,7 @@ watch(set, s => {
               <span class="kd-word-form" lang="ja">{{ w.form }}</span>
               <span class="kd-word-reading" lang="ja">{{ w.reading }}</span>
               <span class="kd-word-gloss">{{ w.gloss }}</span>
+              <SpeakButton :reading="w.reading" />
             </div>
           </div>
         </div>

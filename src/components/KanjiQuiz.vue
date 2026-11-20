@@ -1,20 +1,23 @@
 <script setup lang="ts">
-import { inject, ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
+import { inject, ref, computed, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
 import { QUIZ_KEY } from '../composables/useQuiz'
 import { useKanji } from '../composables/useKanji'
 import { courseEntries, kanjiEntry, kanjiLookalikeHint, kanjiLookalikes, kanjiStrokes, sameForm, wordById } from '../data/kanjiData'
 import { isSeen } from '../learning/scheduler'
 import { optionText, spellDiff } from '../learning/kanjiCards'
+import { cleanTyped, hasKanji, previewParts } from '../learning/kanaInput'
 import { setCourse } from '../kanjiShell'
 import { kanjiId } from '../kanjiKeys'
 import StrokeDemo from './StrokeDemo.vue'
 import StrokeCanvas from './StrokeCanvas.vue'
 import Icon from './Icon.vue'
+import SpeakButton from './SpeakButton.vue'
 
 const { notify, screen } = inject(QUIZ_KEY)!
 const {
-  statOf, cards, current, card, answered, pickedOption, gaveUp, mistake, correctCount, wrongCount, startedAt, progress,
-  choose, giveUp, next, goHome, resume,
+  statOf, cards, current, card, answered, pickedOption, gaveUp, mistake, correct, correctCount, wrongCount, startedAt, progress,
+  typedAnswer, slipped, verdict,
+  choose, giveUp, submitTyped, next, goHome, resume,
 } = useKanji()
 
 // a word card carries its word, a kanji card its kanji; `entry` is the kanji, for a word its home kanji
@@ -23,7 +26,7 @@ const entry = computed(() => card.value ? kanjiEntry(card.value.home) : null)
 const strokes = computed(() => card.value && !word.value ? kanjiStrokes(card.value.home) ?? undefined : undefined)
 const isIntro = computed(() => card.value?.type === 'intro')
 const kanjiIntro = computed(() => isIntro.value && !word.value)
-const correct = computed(() => answered.value && pickedOption.value === card.value?.answer)
+const isTyped = computed(() => card.value?.type === 'read-type')
 
 // the word is the kanji standing alone: its intro only says so, the kanji intro came just before
 const aloneAsWord = computed(() => !!word.value && word.value.form === word.value.home)
@@ -50,6 +53,7 @@ const label = computed(() => {
     recognize: 'Which kanji means',
     'word-meaning': 'What does this word mean?',
     'read-choice': 'How is this word read?',
+    'read-type': 'How is this word read? Type it',
     spell: 'How is this word written?',
   }[c.type]
 })
@@ -100,8 +104,49 @@ const mistakeWord = computed(() => mistake.value?.kind === 'other-reading' ? wor
 const feedbackText = computed(() => {
   if (!answered.value) return ''
   if (correct.value) return 'Correct'
+  if (verdict.value?.result === 'wrong' && verdict.value.typo) return 'Looks like a typo again'
   return gaveUp.value ? 'Here it is' : 'Not quite'
 })
+
+// right with a reading that isn't the one shown first: name that one too
+const otherReading = computed(() => verdict.value?.result === 'right' && verdict.value.kana !== card.value?.answer)
+
+// what the card says while it asks again, one hint at a time: the last verdict decides
+const retryHint = computed(() => {
+  const v = verdict.value
+  if (answered.value || !v) return null
+  return v.result === 'slip' || v.result === 'homograph' || v.result === 'kanji' ? v : null
+})
+
+// the hiragana the typing turns into, before it is sent (KR20). The field keeps what was
+// typed, rewriting it under the iOS keyboard breaks typing. Letters that make no kana yet
+// stay letters, shown apart.
+const preview = computed(() => previewParts(typedAnswer.value))
+const canSend = computed(() => cleanTyped(typedAnswer.value) !== '' || hasKanji(typedAnswer.value))
+
+// :value and @input instead of v-model: v-model ignores input while a Japanese keyboard
+// composes, the preview and Check would stay dead until the composition ends
+function onTypedInput(e: Event): void {
+  typedAnswer.value = (e.target as HTMLInputElement).value
+}
+
+const typeField = ref<HTMLInputElement | null>(null)
+const focusField = () => nextTick(() => typeField.value?.focus())
+watch(card, c => { if (c?.type === 'read-type') focusField() }, { immediate: true })
+
+// a slip, a homograph or kanji ask again, the cursor goes back into the field (Check took it away)
+function check(): void {
+  submitTyped()
+  if (!answered.value) focusField()
+}
+
+function onTypedEnter(e: KeyboardEvent): void {
+  // the Enter that confirms a composition: Safari sends it with isComposing false but keyCode 229.
+  // A held key must not run through the cards.
+  if (e.isComposing || e.keyCode === 229 || e.repeat) return
+  if (answered.value) next()
+  else check()
+}
 
 // the hook on first contact with a kanji and after a missed kanji
 const hook = computed(() => {
@@ -133,6 +178,7 @@ const primary = computed((): Action | null => {
   }
   if (isIntro.value) return { label: 'Got it', run: next }
   if (answered.value) return { label: isLast.value ? 'Results' : 'Next', run: next }
+  if (isTyped.value) return { label: 'Check', run: check, enabled: canSend.value }
   return null
 })
 
@@ -165,7 +211,10 @@ function endSession(): void {
 
 // Enter runs the main button, 1 to 4 pick an option
 function onKey(e: KeyboardEvent): void {
-  if (e.isComposing || e.metaKey || e.ctrlKey || e.altKey || e.repeat) return
+  // the field has its own Enter, and an Enter inside a composition confirms it
+  if (e.isComposing || e.target === typeField.value) return
+  // Cmd+1 switches browser tabs, and a held key must not run through the cards
+  if (e.metaKey || e.ctrlKey || e.altKey || e.repeat) return
   const c = card.value
   if (!c) return
   if (e.key === 'Enter') {
@@ -177,8 +226,21 @@ function onKey(e: KeyboardEvent): void {
   if (c.type !== 'intro' && !answered.value && n >= 1 && n <= c.options.length) choose(c.options[n - 1])
 }
 
-onMounted(() => window.addEventListener('keydown', onKey))
-onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
+// with the iOS keyboard up only the visual viewport shrinks, css can't see that
+const compact = ref(false)
+function onViewport(): void {
+  compact.value = (window.visualViewport?.height ?? window.innerHeight) < 560
+}
+
+onMounted(() => {
+  window.addEventListener('keydown', onKey)
+  window.visualViewport?.addEventListener('resize', onViewport)
+  onViewport()
+})
+onBeforeUnmount(() => {
+  window.removeEventListener('keydown', onKey)
+  window.visualViewport?.removeEventListener('resize', onViewport)
+})
 
 const optionClass = (opt: string) => ({
   correct: answered.value && opt === card.value?.answer,
@@ -198,7 +260,7 @@ const formLength = computed(() => Math.max(1, ...(card.value?.options ?? []).map
 </script>
 
 <template>
-  <div class="quiz" :class="{ 'q-trace': kanjiIntro }">
+  <div class="quiz" :class="{ compact, 'q-trace': kanjiIntro }">
     <div class="quiz-top">
       <div class="quiz-topbar">
         <button class="icon-btn boxed" aria-label="End session" @click="endSession()"><Icon name="x" :size="20" /></button>
@@ -232,11 +294,14 @@ const formLength = computed(() => Math.max(1, ...(card.value?.options ?? []).map
         <template v-else-if="word">
           <div class="q-main q-word" :style="{ '--len': [...word.form].length }" lang="ja">{{ word.form }}</div>
           <template v-if="isIntro">
-            <div class="intro-reading" lang="ja">{{ word.reading }}</div>
+            <div class="intro-reading-row">
+              <span class="intro-reading" lang="ja">{{ word.reading }}</span>
+              <SpeakButton :reading="word.reading" />
+            </div>
             <div class="intro-keyword">{{ word.gloss }}</div>
           </template>
           <!-- two words written alike: the one meant is told by what the question doesn't ask -->
-          <div v-else-if="hasTwin && card.type === 'read-choice'" class="word-gloss">{{ word.gloss }}</div>
+          <div v-else-if="hasTwin && (card.type === 'read-choice' || isTyped)" class="word-gloss">{{ word.gloss }}</div>
           <div v-else-if="hasTwin" class="word-gloss" lang="ja">{{ word.reading }}</div>
         </template>
 
@@ -267,8 +332,42 @@ const formLength = computed(() => Math.max(1, ...(card.value?.options ?? []).map
           <p v-if="word.special" class="intro-note">A special reading: it belongs to the word as a whole, not to each kanji.</p>
         </template>
 
+        <!-- typed reading: the field keeps the romaji, the preview shows the kana it gives -->
+        <div v-if="isTyped" class="reading-input">
+          <input
+            ref="typeField"
+            :value="typedAnswer"
+            class="type-field reading-field"
+            :class="{
+              'input-correct': answered && correct,
+              'input-wrong': answered && !correct,
+              'input-retry': slipped && !answered,
+            }"
+            type="text"
+            aria-label="Type the reading, in romaji or kana"
+            autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+            enterkeyhint="go"
+            placeholder="type romaji..."
+            maxlength="40"
+            :readonly="answered"
+            @input="onTypedInput"
+            @keydown.enter="onTypedEnter"
+          />
+          <div v-if="!answered" class="kana-preview" aria-hidden="true">
+            <span v-for="(part, i) in preview" :key="i" :class="{ pending: part.pending }" :lang="part.pending ? undefined : 'ja'">{{ part.text }}</span>
+          </div>
+          <div v-if="retryHint" class="type-hint" role="status">
+            <template v-if="retryHint.result === 'slip'">Looks like a typo. Fix it and check again.</template>
+            <template v-else-if="retryHint.result === 'kanji'">Type the reading in hiragana or romaji, not in kanji.</template>
+            <template v-else>
+              <span class="kana" lang="ja">{{ retryHint.kana }}</span> is also a way to read this spelling, but for another word.
+              This card wants the word for "{{ word?.gloss }}", try again.
+            </template>
+          </div>
+        </div>
+
         <div
-          v-if="card.type !== 'intro'"
+          v-if="card.options.length"
           :class="optionsClass" :style="card.type === 'spell' ? { '--len': formLength } : undefined"
           :lang="englishOptions ? undefined : 'ja'"
         >
@@ -290,14 +389,21 @@ const formLength = computed(() => Math.max(1, ...(card.value?.options ?? []).map
           :class="{ show: !!feedbackText, correct: correct, wrong: answered && !correct }"
         >
           <span v-if="feedbackText" class="feedback-icon"><Icon :name="correct ? 'check' : 'x'" :size="18" /></span>
-          <span class="feedback-text">{{ feedbackText }}</span>
+          <span class="feedback-text">
+            {{ feedbackText }}
+            <span v-if="otherReading" class="feedback-sub">Usually read <span class="kana" lang="ja">{{ card.answer }}</span>.</span>
+          </span>
         </div>
+
+        <!-- a typed reading that was missed: the right one in large hiragana (KR33) -->
+        <div v-if="isTyped && answered && !correct" class="typed-answer" :style="{ '--len': card.answer.length }" lang="ja">{{ card.answer }}</div>
 
         <!-- after any word question: the word with its reading and meaning (KR34) -->
         <div v-if="word && answered" class="explain word-line">
           <span class="word-line-form" lang="ja">{{ word.form }}</span>
           <span class="word-line-reading" lang="ja">{{ word.reading }}</span>
           <span class="word-line-gloss">{{ word.gloss }}</span>
+          <SpeakButton :reading="word.reading" />
           <!-- a wrong reading names its kind (KR33) -->
           <div v-if="mistake" class="explain-hint">
             <template v-if="mistake.kind === 'long-vowel'">Close, but a vowel is held too long or too short.</template>
@@ -351,7 +457,7 @@ const formLength = computed(() => Math.max(1, ...(card.value?.options ?? []).map
         v-if="primary" class="action-primary" :class="{ intro: isIntro }"
         :disabled="primary.enabled === false"
         @click="primary.run()"
-      >{{ primary.label }}<Icon name="arrow" :size="20" /></button>
+      >{{ primary.label }}<Icon v-if="primary.label !== 'Check'" name="arrow" :size="20" /></button>
     </div>
   </div>
 </template>

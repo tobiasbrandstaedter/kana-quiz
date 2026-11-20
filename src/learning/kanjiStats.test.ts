@@ -57,6 +57,13 @@ describe('applyKanjiAnswer', () => {
     expect(e).toMatchObject({ box: 0, due: NOW, correct: 1 })
   })
 
+  it('counts a typo as wrong and leaves the box alone', () => {
+    const before = { ...newKanjiEntry('w:a'), correct: 3, box: 3, due: NOW, streak: 3 }
+    const e = applyKanjiAnswer(before, answer({ id: 'w:a', type: 'read-type', correct: false, given: '', typo: true }), NOW)
+    expect(e).toMatchObject({ box: 3, due: NOW, incorrect: 1, streak: 0, lastWrong: NOW })
+    expect(e.byType['read-type']).toEqual({ correct: 0, incorrect: 1 })
+  })
+
   it('leaves the old entry alone', () => {
     const before = newKanjiEntry('k:A')
     applyKanjiAnswer(before, answer({ correct: false, given: 'k:B' }), NOW)

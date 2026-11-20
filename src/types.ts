@@ -285,12 +285,13 @@ export interface KanjiReading {
 
 // Practice. 'meaning' shows the kanji and asks for its keyword (M1), 'recognize' shows the
 // keyword and asks for the kanji (M2). Words: 'word-meaning' shows the word and asks for its
-// meaning (V1), 'read-choice' for its reading (R1), 'spell' shows reading and meaning and asks
-// for the written form (S1). Typing a reading (R2) joins later.
+// meaning (V1), 'read-choice' for its reading (R1), 'read-type' has the reading typed (R2), 'spell'
+// shows reading and meaning and asks for the written form (S1). The mode Reading is
+// 'read-choice' and asks R1 or R2 by the box, there is no mode of its own for R2.
 export type KanjiQuestionType = 'meaning' | 'recognize'
-export type WordQuestionType = 'word-meaning' | 'read-choice' | 'spell'
+export type WordQuestionType = 'word-meaning' | 'read-choice' | 'read-type' | 'spell'
 export type QuestionType = KanjiQuestionType | WordQuestionType
-export type KanjiMode = QuestionType | 'mixed'
+export type KanjiMode = Exclude<QuestionType, 'read-type'> | 'mixed'
 export type Course = 'kana' | 'kanji'
 
 // the kinds of wrong readings that have a name (KR22, KR33), see learning/readings.ts
@@ -321,10 +322,12 @@ export interface KanjiAnswerInput {
   type: QuestionType
   correct: boolean
   // what was picked, '' for "Don't know": the item id for kanji and meaning options,
-  // the reading for a reading question, the written form for a spelling question
+  // the reading for a reading question (typed: only when it is a real reading), the written
+  // form for a spelling question
   given: string
   ms: number
   holdBox?: boolean  // right after a miss in the same session: counts, but can't promote
+  typo?: boolean     // a typed reading slipped twice: counts as wrong, but leaves the Leitner box alone
   mistake?: ReadingKind  // the kind of a wrong reading, when it has one
 }
 
@@ -342,9 +345,10 @@ export interface KanjiCard {
   home: string  // the kanji, for a word its home kanji
   type: QuestionType | 'intro'
   // kanji for 'meaning' and 'recognize' (a meaning card shows their keywords), word ids for
-  // 'word-meaning' (shown as glosses), readings for 'read-choice', written forms for 'spell'
+  // 'word-meaning' (shown as glosses), readings for 'read-choice', written forms for 'spell',
+  // none for 'read-type'
   options: string[]
-  answer: string  // the right one of the options
+  answer: string  // the right one of the options, the reading shown first for 'read-type'
   // the intro of a new kanji's first word: the kanji item that has to be answered right in
   // this session first, else the word's cards are dropped (KR14)
   needs?: string

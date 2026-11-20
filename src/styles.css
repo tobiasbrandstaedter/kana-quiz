@@ -162,7 +162,7 @@ body {
 .q-main, .option-btn, .error-kana, .missed-item .k, .col-btn .kana-sample, .set-kanji, .stats-kana-cell,
 .cc-kana, .stroke-kana, .stroke-pick, .row-chip, .kc-kanji, .explain-item .k, .hero-kana, .fb-kana,
 .intro-reading, .q-reading, .word-line-form, .word-line-reading, .kd-word-form, .kd-word-reading, .missed-reading,
-.error-reading, .stats-reading, .word-kanji-row .kana {
+.error-reading, .stats-reading, .word-kanji-row .kana, .kana-preview, .typed-answer {
   font-family: var(--kana-font);
   /* a font without a bold cut shows as it is, smeared fake bold is no help when learning shapes */
   font-synthesis: none;
@@ -904,6 +904,20 @@ body {
 .word-line-reading { font-size: 26px; font-weight: 700; color: var(--primary-text); }
 .word-line-gloss { font-size: 16px; font-weight: 800; color: var(--ink-2); }
 .word-line .explain-hint { flex-basis: 100%; }
+/* the button that says a word sits in a line of text, centered on it rather than on the baseline */
+.intro-reading-row { display: flex; align-items: center; justify-content: center; gap: 12px; }
+.word-line .speak-btn, .kd-word-main .speak-btn { align-self: center; }
+.kd-word-main .speak-btn { margin-left: auto; }
+.kd-word-main .speak-btn + .kd-word-stage { margin-left: 0; }
+
+/* typed reading: romaji in the field, the kana it gives right below, letters not yet kana in
+   the UI font. Seven kana fit at 375px */
+.reading-input { margin-bottom: 16px; }
+.type-field.reading-field { font-size: 24px; }
+.kana-preview { min-height: 52px; margin-top: 8px; text-align: center; font-size: 36px; font-weight: 700; line-height: 1.2; color: var(--primary-text); overflow-wrap: anywhere; }
+.kana-preview .pending { font-family: var(--ui-font); font-size: 26px; font-weight: 800; color: var(--ink-2); }
+/* a missed typed reading: the right one, large */
+.typed-answer { margin-bottom: 14px; text-align: center; font-size: min(64px, calc(300px / var(--len, 1))); font-weight: 700; line-height: 1.2; color: var(--good-text); }
 
 .feedback {
   display: flex;
@@ -999,6 +1013,8 @@ body {
 .quiz.compact .q-main { font-size: 96px; }
 .quiz.compact .q-main.romaji-q { font-size: 44px; }
 .quiz.compact .quiz-topbar { margin-bottom: 10px; }
+.quiz.compact .q-main.q-word { font-size: min(72px, calc(260px / var(--len, 1))); }
+.quiz.compact .kana-preview { min-height: 44px; margin-top: 4px; font-size: 30px; }
 
 /* iPad landscape: prompt on the left, answer on the right */
 @media (orientation: landscape) and (min-width: 900px) and (max-height: 900px) {
@@ -1839,7 +1855,7 @@ label.btn:focus-within { outline: 3px solid var(--focus); outline-offset: 2px; }
 :root[data-theme="sumi"] .intro-romaji { font-family: var(--mincho); color: var(--ink); }
 :root[data-theme="sumi"] :is(.kanji-keyword, .intro-keyword, .word-gloss) { font-family: var(--mincho); font-weight: 800; color: var(--ink); }
 /* readings stay ink, vermilion is for what needs a look */
-:root[data-theme="sumi"] :is(.word-line-reading, .kd-word-reading, .kd-reading-kind) { color: var(--ink); }
+:root[data-theme="sumi"] :is(.word-line-reading, .kd-word-reading, .kd-reading-kind, .kana-preview) { color: var(--ink); }
 :root[data-theme="sumi"] .kd-word-note .kana { color: var(--shu); }
 :root[data-theme="sumi"] :is(.audio-btn, .listen-btn) { background: transparent; }
 :root[data-theme="sumi"] .audio-btn { border-radius: 50%; }
@@ -2056,7 +2072,7 @@ label.btn:focus-within { outline: 3px solid var(--focus); outline-offset: 2px; }
 :root[data-theme="yoru"] .kanji-keyword { font-weight: 700; color: var(--cyan); text-shadow: var(--tglow-c); }
 :root[data-theme="yoru"] .intro-keyword { color: var(--cyan); }
 :root[data-theme="yoru"] .word-gloss { color: var(--cyan); }
-:root[data-theme="yoru"] :is(.word-line-reading, .kd-word-reading, .kd-reading-kind) { color: var(--cyan); }
+:root[data-theme="yoru"] :is(.word-line-reading, .kd-word-reading, .kd-reading-kind, .kana-preview) { color: var(--cyan); }
 :root[data-theme="yoru"] :is(.audio-btn, .listen-btn) { background: var(--surface-2); }
 :root[data-theme="yoru"] :is(.audio-btn, .listen-btn).playing { background: var(--cyan); color: var(--bg); box-shadow: var(--glow-c); }
 :root[data-theme="yoru"] .option-btn.correct { border-color: var(--good); background: var(--good-soft); color: var(--good); box-shadow: var(--glow-g); }

@@ -1,6 +1,6 @@
 import { ref, computed, effectScope } from 'vue'
 import type {
-  ItemInfo, KanjiAnswerRecord, KanjiCard, KanjiMode, KanjiSort, KanjiSortCol, KanjiStatEntry, KanjiStatsMap, QuestionType, ReadingKind,
+  ItemInfo, KanjiAnswerInput, KanjiAnswerRecord, KanjiCard, KanjiMode, KanjiSort, KanjiSortCol, KanjiStatEntry, KanjiStatsMap, QuestionType,
 } from '../types'
 import { allKanji, kanjiSets } from '../data/kanjiData'
 import { applyKanjiAnswer, normalizeKanjiStats } from '../learning/kanjiStats'
@@ -10,8 +10,9 @@ import {
 import type { PlannedCard } from '../learning/kanjiPlan'
 import { noteResult, summarizeRound, resultScore, resultLabel, splitMoves } from '../learning/kanjiQuiz'
 import type { RoundResults } from '../learning/kanjiQuiz'
-import { itemInfo, itemOrder, makeCard, storedAnswer, wordReadingMistake, PLAN_COURSE } from '../learning/kanjiCards'
-import type { ReadingMistake } from '../learning/readings'
+import { itemInfo, itemOrder, makeCard, storedAnswer, wordReadingMistake, wordTypedVerdict, PLAN_COURSE } from '../learning/kanjiCards'
+import { cleanTyped, hasKanji } from '../learning/kanaInput'
+import type { ReadingMistake, TypedVerdict } from '../learning/readings'
 import { isWordType } from '../learning/wordQuiz'
 import { itemRow, openKanjiErrors, sortKanjiRows } from '../learning/kanjiProgress'
 import { planReask, dueOutlook, columnProgress, isSeen, MASTERED_BOX } from '../learning/scheduler'
@@ -186,6 +187,12 @@ function createKanji() {
   const pickedOption = ref<string | null>(null)  // the option chosen on the current card
   const gaveUp = ref(false)
   const mistake = ref<ReadingMistake | null>(null)  // the kind of a wrong reading on the current card
+  const correct = ref(false)  // the current card was answered right
+  // a typed reading (R2): what is in the field, whether a slip was let through on this card,
+  // and the verdict on the last answer sent (the card's hints and feedback read it)
+  const typedAnswer = ref('')
+  const slipped = ref(false)
+  const verdict = ref<TypedVerdict | null>(null)
   const correctCount = ref(0)
   const wrongCount = ref(0)
   const startedAt = ref(0)
@@ -210,6 +217,10 @@ function createKanji() {
     pickedOption.value = null
     gaveUp.value = false
     mistake.value = null
+    correct.value = false
+    typedAnswer.value = ''
+    slipped.value = false
+    verdict.value = null
     questionStart = Date.now()
   }
 
@@ -292,34 +303,37 @@ function createKanji() {
   }
 
   /** Applies the answer to the stored stats and the log, returns how the box moved. */
-  function saveAnswer(id: string, type: QuestionType, correct: boolean, given: string, holdBox: boolean, kind?: ReadingKind): BoxMove {
+  function saveAnswer(a: Omit<KanjiAnswerInput, 'ms'>): BoxMove {
     const now = Date.now()
     const ms = now - questionStart
     // read storage again, another tab may have written in between
     const data = loadStats()
-    const from = data[id]?.box ?? 0
-    data[id] = applyKanjiAnswer(data[id], { id, type, correct, given, ms, holdBox, mistake: kind }, now)
+    const from = data[a.id]?.box ?? 0
+    data[a.id] = applyKanjiAnswer(data[a.id], { ...a, ms }, now)
     saveStats(data)
 
     const nextLog = loadLog()
-    nextLog.push({ id, type, correct, given, ms, t: now })
+    nextLog.push({ id: a.id, type: a.type, correct: a.correct, given: a.given, ms, t: now })
     if (nextLog.length > MAX_ANSWERS) nextLog.splice(0, nextLog.length - MAX_ANSWERS)
     writeJson(KANJI_ANSWERS_KEY, nextLog)
     log.value = nextLog
 
     countAnswer(now)
-    return { from, to: data[id].box }
+    return { from, to: data[a.id].box }
   }
 
-  function record(id: string, type: QuestionType, correct: boolean, given: string, kind?: ReadingKind): void {
+  // an answer as a card gives it, the time and whether the box is held are added on the way
+  type CardAnswer = Omit<KanjiAnswerInput, 'ms' | 'holdBox'>
+
+  function record(a: CardAnswer): void {
     // right on the re-ask, seconds after seeing the answer, is no reason to promote
-    const move = saveAnswer(id, type, correct, given, correct && !!results.value[id]?.missed, kind)
-    const prev = moves.value[id]
-    moves.value = { ...moves.value, [id]: { from: prev?.from ?? move.from, to: move.to } }
-    results.value = noteResult(results.value, id, correct)
-    if (correct) {
+    const move = saveAnswer({ ...a, holdBox: a.correct && !!results.value[a.id]?.missed })
+    const prev = moves.value[a.id]
+    moves.value = { ...moves.value, [a.id]: { from: prev?.from ?? move.from, to: move.to } }
+    results.value = noteResult(results.value, a.id, a.correct)
+    if (a.correct) {
       correctCount.value++
-      rightIds.add(id)
+      rightIds.add(a.id)
     } else wrongCount.value++
   }
 
@@ -334,28 +348,48 @@ function createKanji() {
     qs.splice(slot.index, 0, ...padding, { ...buildCard({ id, type }), reask: true })
   }
 
-  function answer(given: string | null): void {
-    const c = card.value
-    if (!c || c.type === 'intro' || answered.value) return
+  function settle(a: CardAnswer): void {
     answered.value = true
-    pickedOption.value = given
-    gaveUp.value = given === null
-    const correct = given === c.answer
-    if (!correct && given && c.type === 'read-choice') mistake.value = wordReadingMistake(c.id, given)
-    record(c.id, c.type, correct, storedAnswer(c, given), mistake.value?.kind)
-    if (!correct) {
-      queueReask(c.id, c.type)
+    correct.value = a.correct
+    record(a)
+    if (!a.correct) {
+      queueReask(a.id, a.type)
       return
     }
     // A word card waits for Next: its reading and meaning are to be read (KR34), and a card
     // that changes under the finger would take the tap meant for Next. A kanji card moves on
     // shortly, unless Next was pressed first.
-    if (!kanjiOfId(c.id)) return
+    if (!kanjiOfId(a.id)) return
     const session = startedAt.value
     const at = current.value
     setTimeout(() => {
       if (kanjiScreen.value === 'quiz' && startedAt.value === session && current.value === at) next()
     }, 400)
+  }
+
+  function answer(given: string | null): void {
+    const c = card.value
+    if (!c || c.type === 'intro' || answered.value) return
+    pickedOption.value = given
+    gaveUp.value = given === null
+    const picked = given === c.answer
+    if (!picked && given && c.type === 'read-choice') mistake.value = wordReadingMistake(c.id, given)
+    settle({ id: c.id, type: c.type, correct: picked, given: storedAnswer(c, given), mistake: mistake.value?.kind })
+  }
+
+  // a typed reading: a homograph, kanji in the input or the first slip ask again and count nothing
+  function submitTyped(): void {
+    const c = card.value
+    const typed = typedAnswer.value
+    if (!c || c.type !== 'read-type' || answered.value || !(cleanTyped(typed) || hasKanji(typed))) return
+    const v = wordTypedVerdict(c.id, typed, slipped.value)
+    verdict.value = v
+    if (v.result === 'slip') slipped.value = true
+    else if (v.result === 'right') settle({ id: c.id, type: c.type, correct: true, given: v.kana })
+    else if (v.result === 'wrong') {
+      mistake.value = v.mistake
+      settle({ id: c.id, type: c.type, correct: false, given: v.given, typo: v.typo, mistake: v.mistake?.kind })
+    }
   }
 
   const choose = (option: string) => answer(option)
@@ -412,9 +446,10 @@ function createKanji() {
     pickedSets, toggleSet, selectAllSets, selectNoneSets,
     statOf, lockOf, hasError, summary, progressBySet,
     openErrors, resolveErrors, resolveAllErrors, rows, tableShow, tableSort, setTableSort, errorsScrollPending,
-    cards, current, card, answered, pickedOption, gaveUp, mistake, correctCount, wrongCount, startedAt, progress,
+    cards, current, card, answered, pickedOption, gaveUp, mistake, correct, correctCount, wrongCount, startedAt, progress,
+    typedAnswer, slipped, verdict,
     startSmart, startCustom, startErrors, startKanji, restart, restartLabel,
-    choose, giveUp, next, goHome, resume,
+    choose, giveUp, submitTyped, next, goHome, resume,
     resultScore: score, resultLabel: label, missed, roundOutcome,
   }
 }

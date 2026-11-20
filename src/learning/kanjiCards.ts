@@ -10,12 +10,14 @@ import type { PlanCourse, PlannedCard } from './kanjiPlan'
 import { confusedKanji } from './kanjiStats'
 import { kanjiQuestionType, makeKanjiCard, pickKanjiOptions } from './kanjiQuiz'
 import { isWordType, pickMeaningOptions, pickReadingOptions, pickSpellOptions, wordQuestionType } from './wordQuiz'
-import { readingMistake } from './readings'
-import type { ReadingMistake } from './readings'
+import { readingMistake, typedVerdict } from './readings'
+import type { ReadingMistake, TypedVerdict } from './readings'
 import { shuffle } from './distractors'
 
 const KANJI = allKanji()
 const WORDS = courseWords()
+// every reading of a course word, a typed one in here is a mix-up and not a slip
+const COURSE_READINGS = new Set(WORDS.flatMap(w => w.readings))
 
 /** Every kanji and course word as the plan works with them. */
 export const PLAN_COURSE: PlanCourse = {
@@ -79,6 +81,8 @@ export function makeCard(item: PlannedCard, ctx: CardContext, rng: () => number 
   } else if (type === 'read-choice') {
     answer = word.reading
     wrong = pickReadingOptions(word, WORDS, ctx.knownWords, kanjiReadings, rng)
+  } else if (type === 'read-type') {
+    return { ...base, type, options: [], answer: word.reading }
   } else {
     answer = word.form
     const isWord = (form: string, reading: string) => WORDS.some(w => w.form === form && w.readings.includes(reading))
@@ -118,4 +122,15 @@ export function wordReadingMistake(id: string, given: string): ReadingMistake | 
   const w = wordById(id)
   if (!w || w.homographs.includes(given)) return null
   return readingMistake(given, w.reading, w.split, kanjiReadings)
+}
+
+/**
+ * The verdict on a typed reading of a word (see typedVerdict). A known reading is one of a
+ * course word or one of the word's kanji as the course words show it.
+ */
+export function wordTypedVerdict(id: string, typed: string, slipped: boolean): TypedVerdict {
+  const w = wordById(id)!
+  const isKnownReading = (kana: string) =>
+    COURSE_READINGS.has(kana) || w.kanji.some(k => kanjiReadings(k).some(r => r.reading === kana))
+  return typedVerdict(typed, w, kanjiReadings, isKnownReading, slipped)
 }

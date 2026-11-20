@@ -128,11 +128,11 @@ Why: a lock punishes people who know kana from elsewhere or moved to a new devic
 
 ### KD13: sound through the system voice
 
-Words get a button that reads them with the Japanese system voice. It is hidden when the device has none. Nothing plays by itself.
+Words get a button that reads them with the Japanese system voice. It is shown wherever the browser can speak at all (see the trap below). Nothing plays by itself.
 
 Why: recorded clips exist for kana only. The system voice is free, works offline on iOS and is good enough for single words. No autoplay because people practice on the train, and because iOS and Chrome only speak after a tap anyway.
 
-Known trap: since iOS 16 the Japanese voice can be missing from the list of voices and still speak. "Has none" therefore can't be read off that list alone, which is what `audio.ts` does today. The plan measures this on a real iPhone before the button is built.
+Known trap: since iOS 16 the Japanese voice can be missing from the list of voices and still speak. "Has none" therefore can't be read off that list, which is what the kana fallback in `audio.ts` does. Nobody measured it on a real iPhone, so the button does not look at the list: a button that stays silent on a few devices is the smaller harm than a button missing on every iPhone.
 
 ### KD14: special readings are marked and come after the regular ones
 
@@ -255,8 +255,9 @@ The draft of the sets is in section 12. The data phase turns it into the final o
 
 - KR20: the answer is the reading in hiragana. The learner types romaji on the normal keyboard and sees the hiragana it turns into before sending it off. Typing kana directly with a Japanese keyboard works too.
 - KR21: the romaji follows the kana spelling: `gakkou` gives がっこう, `nn` or `n` before a consonant or at the end gives ん, the spellings accepted for kana today (si, tu, hu, ...) stay accepted. No macrons.
-- KR22: an answer that differs from the right one only in one of these ways is a real mistake with a name, not a typo: vowel length, a small っ, voicing, a long vowel spelled with the wrong kana (おう for おお, ええ for えい). It counts as wrong and the kind is stored (KR33). The comparison is made in kana.
-- KR23: of what is left, an answer one keystroke off in romaji gets one more try without counting, the same way typos are treated for kana. The second slip counts as wrong and leaves the box alone.
+- KR22: an answer that differs from an accepted reading only in one of these ways is a real mistake with a name, not a typo: vowel length, a small っ, voicing, a long vowel spelled with the wrong kana (おう for おお, ええ for えい). It counts as wrong and the kind is stored (KR33). The comparison is made in kana, and only when what was typed could be a reading at all: a bounced key (っご) is a slip, not a small っ mistake.
+- KR23: of what is left, an answer one keystroke off in romaji (two neighbouring letters swapped count as one) gets one more try without counting. The second attempt counts. It leaves the box alone only when it is still visibly a typing accident (letters left over that are not kana). A second wrong answer in clean kana is a miss like any other. For readings of one or two kana a clean kana answer is never a slip: there nearly every other kana is one key away.
+- KR79: stray characters (punctuation, digits, a period from the keyboard's double space) are ignored. Input with kanji in it is not judged, the card asks for hiragana. An `n` before a vowel or y is accepted either way (`kinyoubi` and `kin'youbi`).
 
 ### Which question when
 
