@@ -196,7 +196,7 @@ const MAX_REASKS = 2
  * How a missed item comes back: 3 to 6 cards later, at most MAX_REASKS times per session
  * (`reasked` is how often it already came back). `candidates` are the ids of the round that
  * may go in front of it as padding, `pad` says which ones the caller has to insert before
- * the re-ask at `index`. Null when the re-ask is dropped: asked back often enough, or too
+ * the re-ask at `index`, never the item of the card right before `index`. Null when the re-ask is dropped: asked back often enough, or too
  * few other items left to pad with, it is due next session anyway.
  */
 export function planReask(
@@ -205,7 +205,8 @@ export function planReask(
 ): { index: number; pad: string[] } | null {
   if (reasked >= MAX_REASKS) return null
   const { index, pad } = reaskSlot(queue, current, id, 3 + Math.floor(rng() * 4))
-  const others = shuffle([...new Set(candidates.filter(c => c !== id))], rng).slice(0, pad)
+  // not the item asked right before the slot either, it would come twice in a row
+  const others = shuffle([...new Set(candidates.filter(c => c !== id && c !== queue[index - 1]))], rng).slice(0, pad)
   if (others.length < pad) return null
   return { index, pad: others }
 }

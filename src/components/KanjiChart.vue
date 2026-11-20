@@ -4,6 +4,7 @@ import { useKanji } from '../composables/useKanji'
 import { kanjiEntry } from '../data/kanjiData'
 import { isDue, isSeen } from '../learning/scheduler'
 import { openKanji } from '../kanjiShell'
+import { kanjiId } from '../kanjiKeys'
 import { clock } from '../clock'
 import { stageOf, STAGE_LABEL } from '../format'
 import Icon from './Icon.vue'
@@ -16,11 +17,11 @@ const opened = ref(new Set<string>())
 
 const groups = computed(() => sets.map(s => ({
   ...s,
-  open: opened.value.has(s.id) || s.kanji.some(k => isSeen(statOf(k))),
+  open: opened.value.has(s.id) || s.kanji.some(k => isSeen(statOf(kanjiId(k)))),
 })))
 
 function cellState(kanji: string) {
-  const stat = statOf(kanji)
+  const stat = statOf(kanjiId(kanji))
   return {
     stage: stageOf(stat?.box ?? 0, isSeen(stat)),
     due: isSeen(stat) && isDue(stat, clock.value),

@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest'
 import { KANJI_SOURCE } from './kanjiSource'
 import {
-  allKanji, groupOf, homeKanji, KANJI_DATA_DATE, KANJI_SOURCES, kanjiEntry, kanjiLookalikeHint, kanjiLookalikes,
-  kanjiReadings, kanjiSets, kanjiStrokes, ownWords, tooClose, wordById, wordGroups, wordId, wordsWith,
+  allKanji, courseEntries, courseWords, groupOf, homeKanji, KANJI_DATA_DATE, KANJI_SOURCES, kanjiEntry, kanjiLookalikeHint, kanjiLookalikes,
+  kanjiReadings, kanjiSets, kanjiStrokes, kanjiWithReading, ownWords, sameForm, tooClose, wordById, wordGroups, wordId, wordsWith,
 } from './kanjiData'
 import { CLOSE_MEANINGS, KANJI_LOOKALIKES, WORD_GROUPS } from './kanjiCourse'
 
@@ -22,6 +22,11 @@ describe('kanji entries', () => {
     expect(k.meanings).toEqual(KANJI_SOURCE[first.kanji].meanings)
     expect(k.strokeCount).toBe(KANJI_SOURCE[first.kanji].strokes)
     expect(kanjiEntry('あ')).toBeNull()
+  })
+
+  it('give the entries of the course kanji asked for, in that order, nothing for the rest', () => {
+    const [a, b] = allKanji()
+    expect(courseEntries([b.kanji, 'あ', a.kanji])).toEqual([b, a])
   })
 })
 
@@ -47,6 +52,19 @@ describe('words', () => {
       const found = wordsWith(k.kanji)
       for (const w of found) expect(w.form).toContain(k.kanji)
       for (const own of k.words) expect(found.map(w => w.id)).toContain(own)
+    }
+  })
+
+  it('are all listed as course words, by home kanji and teaching order', () => {
+    expect(courseWords().map(w => w.id)).toEqual(allKanji().flatMap(k => k.words))
+    for (const w of courseWords()) expect(w.group).toBeNull()
+  })
+
+  it('know the other course words written the same way', () => {
+    for (const w of courseWords()) {
+      const twins = sameForm(w)
+      expect(twins.map(t => t.id)).toEqual(courseWords().filter(o => o.form === w.form && o.id !== w.id).map(o => o.id))
+      expect(twins).not.toContain(w)
     }
   })
 
@@ -93,6 +111,19 @@ describe('kanji readings', () => {
         for (const p of wordById(id)!.split)
           if (kanjiEntry(p.text)) expect(kanjiReadings(p.text).map(r => r.reading), `${p.text} in ${id}`).toContain(p.reading)
     }
+  })
+
+  it('find the kanji that share a reading, in course order', () => {
+    const all = allKanji().map(k => k.kanji)
+    for (const k of allKanji()) {
+      for (const r of kanjiReadings(k.kanji)) {
+        const found = kanjiWithReading(r.reading)
+        expect(found).toContain(k.kanji)
+        for (const other of found) expect(kanjiReadings(other).map(x => x.reading)).toContain(r.reading)
+        expect(found).toEqual(all.filter(x => found.includes(x)))
+      }
+    }
+    expect(kanjiWithReading('')).toEqual([])
   })
 
   it('label a reading on or kun when it is exactly one of the two in the source', () => {

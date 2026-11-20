@@ -114,12 +114,30 @@ export const allKanji = (): KanjiEntry[] => ORDER.map(k => KANJI.get(k)!)
 
 export const kanjiEntry = (kanji: string): KanjiEntry | null => KANJI.get(kanji) ?? null
 
+/** The entries of the kanji the course has, in the order given, the rest left out. */
+export function courseEntries(kanji: string[]): KanjiEntry[] {
+  return kanji.map(kanjiEntry).filter((entry): entry is KanjiEntry => !!entry)
+}
+
 /** Course words and group members. */
 export const wordById = (id: string): WordEntry | null => WORDS.get(id) ?? null
 
 /** The words this kanji owns, first word first. */
 export function ownWords(kanji: string): WordEntry[] {
   return KANJI.get(kanji)?.words.map(id => WORDS.get(id)!) ?? []
+}
+
+/** Every course word (no group members), in course order: by home kanji, then teaching order. */
+export const courseWords = (): WordEntry[] => COURSE_WORDS
+
+/** Other course words written the same way (KR78), a card that shows the form has to tell them apart. */
+export function sameForm(word: WordEntry): WordEntry[] {
+  return COURSE_WORDS.filter(w => w.form === word.form && w.id !== word.id)
+}
+
+/** Kanji of the course that have this reading in one of their words, in course order. */
+export function kanjiWithReading(reading: string): string[] {
+  return ORDER.filter(k => kanjiReadings(k).some(r => r.reading === reading))
 }
 
 /** Course words (not group members) that contain the kanji, in course order. */

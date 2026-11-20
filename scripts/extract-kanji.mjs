@@ -260,11 +260,16 @@ function shownReading(w, form, wanted, where) {
 
 function sourceWord(w, form, reading) {
   const split = splitOf(form, reading)
+  const readings = readingsFor(w, form)
+  // every other entry counts, common or not: a reading of this spelling is never wrong
+  const homographs = unique((byForm.get(form) ?? []).filter(o => o.id !== w.id).flatMap(o => readingsFor(o, form)))
+    .filter(r => !readings.includes(r))
   return {
     form,
     jmdict: w.id,
     reading,
-    readings: readingsFor(w, form),
+    readings,
+    homographs,
     glosses: glossesFor(w, form, reading),
     n5: inN5(form, reading),
     common: isCommon(w),

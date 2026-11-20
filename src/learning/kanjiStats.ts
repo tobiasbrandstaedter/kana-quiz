@@ -5,7 +5,7 @@ import { kanjiOfId } from '../kanjiKeys'
 export function newKanjiEntry(id: string): KanjiStatEntry {
   return {
     id, correct: 0, incorrect: 0, totalMs: 0, count: 0, lastSeen: 0, lastWrong: 0, resolvedAt: 0,
-    streak: 0, confusions: {}, byType: {}, box: 0, due: 0,
+    streak: 0, confusions: {}, byType: {}, mistakes: {}, box: 0, due: 0,
   }
 }
 
@@ -22,10 +22,13 @@ export function normalizeKanjiStats(raw: unknown): KanjiStatsMap {
 /**
  * The entry after one answer, the old one stays untouched. The Leitner box moves through
  * `review`, except with holdBox (right on the re-ask after a miss in the same session).
- * "Don't know" comes with an empty `given` and leaves no confusion behind.
+ * "Don't know" comes with an empty `given` and leaves no confusion behind. A wrong reading
+ * with a name counts its kind in `mistakes`.
  */
 export function applyKanjiAnswer(old: KanjiStatEntry | undefined, a: KanjiAnswerInput, now: number): KanjiStatEntry {
-  const e = old ? { ...old, confusions: { ...old.confusions }, byType: { ...old.byType } } : newKanjiEntry(a.id)
+  const e = old
+    ? { ...old, confusions: { ...old.confusions }, byType: { ...old.byType }, mistakes: { ...old.mistakes } }
+    : newKanjiEntry(a.id)
   const byType = { ...(e.byType[a.type] ?? { correct: 0, incorrect: 0 }) }
   e.byType[a.type] = byType
   e.lastSeen = now
@@ -39,6 +42,7 @@ export function applyKanjiAnswer(old: KanjiStatEntry | undefined, a: KanjiAnswer
     e.streak = 0
     e.lastWrong = now
     if (a.given) e.confusions[a.given] = (e.confusions[a.given] ?? 0) + 1
+    if (a.mistake) e.mistakes[a.mistake] = (e.mistakes[a.mistake] ?? 0) + 1
   }
   if (!a.holdBox) Object.assign(e, review(e, a.correct, now))
   if (a.ms > 0 && a.ms < 30_000) {

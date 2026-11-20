@@ -29,6 +29,17 @@ describe('applyKanjiAnswer', () => {
     expect(e.confusions).toEqual({ 'k:B': 1 })
   })
 
+  it('counts a wrong reading by its kind', () => {
+    // made up kana, not readings of real words
+    const miss = (given: string, mistake: 'long-vowel' | 'voicing') =>
+      answer({ id: 'w:a', type: 'read-choice', correct: false, given, mistake })
+    let e = applyKanjiAnswer(undefined, miss('かこ', 'long-vowel'), NOW)
+    e = applyKanjiAnswer(e, miss('かこ', 'long-vowel'), NOW + 1)
+    e = applyKanjiAnswer(e, miss('がこう', 'voicing'), NOW + 2)
+    expect(e.mistakes).toEqual({ 'long-vowel': 2, voicing: 1 })
+    expect(e.confusions).toEqual({ 'かこ': 2, 'がこう': 1 })
+  })
+
   it('stores no confusion for "Don\'t know"', () => {
     const e = applyKanjiAnswer(undefined, answer({ correct: false, given: '' }), NOW)
     expect(e.incorrect).toBe(1)
@@ -63,6 +74,8 @@ describe('normalizeKanjiStats', () => {
     const out = normalizeKanjiStats({ 'k:A': { correct: 2, box: 1 }, 'k:B': 'nonsense' })
     expect(out).toEqual({ 'k:A': { ...newKanjiEntry('k:A'), correct: 2, box: 1 } })
     expect(normalizeKanjiStats(null)).toEqual({})
+    // an entry stored before words came has no mistakes field and gets an empty one
+    expect(normalizeKanjiStats({ 'k:A': { correct: 1, confusions: {}, byType: {} } })['k:A'].mistakes).toEqual({})
   })
 })
 

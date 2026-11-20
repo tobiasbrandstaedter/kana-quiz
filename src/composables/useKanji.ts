@@ -1,17 +1,23 @@
 import { ref, computed, effectScope } from 'vue'
 import type {
-  KanjiAnswerRecord, KanjiCard, KanjiEntry, KanjiMode, KanjiQuestionType, KanjiSort, KanjiSortCol, KanjiStatEntry, KanjiStatsMap,
+  ItemInfo, KanjiAnswerRecord, KanjiCard, KanjiMode, KanjiSort, KanjiSortCol, KanjiStatEntry, KanjiStatsMap, QuestionType, ReadingKind,
 } from '../types'
-import { allKanji, kanjiEntry, kanjiLookalikes, kanjiSets, tooClose } from '../data/kanjiData'
-import { applyKanjiAnswer, confusedKanji, normalizeKanjiStats } from '../learning/kanjiStats'
-import { planKanji, pickedKanjiIds, errorPracticeIds, singleKanjiOrder, CARDS_PER_NEW } from '../learning/kanjiPlan'
-import { kanjiQuestionType, makeKanjiCard, noteResult, pickKanjiOptions, summarizeRound, resultScore, resultLabel, splitMoves } from '../learning/kanjiQuiz'
+import { allKanji, kanjiSets } from '../data/kanjiData'
+import { applyKanjiAnswer, normalizeKanjiStats } from '../learning/kanjiStats'
+import {
+  planKanji, planCards, orderKanjiSession, readyCard, pickedKanjiIds, pickedWordIds, errorPracticeIds, singleKanjiOrder, wordLock,
+} from '../learning/kanjiPlan'
+import type { PlannedCard } from '../learning/kanjiPlan'
+import { noteResult, summarizeRound, resultScore, resultLabel, splitMoves } from '../learning/kanjiQuiz'
 import type { RoundResults } from '../learning/kanjiQuiz'
-import { kanjiRow, openKanjiErrors, sortKanjiRows } from '../learning/kanjiProgress'
-import { orderSession, planReask, dueOutlook, columnProgress, isSeen, MASTERED_BOX } from '../learning/scheduler'
+import { itemInfo, itemOrder, makeCard, storedAnswer, wordReadingMistake, PLAN_COURSE } from '../learning/kanjiCards'
+import type { ReadingMistake } from '../learning/readings'
+import { isWordType } from '../learning/wordQuiz'
+import { itemRow, openKanjiErrors, sortKanjiRows } from '../learning/kanjiProgress'
+import { planReask, dueOutlook, columnProgress, isSeen, MASTERED_BOX } from '../learning/scheduler'
 import type { ColumnProgress } from '../learning/scheduler'
 import { shuffle } from '../learning/distractors'
-import { KANJI_ANSWERS_KEY, KANJI_STATS_KEY, kanjiId } from '../kanjiKeys'
+import { KANJI_ANSWERS_KEY, KANJI_STATS_KEY, kanjiId, kanjiOfId } from '../kanjiKeys'
 import { kanjiScreen, kanjiRevision, closeKanji, loadKanjiPrefs, saveKanjiPrefs, onKanjiReset, readJson, writeJson } from '../kanjiShell'
 import { countAnswer } from '../days'
 import { clock } from '../clock'
@@ -25,11 +31,6 @@ const loadStats = () => normalizeKanjiStats(readJson(KANJI_STATS_KEY))
 function loadLog(): KanjiAnswerRecord[] {
   const raw = readJson(KANJI_ANSWERS_KEY)
   return Array.isArray(raw) ? raw : []
-}
-
-/** The course entries of the kanji the course has, the rest is left out. */
-export function courseEntries(kanji: string[]): KanjiEntry[] {
-  return kanji.map(kanjiEntry).filter((entry): entry is KanjiEntry => !!entry)
 }
 
 function createKanji() {
@@ -47,8 +48,14 @@ function createKanji() {
   const kanjiList = allKanji()
   const kanjiIds = kanjiList.map(k => k.id)
   const byId = new Map(kanjiList.map(k => [k.id, k]))
+  const wordIds = PLAN_COURSE.words.map(w => w.id)
+  const planWords = new Map(PLAN_COURSE.words.map(w => [w.id, w]))
+  const itemIds = [...kanjiIds, ...wordIds]
 
-  const statOf = (kanji: string): KanjiStatEntry | undefined => stats.value[kanjiId(kanji)]
+  /** The stats of a kanji or word, by item id. */
+  const statOf = (id: string): KanjiStatEntry | undefined => stats.value[id]
+  /** What keeps a word from coming in yet, null once nothing does (KR29). */
+  const lockOf = (wordId: string) => wordLock(planWords.get(wordId)!, stats.value)
 
   // every write goes through here, so the shell's counts read storage again
   function saveStats(data: KanjiStatsMap): void {
@@ -59,27 +66,36 @@ function createKanji() {
 
   const planAt = (now: number) => {
     const newIds = pickedSets.value.size ? pickedKanjiIds(sets, pickedSets.value) : kanjiIds
-    return planKanji(stats.value, log.value, kanjiIds, smartSize.value, now, smartNew.value, newIds)
+    return planKanji(stats.value, log.value, PLAN_COURSE, smartSize.value, now, smartNew.value, newIds)
   }
   const plan = computed(() => planAt(clock.value))
 
   const seenStats = computed(() => kanjiIds.map(id => stats.value[id]).filter(isSeen))
+  const seenWords = computed(() => wordIds.map(id => stats.value[id]).filter(isSeen))
 
   const summary = computed(() => {
     const p = plan.value
     const seen = seenStats.value
-    const correct = seen.reduce((n, stat) => n + stat.correct, 0)
-    const incorrect = seen.reduce((n, stat) => n + stat.incorrect, 0)
+    const items = [...seen, ...seenWords.value]
+    const correct = items.reduce((n, stat) => n + stat.correct, 0)
+    const incorrect = items.reduce((n, stat) => n + stat.incorrect, 0)
+    const mastered = (list: KanjiStatEntry[]) => list.filter(stat => stat.box >= MASTERED_BOX).length
     return {
       total: kanjiIds.length,
       seen: seen.length,
-      mastered: seen.filter(stat => stat.box >= MASTERED_BOX).length,
+      mastered: mastered(seen),
+      wordsMastered: mastered(seenWords.value),
+      // kanji and words together, for the tiles (KR45)
+      itemsSeen: items.length,
+      itemsMastered: mastered(items),
       accuracy: `${accuracy({ correct, incorrect })}%`,
       weak: p.weak.length, fresh: p.fresh.length, fill: p.fill.length,
-      cards: p.due.length + p.weak.length + p.fill.length + p.fresh.length * CARDS_PER_NEW,
+      newWords: p.newWords.length + Object.keys(p.firstWords).length,
+      outsideSets: p.outsideSets.map(kanjiOfId).filter((k): k is string => !!k),
+      cards: planCards(p),
       nextNew: p.fresh.map(id => byId.get(id)!.kanji),
       fromSelection: pickedSets.value.size > 0,
-      outlook: dueOutlook(seen, clock.value),
+      outlook: dueOutlook(items, clock.value),
       newBlocked: p.newBlocked,
     }
   })
@@ -125,7 +141,7 @@ function createKanji() {
 
   // --- progress ---
 
-  const openErrors = computed(() => openKanjiErrors(stats.value, log.value, kanjiIds).map(stat => ({ ...stat, entry: byId.get(stat.id)! })))
+  const openErrors = computed(() => openKanjiErrors(stats.value, log.value, itemIds).map(stat => ({ ...stat, item: itemInfo(stat.id)! })))
   const errorIds = computed(() => new Set(openErrors.value.map(e => e.id)))
   const hasError = (kanji: string) => errorIds.value.has(kanjiId(kanji))
 
@@ -148,7 +164,16 @@ function createKanji() {
     else tableSort.value = { col, dir: col === 'errors' ? 'desc' : 'asc' }
   }
 
-  const rows = computed(() => sortKanjiRows(seenStats.value.map(stat => kanjiRow(byId.get(stat.id)!, stat)), tableSort.value))
+  // the table lists kanji and words, or only one of the two (KR53)
+  const tableShow = ref<'all' | 'kanji' | 'words'>('all')
+
+  const rows = computed(() => {
+    const shown = [
+      ...(tableShow.value === 'words' ? [] : seenStats.value),
+      ...(tableShow.value === 'kanji' ? [] : seenWords.value),
+    ]
+    return sortKanjiRows(shown.map(stat => itemRow(itemInfo(stat.id)!, itemOrder(stat.id), stat)), tableSort.value)
+  })
 
   // set by the errors tile on the Practice tab, the Progress tab scrolls to its list and clears it
   const errorsScrollPending = ref(false)
@@ -160,6 +185,7 @@ function createKanji() {
   const answered = ref(false)
   const pickedOption = ref<string | null>(null)  // the option chosen on the current card
   const gaveUp = ref(false)
+  const mistake = ref<ReadingMistake | null>(null)  // the kind of a wrong reading on the current card
   const correctCount = ref(0)
   const wrongCount = ref(0)
   const startedAt = ref(0)
@@ -167,45 +193,44 @@ function createKanji() {
   const moves = ref<Record<string, BoxMove>>({})
   let questionStart = 0
   let reasked: Record<string, number> = {}
-  // kanji the learner has met, the session's own included, for the wrong options
-  let known = new Set<string>()
+  // items answered right in this session: a new kanji's first word needs its kanji in here
+  let rightIds = new Set<string>()
+  // kanji and words the learner has met, the session's own included, for the wrong options
+  let knownKanji = new Set<string>()
+  let knownWords = new Set<string>()
 
   const card = computed(() => cards.value[current.value] ?? null)
   const progress = computed(() => cards.value.length ? (current.value / cards.value.length) * 100 : 0)
 
-  function buildCard(entry: KanjiEntry, type: KanjiQuestionType): KanjiCard {
-    const preferred = [...confusedKanji(stats.value[entry.id]).map(c => c.kanji), ...kanjiLookalikes(entry.kanji)]
-    return makeKanjiCard(entry, type, pickKanjiOptions(entry, kanjiList, preferred, known, tooClose))
-  }
-
-  const cardFor = (entry: KanjiEntry) => buildCard(entry, kanjiQuestionType(stats.value[entry.id], mode.value))
+  const buildCard = (item: PlannedCard): KanjiCard =>
+    makeCard(item, { stats: stats.value, mode: mode.value, knownKanji, knownWords })
 
   function resetCard(): void {
     answered.value = false
     pickedOption.value = null
     gaveUp.value = false
+    mistake.value = null
     questionStart = Date.now()
   }
 
-  function begin(items: Array<{ id: string; intro: boolean }>): void {
-    const knownIds = [...seenStats.value.map(stat => stat.id), ...items.map(i => i.id)]
-    known = new Set(knownIds.map(id => byId.get(id)!.kanji))
+  function begin(items: PlannedCard[]): void {
+    const ids = [...seenStats.value.map(stat => stat.id), ...seenWords.value.map(stat => stat.id), ...items.map(i => i.id)]
+    knownKanji = new Set(ids.map(kanjiOfId).filter((k): k is string => !!k))
+    knownWords = new Set(ids.filter(id => !kanjiOfId(id)))
     reasked = {}
+    rightIds = new Set()
     moves.value = {}
     results.value = {}
     correctCount.value = 0
     wrongCount.value = 0
-    cards.value = items.map(i => {
-      const entry = byId.get(i.id)!
-      return i.intro ? { id: entry.id, kanji: entry.kanji, type: 'intro', options: [] } : cardFor(entry)
-    })
+    cards.value = items.map(buildCard)
     current.value = 0
     startedAt.value = Date.now()
     resetCard()
     kanjiScreen.value = 'quiz'
   }
 
-  const questionsOnly = (ids: string[]) => ids.map(id => ({ id, intro: false }))
+  const questionsOnly = (ids: string[]): PlannedCard[] => ids.map(id => ({ id }))
 
   // what the first button on the results screen repeats
   let lastStart: () => boolean = startSmart
@@ -218,16 +243,21 @@ function createKanji() {
 
   /** False when there is nothing to practice. */
   function startSmart(): boolean {
-    const items = orderSession(planAt(Date.now()))
+    const items = orderKanjiSession(planAt(Date.now()))
     if (items.length === 0) return false
     remember(startSmart, 'Keep going')
-    begin(items.map(i => ({ id: i.pair, intro: i.intro })))
+    begin(items)
     return true
   }
 
-  // every kanji of the picked sets once, no intro, a kanji not met yet is asked like any other
+  // the word modes ask words, the custom quiz then runs over the words met so far (KR47)
+  const wordMode = computed(() => isWordType(mode.value))
+
+  // every kanji of the picked sets once, no intro, a kanji not met yet is asked like any other.
+  // In a word mode every word of their kanji that has been introduced.
   function startCustom(): boolean {
-    const ids = shuffle(pickedKanjiIds(sets, pickedSets.value))
+    const kanji = pickedKanjiIds(sets, pickedSets.value)
+    const ids = shuffle(wordMode.value ? pickedWordIds(kanji, PLAN_COURSE.words, stats.value) : kanji)
     if (ids.length === 0) return false
     remember(startCustom, 'Again')
     begin(questionsOnly(ids))
@@ -247,7 +277,7 @@ function createKanji() {
   function startKanji(kanji: string): boolean {
     const id = kanjiId(kanji)
     const start = () => {
-      const intro = isSeen(stats.value[id]) ? [] : [{ id, intro: true }]
+      const intro: PlannedCard[] = isSeen(stats.value[id]) ? [] : [{ id, type: 'intro' }]
       begin([...intro, ...questionsOnly(singleKanjiOrder(id, seenStats.value.map(stat => stat.id)))])
       return true
     }
@@ -262,13 +292,13 @@ function createKanji() {
   }
 
   /** Applies the answer to the stored stats and the log, returns how the box moved. */
-  function saveAnswer(id: string, type: KanjiQuestionType, correct: boolean, given: string, holdBox: boolean): BoxMove {
+  function saveAnswer(id: string, type: QuestionType, correct: boolean, given: string, holdBox: boolean, kind?: ReadingKind): BoxMove {
     const now = Date.now()
     const ms = now - questionStart
     // read storage again, another tab may have written in between
     const data = loadStats()
     const from = data[id]?.box ?? 0
-    data[id] = applyKanjiAnswer(data[id], { id, type, correct, given, ms, holdBox }, now)
+    data[id] = applyKanjiAnswer(data[id], { id, type, correct, given, ms, holdBox, mistake: kind }, now)
     saveStats(data)
 
     const nextLog = loadLog()
@@ -281,25 +311,27 @@ function createKanji() {
     return { from, to: data[id].box }
   }
 
-  function record(id: string, type: KanjiQuestionType, correct: boolean, given: string): void {
+  function record(id: string, type: QuestionType, correct: boolean, given: string, kind?: ReadingKind): void {
     // right on the re-ask, seconds after seeing the answer, is no reason to promote
-    const move = saveAnswer(id, type, correct, given, correct && !!results.value[id]?.missed)
+    const move = saveAnswer(id, type, correct, given, correct && !!results.value[id]?.missed, kind)
     const prev = moves.value[id]
     moves.value = { ...moves.value, [id]: { from: prev?.from ?? move.from, to: move.to } }
     results.value = noteResult(results.value, id, correct)
-    if (correct) correctCount.value++
-    else wrongCount.value++
+    if (correct) {
+      correctCount.value++
+      rightIds.add(id)
+    } else wrongCount.value++
   }
 
-  // a missed kanji comes back a few cards later, in the type that was missed
-  function queueReask(id: string, type: KanjiQuestionType): void {
+  // a missed item comes back a few cards later, in the type that was missed
+  function queueReask(id: string, type: QuestionType): void {
     const qs = cards.value
     const asked = qs.filter(x => x.type !== 'intro')
     const slot = planReask(qs.map(x => x.id), current.value, id, asked.map(x => x.id), reasked[id] ?? 0)
     if (!slot) return
     reasked[id] = (reasked[id] ?? 0) + 1
-    const padding = slot.pad.map(p => cardFor(byId.get(p)!))
-    qs.splice(slot.index, 0, ...padding, { ...buildCard(byId.get(id)!, type), reask: true })
+    const padding = slot.pad.map(p => buildCard({ id: p }))
+    qs.splice(slot.index, 0, ...padding, { ...buildCard({ id, type }), reask: true })
   }
 
   function answer(given: string | null): void {
@@ -308,13 +340,17 @@ function createKanji() {
     answered.value = true
     pickedOption.value = given
     gaveUp.value = given === null
-    const correct = given === c.kanji
-    record(c.id, c.type, correct, given ? kanjiId(given) : '')
+    const correct = given === c.answer
+    if (!correct && given && c.type === 'read-choice') mistake.value = wordReadingMistake(c.id, given)
+    record(c.id, c.type, correct, storedAnswer(c, given), mistake.value?.kind)
     if (!correct) {
       queueReask(c.id, c.type)
       return
     }
-    // on to the next card shortly, unless Next was pressed first
+    // A word card waits for Next: its reading and meaning are to be read (KR34), and a card
+    // that changes under the finger would take the tap meant for Next. A kanji card moves on
+    // shortly, unless Next was pressed first.
+    if (!kanjiOfId(c.id)) return
     const session = startedAt.value
     const at = current.value
     setTimeout(() => {
@@ -322,11 +358,13 @@ function createKanji() {
     }, 400)
   }
 
-  const choose = (kanji: string) => answer(kanji)
+  const choose = (option: string) => answer(option)
   const giveUp = () => answer(null)
 
   function next(): void {
     current.value++
+    // a new kanji's first word only comes once the kanji was answered right (KR14)
+    cards.value = readyCard(cards.value, current.value, rightIds)
     if (current.value >= cards.value.length) kanjiScreen.value = 'results'
     else resetCard()
   }
@@ -350,12 +388,13 @@ function createKanji() {
 
   const missed = computed(() => Object.entries(results.value)
     .filter(([, r]) => r.missed)
-    .map(([id]) => byId.get(id)!))
+    .map(([id]) => itemInfo(id))
+    .filter((item): item is ItemInfo => !!item))
 
   const roundOutcome = computed(() => {
     const { up, down, mastered } = splitMoves(moves.value)
-    const kanji = (ids: string[]) => ids.map(id => byId.get(id)!.kanji)
-    return { up: kanji(up), down: kanji(down), mastered: kanji(mastered), outlook: summary.value.outlook }
+    const text = (ids: string[]) => ids.map(id => itemInfo(id)?.text ?? '')
+    return { up: text(up), down: text(down), mastered: text(mastered), outlook: summary.value.outlook }
   })
 
   // Reset in the settings: kanjiShell has wiped storage, drop what is held here too
@@ -369,11 +408,11 @@ function createKanji() {
   })
 
   return {
-    sets, mode, setMode, smartSize, smartNew, setSmartSize, setSmartNew,
+    sets, mode, setMode, wordMode, smartSize, smartNew, setSmartSize, setSmartNew,
     pickedSets, toggleSet, selectAllSets, selectNoneSets,
-    statOf, hasError, summary, progressBySet,
-    openErrors, resolveErrors, resolveAllErrors, rows, tableSort, setTableSort, errorsScrollPending,
-    cards, current, card, answered, pickedOption, gaveUp, correctCount, wrongCount, startedAt, progress,
+    statOf, lockOf, hasError, summary, progressBySet,
+    openErrors, resolveErrors, resolveAllErrors, rows, tableShow, tableSort, setTableSort, errorsScrollPending,
+    cards, current, card, answered, pickedOption, gaveUp, mistake, correctCount, wrongCount, startedAt, progress,
     startSmart, startCustom, startErrors, startKanji, restart, restartLabel,
     choose, giveUp, next, goHome, resume,
     resultScore: score, resultLabel: label, missed, roundOutcome,

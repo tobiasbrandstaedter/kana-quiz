@@ -1,7 +1,6 @@
 <script setup lang="ts">
-import { inject, onMounted, nextTick } from 'vue'
+import { onMounted, nextTick } from 'vue'
 import type { KanjiSortCol } from '../types'
-import { QUIZ_KEY } from '../composables/useQuiz'
 import { useKanji } from '../composables/useKanji'
 import { dueAt, isDue } from '../learning/scheduler'
 import { clock } from '../clock'
@@ -10,10 +9,9 @@ import { openKanji } from '../kanjiShell'
 import KanjiChart from './KanjiChart.vue'
 import Icon from './Icon.vue'
 
-const { today } = inject(QUIZ_KEY)!
 const {
   summary, openErrors, resolveErrors, resolveAllErrors, startErrors,
-  rows, tableSort, setTableSort, errorsScrollPending,
+  rows, tableShow, tableSort, setTableSort, errorsScrollPending,
 } = useKanji()
 
 // the errors tile on the Practice tab led here
@@ -24,11 +22,13 @@ onMounted(() => {
 })
 
 const COLUMNS: Array<[KanjiSortCol, string]> = [
-  ['kanji', 'Kanji'],
+  ['kanji', 'Item'],
   ['acc', 'Accuracy'],
   ['box', 'Stage'],
   ['errors', 'Errors'],
 ]
+
+const SHOW = [['all', 'All'], ['kanji', 'Kanji'], ['words', 'Words']] as const
 
 function sortIcon(col: KanjiSortCol): string {
   if (tableSort.value?.col !== col) return 'sort'
@@ -46,7 +46,7 @@ function sortState(col: KanjiSortCol): string {
     <div class="stats-summary">
       <div class="stat-card correct"><div class="sc-value">{{ summary.mastered }}<small> / {{ summary.total }}</small></div><div class="sc-label">Mastered</div></div>
       <div class="stat-card accent"><div class="sc-value">{{ summary.seen }}<small> / {{ summary.total }}</small></div><div class="sc-label">Kanji seen</div></div>
-      <div class="stat-card purple"><div class="sc-value">{{ today.streak }}</div><div class="sc-label">Day streak</div></div>
+      <div class="stat-card purple"><div class="sc-value">{{ summary.wordsMastered }}</div><div class="sc-label">Words mastered</div></div>
       <div class="stat-card"><div class="sc-value">{{ summary.accuracy }}</div><div class="sc-label">Accuracy</div></div>
     </div>
 
@@ -58,7 +58,7 @@ function sortState(col: KanjiSortCol): string {
       <h2 class="section-title">Open errors <span class="count-tag">{{ openErrors.length }}</span></h2>
       <button v-if="openErrors.length" class="btn btn-sm" @click="resolveAllErrors()">Mark all resolved</button>
     </div>
-    <p class="section-note">A kanji leaves this list once you've mastered it again. Resolving only hides it here, your progress stays.</p>
+    <p class="section-note">Kanji and words leave this list once you've mastered them again. Resolving only hides them here, your progress stays.</p>
     <div v-if="openErrors.length === 0" class="no-errors-state">
       <div class="big"><Icon name="check" :size="40" /></div>
       <div class="msg">No open errors</div>
@@ -66,19 +66,33 @@ function sortState(col: KanjiSortCol): string {
     <template v-else>
       <div class="error-table kanji-errors">
         <div v-for="stat in openErrors" :key="stat.id" class="error-row">
-          <button class="error-kana" :aria-label="`Details for ${stat.entry.keyword}`" @click="openKanji(stat.entry.kanji)"><span lang="ja">{{ stat.entry.kanji }}</span></button>
-          <span class="error-romaji">{{ stat.entry.keyword }}</span>
+          <button
+            class="error-kana" :class="{ word: stat.item.kind === 'word' }" :style="{ '--len': [...stat.item.text].length }"
+            :aria-label="`Details for ${stat.item.meaning}`" @click="openKanji(stat.item.home)"
+          ><span lang="ja">{{ stat.item.text }}</span></button>
+          <span class="error-romaji">
+            <span v-if="stat.item.reading" class="error-reading" lang="ja">{{ stat.item.reading }}</span>
+            {{ stat.item.meaning }}
+          </span>
           <span class="error-facts">
             {{ stat.incorrect }} miss{{ stat.incorrect === 1 ? '' : 'es' }}
             <span class="error-accuracy" :class="accClass(accuracy(stat))">{{ accuracy(stat) }}% right</span>
           </span>
-          <button class="btn btn-sm" :aria-label="`Mark ${stat.entry.keyword} as resolved`" @click="resolveErrors([stat.id])">Resolve</button>
+          <button class="btn btn-sm" :aria-label="`Mark ${stat.item.meaning} as resolved`" @click="resolveErrors([stat.id])">Resolve</button>
         </div>
       </div>
       <button class="btn btn-bad btn-lg btn-block" @click="startErrors()">Practice errors</button>
     </template>
 
-    <h2 class="section-title spaced">All kanji</h2>
+    <div class="section-head">
+      <h2 class="section-title">Kanji and words</h2>
+    </div>
+    <div class="chip-row table-show" role="group" aria-label="Show in the table">
+      <button
+        v-for="[value, text] in SHOW" :key="value" class="chip" :class="{ active: tableShow === value }"
+        :aria-pressed="tableShow === value" @click="tableShow = value"
+      >{{ text }}</button>
+    </div>
     <div v-if="rows.length === 0" class="no-stats-state">
       <div class="big" lang="ja">統</div>
       <div class="msg">No data yet, finish a session to see stats</div>
@@ -94,9 +108,14 @@ function sortState(col: KanjiSortCol): string {
           <span v-if="col === 'kanji'">Meaning</span>
         </template>
       </div>
-      <button v-for="r in rows" :key="r.id" class="stats-row" @click="openKanji(r.kanji)">
-        <span class="stats-kana-cell" lang="ja">{{ r.kanji }}</span>
-        <span class="stats-romaji-cell">{{ r.keyword }}</span>
+      <button v-for="r in rows" :key="r.item.id" class="stats-row" @click="openKanji(r.item.home)">
+        <span
+          class="stats-kana-cell" :class="{ word: r.item.kind === 'word' }" :style="{ '--len': [...r.item.text].length }" lang="ja"
+        >{{ r.item.text }}</span>
+        <span class="stats-romaji-cell">
+          <span v-if="r.item.reading" class="stats-reading" lang="ja">{{ r.item.reading }}</span>
+          {{ r.item.meaning }}
+        </span>
         <div class="acc-bar-wrap">
           <div class="acc-bar-bg"><div class="acc-bar-fill" :class="accClass(r.acc)" :style="{ width: `${r.acc}%` }"></div></div>
           <span class="stats-num" :class="accClass(r.acc)">{{ r.acc }}%</span>

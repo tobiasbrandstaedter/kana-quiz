@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { ref, computed, watch, nextTick } from 'vue'
 import type { DrawResult } from '../types'
-import { useKanji, courseEntries } from '../composables/useKanji'
-import { allKanji, kanjiEntry, kanjiLookalikes, kanjiStrokes } from '../data/kanjiData'
+import { useKanji } from '../composables/useKanji'
+import { allKanji, courseEntries, kanjiEntry, kanjiLookalikes, kanjiStrokes, ownWords } from '../data/kanjiData'
 import { openKanji } from '../kanjiShell'
 import StrokeDemo from './StrokeDemo.vue'
 import StrokeCanvas from './StrokeCanvas.vue'
@@ -19,6 +19,7 @@ const strokes = computed(() => kanjiStrokes(picked.value) ?? undefined)
 
 const parts = computed(() => courseEntries(entry.value.parts))
 const lookalikes = computed(() => courseEntries(kanjiLookalikes(picked.value)))
+const words = computed(() => ownWords(picked.value))
 
 // writing from memory comes in a later release (KD11), watch and trace are here from the start
 type View = 'watch' | 'trace'
@@ -100,6 +101,16 @@ watch(set, s => {
             <button v-for="part in parts" :key="part.kanji" class="kanji-chip" @click="openKanji(part.kanji)">
               <span class="kc-kanji" lang="ja">{{ part.kanji }}</span> {{ part.keyword }}
             </button>
+          </div>
+        </div>
+        <div v-if="words.length" class="kd-block">
+          <div class="kd-block-title">Words</div>
+          <div class="kd-words">
+            <div v-for="w in words" :key="w.id" class="kd-word-main">
+              <span class="kd-word-form" lang="ja">{{ w.form }}</span>
+              <span class="kd-word-reading" lang="ja">{{ w.reading }}</span>
+              <span class="kd-word-gloss">{{ w.gloss }}</span>
+            </div>
           </div>
         </div>
         <div v-if="lookalikes.length" class="kd-block">

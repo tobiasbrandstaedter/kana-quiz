@@ -194,6 +194,16 @@ describe('planReask', () => {
     expect([...plan.pad].sort()).toEqual(['あ', 'う'])
   })
 
+  it('never pads with the item of the card right before the slot', () => {
+    // い missed on card 1, the slot is at the end behind え: え first in the padding would
+    // be え twice in a row
+    for (const rng of [low, () => 0.5, high]) {
+      expect(planReask(['あ', 'い', 'え'], 1, 'い', ['い', 'え', 'う'], 0, rng)!.pad).toEqual(['う'])
+    }
+    // with nothing else to pad with the re-ask is dropped rather than doubled
+    expect(planReask(['あ', 'い', 'え'], 1, 'い', ['い', 'え'], 0, low)).toBeNull()
+  })
+
   it('drops the re-ask when there are too few other items to pad with', () => {
     expect(planReask(['あ', 'い'], 1, 'い', ['あ', 'い'], 0, low)).toBeNull()
     expect(planReask(['い'], 0, 'い', ['い'], 0, low)).toBeNull()

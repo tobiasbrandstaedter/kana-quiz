@@ -15,13 +15,13 @@ const { today, statsData, notify, showTab } = inject(QUIZ_KEY)!
 const {
   sets, summary, mode, setMode, smartSize, smartNew, setSmartSize, setSmartNew,
   pickedSets, toggleSet, selectAllSets, selectNoneSets, progressBySet, openErrors, hasError, errorsScrollPending,
-  startSmart, startCustom,
+  startSmart, startCustom, wordMode,
 } = useKanji()
 
 const optionsOpen = ref(false)
 
 // nothing due, weak or new: say so, and when the next reviews come back
-const caughtUp = computed(() => summary.value.outlook.now + summary.value.weak + summary.value.fresh === 0)
+const caughtUp = computed(() => summary.value.outlook.now + summary.value.weak + summary.value.fresh + summary.value.newWords === 0)
 // nothing seen yet: the hero explains what is about to happen instead of counting
 const firstRun = computed(() => summary.value.seen === 0 && summary.value.fresh > 0)
 
@@ -34,10 +34,11 @@ const plan = computed(() => {
   const s = summary.value
   if (firstRun.value) return { headline: `Your first ${s.fresh} kanji`, rest: '' }
   const parts: Array<[number, string, string]> = [
-    // everything that is due, not just what fits into one session
-    [s.outlook.now, 'kanji due', 'due'],
-    [s.weak, 'weak kanji to firm up', 'weak'],
-    [s.fresh, 'new kanji ready', 'new'],
+    // everything that is due, kanji and words, not just what fits into one session
+    [s.outlook.now, 'due for review', 'due'],
+    [s.weak, 'weak ones to firm up', 'weak'],
+    [s.fresh, `new kanji ready`, 'new kanji'],
+    [s.newWords, `new word${s.newWords === 1 ? '' : 's'} ready`, `new word${s.newWords === 1 ? '' : 's'}`],
   ]
   const live = parts.filter(([n]) => n > 0)
   if (live.length === 0) return { headline: s.seen ? 'All caught up' : 'Nothing to practice yet', rest: '' }
@@ -47,16 +48,16 @@ const plan = computed(() => {
 
 const caughtUpText = computed(() => {
   const o = summary.value.outlook
-  if (o.soon) return `${o.soon} kanji come back within a day.`
+  if (o.soon) return `${o.soon} kanji and words come back within a day.`
   if (o.nextAt) return `Next review ${fromNow(o.nextAt)}.`
   return ''
 })
 
-// why no new kanji come although some are left
+// why nothing new comes although something is left
 const NEW_BLOCKED = {
-  off: 'New kanji are switched off in the session options.',
-  sets: 'You have seen every kanji in the sets you picked.',
-  cap: `No new kanji for now: ${MAX_KANJI_LEARNING} or more are still settling, they come first.`,
+  off: 'New kanji and words are switched off in the session options.',
+  sets: 'You have seen every kanji in the sets you picked, their next words come once those settle.',
+  cap: `Nothing new for now: ${MAX_KANJI_LEARNING} or more kanji and words are still settling, they come first.`,
 }
 
 // picked sets also decide where new kanji come from, so say it on the card
@@ -69,9 +70,13 @@ const pickedText = computed(() => {
 const RING = 2 * Math.PI * 30
 const seenArc = computed(() => (summary.value.seen / summary.value.total) * RING)
 
+// the kanji modes leave words to Mixed and the word modes leave kanji to it
 const MODES: Array<{ mode: KanjiMode; label: string; hint: string; icon: string; tint: string }> = [
-  { mode: 'meaning', label: 'Meaning', hint: 'see the kanji, pick its meaning', icon: 'eye', tint: 'lilac' },
-  { mode: 'recognize', label: 'Recognize', hint: 'see the meaning, pick the kanji', icon: 'pick', tint: 'mint' },
+  { mode: 'meaning', label: 'Meaning', hint: 'kanji, pick its meaning', icon: 'eye', tint: 'lilac' },
+  { mode: 'recognize', label: 'Recognize', hint: 'meaning, pick the kanji', icon: 'pick', tint: 'mint' },
+  { mode: 'word-meaning', label: 'Words', hint: 'word, pick its meaning', icon: 'bulb', tint: 'peach' },
+  { mode: 'read-choice', label: 'Reading', hint: 'word, pick its reading', icon: 'speaker', tint: 'butter' },
+  { mode: 'spell', label: 'Spelling', hint: 'reading, pick the kanji', icon: 'pen', tint: 'mint' },
   { mode: 'mixed', label: 'Mixed', hint: 'by how well you know each', icon: 'shuffle', tint: 'sky' },
 ]
 
@@ -80,6 +85,10 @@ const NEW_COUNTS = [0, 3, 5]
 
 function start(): void {
   if (!startSmart()) notify('Nothing to practice right now, come back when reviews are due.')
+}
+
+function startQuiz(): void {
+  if (!startCustom() && wordMode.value) notify('No words of these sets yet, they come with their kanji in Practice now.')
 }
 
 // the errors tile leads to the list, not to the top of a long tab
@@ -102,7 +111,7 @@ function progressText(p: ColumnProgress): string {
       <div class="hero-text">
         <span class="eyebrow">{{ firstRun ? 'Start here' : today.answers ? `Keep going · ${today.answers} today` : 'Practice now' }}</span>
         <h2 id="kanji-hero-title" class="hero-title">{{ plan.headline }}</h2>
-        <span v-if="firstRun" class="hero-sub">Watch each one, trace it once, then pick its meaning.</span>
+        <span v-if="firstRun" class="hero-sub">Watch each one, trace it once and pick its meaning. Then read a first word with it.</span>
         <span v-else-if="!caughtUp && plan.rest" class="hero-sub">plus {{ plan.rest }}</span>
         <span v-else-if="caughtUp" class="hero-sub">{{ caughtUpText }}</span>
       </div>
@@ -136,7 +145,13 @@ function progressText(p: ColumnProgress): string {
     </div>
 
     <div v-if="summary.fromSelection && summary.newBlocked !== 'off'" class="hero-scope">
-      <span>New kanji only from the sets picked below: {{ pickedText }}</span>
+      <span>
+        New kanji and words only from the sets picked below: {{ pickedText }}.
+        <template v-if="summary.outsideSets.length">
+          Some of their words need kanji from other sets first
+          (<span class="kana" lang="ja">{{ summary.outsideSets.join('・') }}</span>), those come once you use all sets.
+        </template>
+      </span>
       <button class="btn btn-sm" @click="selectNoneSets()">Use all sets</button>
     </div>
 
@@ -153,11 +168,11 @@ function progressText(p: ColumnProgress): string {
 
   <div class="stat-strip">
     <div class="stat-tile good">
-      <span class="stat-num">{{ summary.mastered }}</span>
+      <span class="stat-num">{{ summary.itemsMastered }}</span>
       <span class="stat-label">mastered</span>
     </div>
     <div class="stat-tile primary">
-      <span class="stat-num">{{ summary.seen - summary.mastered }}</span>
+      <span class="stat-num">{{ summary.itemsSeen - summary.itemsMastered }}</span>
       <span class="stat-label">learning</span>
     </div>
     <button class="stat-tile bad" :aria-label="`${openErrors.length} open errors, show them`" @click="showErrors()">
@@ -165,10 +180,11 @@ function progressText(p: ColumnProgress): string {
       <span class="stat-label">errors</span>
     </button>
   </div>
+  <p class="hint-line">Kanji and words counted together.</p>
 
   <h2 class="section-title spaced">How to practice</h2>
   <p class="section-note">Used by Practice now and by the custom quiz.</p>
-  <div class="mode-grid three">
+  <div class="mode-grid">
     <button
       v-for="m in MODES" :key="m.mode"
       class="tile" :class="[m.tint, { active: mode === m.mode }]"
@@ -224,12 +240,13 @@ function progressText(p: ColumnProgress): string {
 
     <!-- 17 sets fill two screens on a phone, the start button stays in reach once one is picked -->
     <div class="custom-start" :class="{ pinned: pickedSets.size > 0 }">
-      <button class="btn btn-primary btn-lg" :disabled="pickedSets.size === 0" @click="startCustom()">
+      <button class="btn btn-primary btn-lg" :disabled="pickedSets.size === 0" @click="startQuiz()">
         {{ pickedSets.size === 0 ? 'Pick sets first' : 'Start quiz' }}
         <Icon v-if="pickedSets.size" name="arrow" :size="20" />
       </button>
     </div>
-    <p class="hint-line">Every kanji of the picked sets once, in the mode above. Kanji you haven't met yet are asked too.</p>
+    <p v-if="wordMode" class="hint-line">Every word of the picked sets you have met so far once, in the mode above.</p>
+    <p v-else class="hint-line">Every kanji of the picked sets once, in the mode above. Kanji you haven't met yet are asked too.</p>
   </section>
 
   <BottomSheet v-if="optionsOpen" title="Session options" @close="optionsOpen = false">
@@ -243,7 +260,7 @@ function progressText(p: ColumnProgress): string {
       </div>
     </div>
     <div class="option-block">
-      <div class="option-title">New kanji per session</div>
+      <div class="option-title">New kanji per session, and as many new words</div>
       <div class="chip-row" role="group" aria-label="New kanji per session">
         <button
           v-for="n in NEW_COUNTS" :key="n" class="chip" :class="{ active: smartNew === n }"
@@ -251,8 +268,8 @@ function progressText(p: ColumnProgress): string {
         >{{ n === 0 ? 'None' : `Up to ${n}` }}</button>
       </div>
       <p class="hint-line">
-        New kanji come {{ summary.fromSelection ? 'from the sets you picked' : 'in course order' }},
-        and wait while {{ MAX_KANJI_LEARNING }} or more are still settling.
+        New kanji come {{ summary.fromSelection ? 'from the sets you picked' : 'in course order' }}, each with its first word,
+        and wait while {{ MAX_KANJI_LEARNING }} or more kanji and words are still settling.
       </p>
     </div>
     <button class="btn btn-primary btn-lg btn-block" @click="optionsOpen = false">Done</button>

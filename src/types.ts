@@ -201,6 +201,9 @@ export interface SourceWord {
   jmdict: string
   reading: string      // the one shown first
   readings: string[]   // every reading JMdict gives for the form in this entry, hiragana
+  // readings other JMdict entries give for the same form (何 なん next to 何 なに): not
+  // wrong for this spelling, so never offered as a wrong option
+  homographs: string[]
   glosses: string[]    // per sense, its glosses joined
   n5: boolean          // in the N5 word list with this form and reading
   common: boolean      // JMdict marks the entry as common
@@ -281,12 +284,19 @@ export interface KanjiReading {
 }
 
 // Practice. 'meaning' shows the kanji and asks for its keyword (M1), 'recognize' shows the
-// keyword and asks for the kanji (M2). Word questions join this union later.
+// keyword and asks for the kanji (M2). Words: 'word-meaning' shows the word and asks for its
+// meaning (V1), 'read-choice' for its reading (R1), 'spell' shows reading and meaning and asks
+// for the written form (S1). Typing a reading (R2) joins later.
 export type KanjiQuestionType = 'meaning' | 'recognize'
-export type KanjiMode = KanjiQuestionType | 'mixed'
+export type WordQuestionType = 'word-meaning' | 'read-choice' | 'spell'
+export type QuestionType = KanjiQuestionType | WordQuestionType
+export type KanjiMode = QuestionType | 'mixed'
 export type Course = 'kana' | 'kanji'
 
-// one stored item, a kanji (`k:日`) now and a word (`w:...`) later
+// the kinds of wrong readings that have a name (KR22, KR33), see learning/readings.ts
+export type ReadingKind = 'long-vowel' | 'small-tsu' | 'voicing' | 'vowel-kana' | 'other-reading'
+
+// one stored item, a kanji (`k:日`) or a word (`w:...`)
 export interface KanjiStatEntry {
   id: string
   correct: number
@@ -297,8 +307,9 @@ export interface KanjiStatEntry {
   lastWrong: number
   resolvedAt: number
   streak: number
-  confusions: Record<string, number>  // id of the item picked instead -> how often
-  byType: Partial<Record<KanjiQuestionType, DirectionStat>>
+  confusions: Record<string, number>  // what was picked instead (see KanjiAnswerInput.given) -> how often
+  byType: Partial<Record<QuestionType, DirectionStat>>
+  mistakes: Partial<Record<ReadingKind, number>>  // wrong readings by kind, words only
   box: number
   due: number
 }
@@ -307,37 +318,53 @@ export type KanjiStatsMap = Record<string, KanjiStatEntry>
 
 export interface KanjiAnswerInput {
   id: string
-  type: KanjiQuestionType
+  type: QuestionType
   correct: boolean
-  given: string      // id of the picked option, '' for "Don't know"
+  // what was picked, '' for "Don't know": the item id for kanji and meaning options,
+  // the reading for a reading question, the written form for a spelling question
+  given: string
   ms: number
   holdBox?: boolean  // right after a miss in the same session: counts, but can't promote
+  mistake?: ReadingKind  // the kind of a wrong reading, when it has one
 }
 
 export interface KanjiAnswerRecord {
   id: string
-  type: KanjiQuestionType
+  type: QuestionType
   correct: boolean
   given: string
   ms: number
   t: number
 }
 
-// options are kanji for both types, a meaning card shows their keywords
 export interface KanjiCard {
   id: string
-  kanji: string
-  type: KanjiQuestionType | 'intro'
+  home: string  // the kanji, for a word its home kanji
+  type: QuestionType | 'intro'
+  // kanji for 'meaning' and 'recognize' (a meaning card shows their keywords), word ids for
+  // 'word-meaning' (shown as glosses), readings for 'read-choice', written forms for 'spell'
   options: string[]
+  answer: string  // the right one of the options
+  // the intro of a new kanji's first word: the kanji item that has to be answered right in
+  // this session first, else the word's cards are dropped (KR14)
+  needs?: string
   reask?: boolean
 }
 
-// a line of the kanji table on the Progress tab
-export interface KanjiRow {
+// what an item id stands for, a kanji or a word, for every list that shows both
+export interface ItemInfo {
   id: string
-  kanji: string
-  keyword: string
-  order: number  // course position, the default sort
+  kind: 'kanji' | 'word'
+  text: string     // the kanji or the written form
+  meaning: string  // keyword or gloss
+  reading: string  // '' for a kanji
+  home: string     // the kanji whose sheet it belongs to
+}
+
+// a line of the table on the Progress tab
+export interface KanjiRow {
+  item: ItemInfo
+  order: number    // course position, the default sort; a word sits right after its home kanji
   correct: number
   incorrect: number
   acc: number

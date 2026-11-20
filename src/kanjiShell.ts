@@ -21,9 +21,10 @@ export interface KanjiPrefs {
   smartSize?: number
   smartNew?: number
   sets?: string[]  // picked for the custom quiz and as the source of new kanji
+  onKunSeen?: boolean  // the one line on on and kun readings was shown in the kanji sheet (KR55)
 }
 
-const MODES: KanjiMode[] = ['meaning', 'recognize', 'mixed']
+const MODES: KanjiMode[] = ['meaning', 'recognize', 'word-meaning', 'read-choice', 'spell', 'mixed']
 
 const inRange = (n: unknown, min: number, max: number): n is number =>
   typeof n === 'number' && Number.isInteger(n) && n >= min && n <= max
@@ -40,6 +41,7 @@ export function loadKanjiPrefs(): KanjiPrefs {
   if (inRange(p.smartNew, 0, 10)) prefs.smartNew = p.smartNew
   // which set ids exist is the chunk's business, it drops the unknown ones
   if (Array.isArray(p.sets)) prefs.sets = p.sets.filter((x): x is string => typeof x === 'string')
+  if (p.onKunSeen === true) prefs.onKunSeen = true
   return prefs
 }
 
@@ -91,11 +93,11 @@ const stored = computed((): KanjiStatsMap => {
   return raw && typeof raw === 'object' ? raw as KanjiStatsMap : {}
 })
 
-/** Kanji (and later words) due now, for the dot on the switch and the tab badge. */
+/** Kanji and words due now, for the dot on the switch and the tab badge. */
 export const kanjiDue = computed(() => Object.values(stored.value).filter(e => isSeen(e) && isDue(e, clock.value)).length)
 
-/** Kanji with an open error, for the badge on the Progress tab. */
-export const kanjiErrors = computed(() => Object.entries(stored.value).filter(([id, e]) => e && kanjiOfId(id) !== null && hasOpenError(e)).length)
+/** Kanji and words with an open error, for the badge on the Progress tab, which lists both. */
+export const kanjiErrors = computed(() => Object.values(stored.value).filter(e => e && hasOpenError(e)).length)
 
 /** Kanji with stored progress, words not counted. */
 export const kanjiTracked = computed(() => Object.keys(stored.value).filter(id => kanjiOfId(id) !== null).length)

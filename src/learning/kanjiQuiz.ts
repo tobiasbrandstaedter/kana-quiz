@@ -3,12 +3,13 @@ import { isSeen, MASTERED_BOX } from './scheduler'
 import { shuffle } from './distractors'
 
 /**
- * Which question an item gets (KR24). A fixed mode asks that type. Mixed goes by how well
- * the kanji is known: its meaning while new and in box 1, the kanji for its keyword in
- * box 2, from box 3 the type with fewer right answers so far.
+ * Which question a kanji gets (KR24). Meaning and Recognize ask their type. Every other mode
+ * (Mixed, and the word modes, which leave kanji to Mixed) goes by how well the kanji is
+ * known: its meaning while new and in box 1, the kanji for its keyword in box 2, from box 3
+ * the type with fewer right answers so far.
  */
 export function kanjiQuestionType(e: KanjiStatEntry | undefined, mode: KanjiMode, rng: () => number = Math.random): KanjiQuestionType {
-  if (mode !== 'mixed') return mode
+  if (mode === 'meaning' || mode === 'recognize') return mode
   if (!isSeen(e) || e.box <= 1) return 'meaning'
   if (e.box === 2) return 'recognize'
   const meaning = e.byType.meaning?.correct ?? 0
@@ -58,8 +59,10 @@ export function pickKanjiOptions(
 }
 
 export function makeKanjiCard(answer: KanjiEntry, type: KanjiQuestionType, wrong: string[], rng: () => number = Math.random): KanjiCard {
-  return { id: answer.id, kanji: answer.kanji, type, options: shuffle([answer.kanji, ...wrong], rng) }
+  return { id: answer.id, home: answer.kanji, type, options: shuffle([answer.kanji, ...wrong], rng), answer: answer.kanji }
 }
+
+// Round scoring, per item: kanji and words count alike.
 
 // per item: missed at any point this round, and the latest answer
 export type RoundResults = Record<string, { missed: boolean; last: boolean }>
@@ -93,7 +96,7 @@ export function resultLabel({ total, first, fixed, open }: RoundSummary): { titl
     pct >= 80   ? ['Great work', 'よくできました'] :
     pct >= 60   ? ['Keep practicing', 'もう少し'] :
                   ['Keep studying', '頑張って！']
-  const parts = [`${first} of ${total} kanji on the first try`]
+  const parts = [`${first} of ${total} kanji and words on the first try`]
   if (fixed) parts.push(`${fixed} right on retry`)
   if (open) parts.push(`${open} still open`)
   return { title, jp, detail: parts.join(' · ') }

@@ -1,0 +1,111 @@
+import type { KanjiEntry, KanjiMode, KanjiReading, KanjiStatEntry, ReadingPart, WordQuestionType } from '../types'
+import { isSeen } from './scheduler'
+import { shuffle } from './distractors'
+import { readingOptions } from './readings'
+
+export const isWordType = (t: string): t is WordQuestionType => t === 'word-meaning' || t === 'read-choice' || t === 'spell'
+
+/**
+ * Which question a word gets (KR25). The modes Words, Reading and Spelling ask their type,
+ * every other mode goes by how well the word is known: while new and in box 1 its reading or
+ * its meaning, whichever has fewer right answers, its reading in box 2 (typed in a later
+ * release), from box 3 of spelling, meaning and reading the one with the fewest right answers.
+ */
+export function wordQuestionType(e: KanjiStatEntry | undefined, mode: KanjiMode, rng: () => number = Math.random): WordQuestionType {
+  if (isWordType(mode)) return mode
+  if (isSeen(e) && e.box === 2) return 'read-choice'
+  const types: WordQuestionType[] = isSeen(e) && e.box >= 3 ? ['spell', 'word-meaning', 'read-choice'] : ['read-choice', 'word-meaning']
+  const right = (t: WordQuestionType) => e?.byType[t]?.correct ?? 0
+  const fewest = Math.min(...types.map(right))
+  const tied = types.filter(t => right(t) === fewest)
+  return tied[Math.floor(rng() * tied.length)]
+}
+
+/** Words the learner has met in random order, then every word by its distance to `id` in course order. */
+export function knownThenNearest<W extends { id: string }>(id: string, words: W[], known: Set<string>, rng: () => number = Math.random): W[] {
+  const at = words.findIndex(w => w.id === id)
+  const nearest = words.map((w, i) => ({ w, d: Math.abs(i - at) })).sort((a, b) => a.d - b.d).map(x => x.w)
+  return [...shuffle(words.filter(w => known.has(w.id)), rng), ...nearest]
+}
+
+// the senses JMdict gives a word, each split into its glosses
+const sourceGlosses = (w: { glosses: string[] }) => w.glosses.flatMap(g => g.split(';').map(x => x.trim()))
+
+/**
+ * Three wrong meanings for a meaning question, as word ids (KR72): glosses of words the
+ * learner has met first, then of the words closest in course order. Never a gloss equal to
+ * the right one, too close to it, or one of the source glosses of either word, and no gloss
+ * twice.
+ */
+export function pickMeaningOptions<W extends { id: string; gloss: string; glosses: string[] }>(
+  answer: W, words: W[], known: Set<string>, tooClose: (a: string, b: string) => boolean, rng: () => number = Math.random,
+): string[] {
+  const answerSources = sourceGlosses(answer)
+  const clash = (w: W) => w.gloss === answer.gloss || tooClose(w.gloss, answer.gloss)
+    || answerSources.includes(w.gloss) || sourceGlosses(w).includes(answer.gloss)
+  const picked: W[] = []
+  for (const w of knownThenNearest(answer.id, words, known, rng)) {
+    if (picked.length === 3) break
+    if (w.id === answer.id || clash(w) || picked.some(p => p.gloss === w.gloss)) continue
+    picked.push(w)
+  }
+  return picked.map(p => p.id)
+}
+
+/**
+ * Three wrong readings for a reading question: near misses and other readings of its kanji
+ * (see readingOptions), filled up with readings of words the learner has met, then of the
+ * words closest in course order.
+ */
+export function pickReadingOptions<W extends { id: string; reading: string; readings: string[]; homographs: string[]; split: ReadingPart[] }>(
+  answer: W, words: W[], known: Set<string>, readingsOf: (kanji: string) => KanjiReading[], rng: () => number = Math.random,
+): string[] {
+  const fill = knownThenNearest(answer.id, words, known, rng).map(w => w.reading)
+  return readingOptions(answer, readingsOf, fill, rng)
+}
+
+/**
+ * Three wrong written forms for a spelling question (KR18, KR16): the word with one of its
+ * kanji swapped for, in this order, a kanji this learner confused with it or a lookalike
+ * (`preferred`), a kanji with the same reading for that part, a kanji of the same set, a kanji
+ * met so far, then the kanji closest in learning order. Never a kanji the word has already,
+ * and never the form of a course word with the same reading (`isWord`), that would be right too.
+ */
+export function pickSpellOptions(
+  word: { form: string; reading: string; split: ReadingPart[]; kanji: string[] }, all: KanjiEntry[],
+  preferred: (kanji: string) => string[], known: Set<string>, sameReading: (reading: string) => string[],
+  isWord: (form: string, reading: string) => boolean, rng: () => number = Math.random,
+): string[] {
+  const byKanji = new Map(all.map(k => [k.kanji, k]))
+  const partReading = (k: string) => word.split.find(p => p.text === k)?.reading
+  const nearest = (k: string) => {
+    const order = byKanji.get(k)?.order ?? 0
+    return [...all].sort((a, b) => Math.abs(a.order - order) - Math.abs(b.order - order)).map(x => x.kanji)
+  }
+  const tiers: Array<(k: string) => string[]> = [
+    preferred,
+    k => { const r = partReading(k); return r ? sameReading(r) : [] },
+    k => shuffle(all.filter(x => x.set === byKanji.get(k)?.set).map(x => x.kanji), rng),
+    () => shuffle([...known], rng),
+    nearest,
+  ]
+
+  const chars = [...word.form]
+  const picked: string[] = []
+  for (const tier of tiers) {
+    // every kanji of the word gets its turn before the next tier, so a two kanji word
+    // doesn't have all its traps on one side
+    const lists = word.kanji.map(k => ({ k, swaps: tier(k).filter(x => byKanji.has(x) && !word.kanji.includes(x)) }))
+    while (picked.length < 3 && lists.some(l => l.swaps.length)) {
+      for (const { k, swaps } of lists) {
+        const swap = swaps.shift()
+        if (!swap || picked.length === 3) continue
+        const form = chars.map(ch => ch === k ? swap : ch).join('')
+        if (picked.includes(form) || isWord(form, word.reading)) continue
+        picked.push(form)
+      }
+    }
+    if (picked.length === 3) break
+  }
+  return picked
+}

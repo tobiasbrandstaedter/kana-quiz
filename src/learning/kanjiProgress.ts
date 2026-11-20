@@ -1,4 +1,4 @@
-import type { KanjiAnswerRecord, KanjiEntry, KanjiRow, KanjiSort, KanjiStatEntry, KanjiStatsMap } from '../types'
+import type { ItemInfo, KanjiAnswerRecord, KanjiRow, KanjiSort, KanjiStatEntry, KanjiStatsMap } from '../types'
 import { accuracy } from '../format'
 import { hasOpenError, recentErrors } from './scheduler'
 
@@ -15,11 +15,9 @@ export function openKanjiErrors(stats: KanjiStatsMap, log: KanjiAnswerRecord[], 
     .sort((a, b) => recentOf(b.id) - recentOf(a.id) || b.incorrect - a.incorrect)
 }
 
-export function kanjiRow(entry: KanjiEntry, stat: KanjiStatEntry): KanjiRow {
-  return {
-    id: stat.id, kanji: entry.kanji, keyword: entry.keyword, order: entry.order,
-    correct: stat.correct, incorrect: stat.incorrect, acc: accuracy(stat), box: stat.box, due: stat.due,
-  }
+/** A table row: what the item is, where it sits in the course, and its numbers. */
+export function itemRow(item: ItemInfo, order: number, stat: KanjiStatEntry): KanjiRow {
+  return { item, order, correct: stat.correct, incorrect: stat.incorrect, acc: accuracy(stat), box: stat.box, due: stat.due }
 }
 
 /** The table in the order the learner asked for, course order without a pick. */

@@ -1,22 +1,23 @@
 <script setup lang="ts">
 import { computed, ref, watch, nextTick } from 'vue'
 import type { KanjiQuestionType } from '../types'
-import { useKanji, courseEntries } from '../composables/useKanji'
-import { kanjiEntry, kanjiLookalikeHint, kanjiLookalikes, kanjiStrokes } from '../data/kanjiData'
+import { useKanji } from '../composables/useKanji'
+import { courseEntries, kanjiEntry, kanjiLookalikeHint, kanjiLookalikes, kanjiReadings, kanjiStrokes, ownWords, wordById } from '../data/kanjiData'
 import { confusedKanji } from '../learning/kanjiStats'
 import { dueAt, isDue, isSeen } from '../learning/scheduler'
-import { kanjiDetail, openKanji, closeKanji } from '../kanjiShell'
+import { kanjiDetail, openKanji, closeKanji, loadKanjiPrefs, saveKanjiPrefs } from '../kanjiShell'
+import { kanjiOfId } from '../kanjiKeys'
 import { clock } from '../clock'
 import { fromNow, stageOf, accuracy, accClass, STAGE_LABEL } from '../format'
 import BottomSheet from './BottomSheet.vue'
 import StrokeDemo from './StrokeDemo.vue'
 import Icon from './Icon.vue'
 
-const { statOf, startKanji } = useKanji()
+const { statOf, lockOf, startKanji } = useKanji()
 
 const entry = computed(() => kanjiDetail.value ? kanjiEntry(kanjiDetail.value) : null)
 const strokes = computed(() => entry.value ? kanjiStrokes(entry.value.kanji) ?? undefined : undefined)
-const stat = computed(() => entry.value ? statOf(entry.value.kanji) : undefined)
+const stat = computed(() => entry.value ? statOf(entry.value.id) : undefined)
 const seen = computed(() => isSeen(stat.value))
 const stage = computed(() => stageOf(stat.value?.box ?? 0, seen.value))
 const otherMeanings = computed(() => entry.value?.meanings.filter(m => m !== entry.value!.keyword) ?? [])
@@ -50,6 +51,31 @@ const reviewText = computed(() => {
 })
 
 const answers = computed(() => (stat.value?.correct ?? 0) + (stat.value?.incorrect ?? 0))
+
+// its words with how far each is (KR54): a word not met yet says what still keeps it back
+const words = computed(() => entry.value ? ownWords(entry.value.kanji).map(w => {
+  const wordStat = statOf(w.id)
+  const met = isSeen(wordStat)
+  const lock = met ? null : lockOf(w.id)
+  const missing = lock?.unseen.map(kanjiOfId).filter((k): k is string => !!k && k !== entry.value!.kanji) ?? []
+  let note = ''
+  if (met) note = ''
+  else if (missing.length) note = 'unlocks once you have met'
+  else if (lock?.review) note = 'unlocks once this kanji is reviewed on a later day'
+  else if (lock) note = 'comes with the kanji'
+  else note = 'ready, comes in a coming session'
+  return { word: w, stage: stageOf(wordStat?.box ?? 0, met), note, missing }
+}) : [])
+
+// other course kanji in a word, each opens its own sheet
+const otherKanji = (kanji: string[]) => courseEntries(kanji.filter(k => k !== entry.value?.kanji))
+
+// its readings as its words show them, on and kun labeled (KD4)
+const readings = computed(() => entry.value ? kanjiReadings(entry.value.kanji).map(r => ({ ...r, form: wordById(r.word)?.form ?? '' })) : [])
+
+// what on and kun mean, once: the first time the sheet is opened (KR55)
+const explainOnKun = !loadKanjiPrefs().onKunSeen
+if (explainOnKun) saveKanjiPrefs({ onKunSeen: true })
 
 // a part or lookalike opens in the same sheet: start it at the top and move the focus there,
 // the chip that was tapped is gone
@@ -102,6 +128,40 @@ function practice(): void {
           <button v-for="part in parts" :key="part.kanji" class="kanji-chip" @click="openKanji(part.kanji)">
             <span class="kc-kanji" lang="ja">{{ part.kanji }}</span> {{ part.keyword }}
           </button>
+        </div>
+      </div>
+
+      <div v-if="words.length" class="kd-block">
+        <div class="kd-block-title">Words</div>
+        <div class="kd-words">
+          <div v-for="w in words" :key="w.word.id" class="kd-word">
+            <div class="kd-word-main">
+              <span class="kd-word-form" lang="ja">{{ w.word.form }}</span>
+              <span class="kd-word-reading" lang="ja">{{ w.word.reading }}</span>
+              <span class="kd-word-gloss">{{ w.word.gloss }}</span>
+              <span class="kd-word-stage stats-stage" :class="w.stage">{{ STAGE_LABEL[w.stage] }}</span>
+            </div>
+            <div v-if="w.note" class="kd-word-note">
+              {{ w.note }}<template v-if="w.missing.length"> <span class="kana" lang="ja">{{ w.missing.join('・') }}</span></template>
+            </div>
+            <div v-if="otherKanji(w.word.kanji).length" class="kd-chips">
+              <button v-for="k in otherKanji(w.word.kanji)" :key="k.kanji" class="kanji-chip" @click="openKanji(k.kanji)">
+                <span class="kc-kanji" lang="ja">{{ k.kanji }}</span> {{ w.word.meanings[k.kanji] ?? k.keyword }}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div v-if="readings.length" class="kd-block">
+        <div class="kd-block-title">Readings</div>
+        <p v-if="explainOnKun" class="kd-hint kd-onkun">On readings come from Chinese and show up in words of two or more kanji, kun readings are native Japanese and often stand alone.</p>
+        <div class="kd-chips">
+          <span v-for="r in readings" :key="r.reading" class="kd-chip kd-reading">
+            <span class="kana" lang="ja">{{ r.reading }}</span>
+            <span v-if="r.kind" class="kd-reading-kind">{{ r.kind }}</span>
+            <span class="kd-reading-word">as in <span lang="ja">{{ r.form }}</span></span>
+          </span>
         </div>
       </div>
 

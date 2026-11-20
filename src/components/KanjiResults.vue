@@ -9,8 +9,8 @@ const { resultScore, resultLabel, missed, roundOutcome, restart, restartLabel, g
 
 const outlookText = computed(() => {
   const o = roundOutcome.value.outlook
-  if (o.now) return `${o.now} kanji ${o.now === 1 ? 'is' : 'are'} due now.`
-  if (o.soon) return `${o.soon} kanji come back within a day.`
+  if (o.now) return `${o.now} kanji and words due now.`
+  if (o.soon) return `${o.soon} kanji and words come back within a day.`
   if (o.nextAt) return `Next review ${fromNow(o.nextAt)}.`
   return ''
 })
@@ -40,7 +40,7 @@ const outlookText = computed(() => {
         <span class="kana" lang="ja">{{ roundOutcome.down.join(' ') }}</span>
       </div>
       <div v-if="!roundOutcome.up.length && !roundOutcome.down.length && !roundOutcome.mastered.length" class="outcome-line quiet">
-        Nothing moved: kanji only move up when they are due, extra practice still sharpens them.
+        Nothing moved: kanji and words only move up when they are due, extra practice still sharpens them.
       </div>
       <div v-if="outlookText" class="outcome-next">{{ outlookText }}</div>
     </div>
@@ -48,9 +48,16 @@ const outlookText = computed(() => {
     <div v-if="missed.length" class="missed-section">
       <div class="missed-title">Missed this round <span>tap for details</span></div>
       <div class="missed-grid">
-        <button v-for="entry in missed" :key="entry.id" class="missed-item" @click="openKanji(entry.kanji)">
-          <span class="k" lang="ja">{{ entry.kanji }}</span>
-          <span class="r">{{ entry.keyword }}</span>
+        <!-- a word opens the sheet of its home kanji, which lists it -->
+        <button
+          v-for="item in missed" :key="item.id" class="missed-item" :class="{ word: item.kind === 'word' }"
+          @click="openKanji(item.home)"
+        >
+          <span class="k" lang="ja">{{ item.text }}</span>
+          <span class="r">
+            <span v-if="item.reading" class="missed-reading" lang="ja">{{ item.reading }}</span>
+            {{ item.meaning }}
+          </span>
         </button>
       </div>
     </div>

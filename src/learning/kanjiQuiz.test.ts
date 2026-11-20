@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest'
+import { seeded } from './seeded'
 import { kanjiQuestionType, pickKanjiOptions, makeKanjiCard, noteResult, summarizeRound, resultScore, resultLabel, splitMoves } from './kanjiQuiz'
 import type { RoundResults } from './kanjiQuiz'
 import { newKanjiEntry } from './kanjiStats'
@@ -15,7 +16,6 @@ const ALL = [
 ]
 const byKanji = (k: string) => ALL.find(e => e.kanji === k)!
 const never = () => false
-const seeded = (seed = 1) => () => (seed = (seed * 16807) % 2147483647) / 2147483647
 
 describe('kanjiQuestionType', () => {
   const at = (box: number, meaning = 0, recognize = 0) => ({
@@ -40,6 +40,12 @@ describe('kanjiQuestionType', () => {
   it('follows a fixed mode', () => {
     expect(kanjiQuestionType(at(0), 'recognize')).toBe('recognize')
     expect(kanjiQuestionType(at(4), 'meaning')).toBe('meaning')
+  })
+
+  it('goes by the box in the word modes, they only fix the type of words', () => {
+    expect(kanjiQuestionType(at(1), 'spell')).toBe('meaning')
+    expect(kanjiQuestionType(at(2), 'read-choice')).toBe('recognize')
+    expect(kanjiQuestionType(at(3, 5, 2), 'word-meaning')).toBe('recognize')
   })
 })
 
@@ -92,7 +98,7 @@ describe('pickKanjiOptions', () => {
 describe('makeKanjiCard', () => {
   it('holds the answer among the options', () => {
     const card = makeKanjiCard(byKanji('A'), 'recognize', ['B', 'C', 'D'], seeded())
-    expect(card).toMatchObject({ id: 'k:A', kanji: 'A', type: 'recognize' })
+    expect(card).toMatchObject({ id: 'k:A', home: 'A', type: 'recognize', answer: 'A' })
     expect([...card.options].sort()).toEqual(['A', 'B', 'C', 'D'])
   })
 })
@@ -125,7 +131,7 @@ describe('resultScore and resultLabel', () => {
     // everything fixed on retry
     expect(resultLabel(round(5, 2, 3)).title).toBe('Got there!')
     expect(resultLabel(round(5, 4)).title).toBe('Great work')
-    expect(resultLabel(round(5, 1, 1)).detail).toBe('1 of 5 kanji on the first try · 1 right on retry · 3 still open')
+    expect(resultLabel(round(5, 1, 1)).detail).toBe('1 of 5 kanji and words on the first try · 1 right on retry · 3 still open')
   })
 })
 
