@@ -97,6 +97,12 @@ async function kanjivg(k) {
   return cachedText(`kanjivg-${KANJIVG_TAG}/${file}`, `https://raw.githubusercontent.com/KanjiVG/kanjivg/${KANJIVG_TAG}/kanji/${file}`)
 }
 
+// KANJIDIC2 lists radical names among the meanings ("one radical (no.1)", "river or
+// three-stroke river radical (no. 47)", "radical number 9"), noise for a beginner. Only
+// the numbered ones go, "radical (chem)" is a real meaning.
+const RADICAL_NAME = /\bradical\b.*\(no?\.\s*\d+|\bradical (number )?\d+/
+const dropped = []
+
 const strokes = {}
 const kanjiSource = {}
 for (const k of SET) {
@@ -118,9 +124,10 @@ for (const k of SET) {
 
   const c = characters.get(k)
   const groups = c.readingMeaning?.groups ?? []
+  for (const g of groups) for (const m of g.meanings) if (m.lang === 'en' && RADICAL_NAME.test(m.value)) dropped.push(`${k} "${m.value}"`)
   const readings = groups.flatMap(g => g.readings)
   kanjiSource[k] = {
-    meanings: unique(groups.flatMap(g => g.meanings.filter(m => m.lang === 'en').map(m => m.value))),
+    meanings: unique(groups.flatMap(g => g.meanings.filter(m => m.lang === 'en' && !RADICAL_NAME.test(m.value)).map(m => m.value))),
     on: unique(readings.filter(r => r.type === 'ja_on').map(r => toHira(r.value))),
     kun: unique(readings.filter(r => r.type === 'ja_kun').map(r => r.value.replace(/-/g, ''))),
     strokes: c.misc.strokeCounts[0],
@@ -449,6 +456,7 @@ ${lines(strokes)}
 `)
 
 console.log(`wrote ${SET.length} kanji, ${Object.keys(words).length} words, ${Object.keys(groups).length} groups`)
+if (dropped.length) console.log(`radical names left out of the meanings: ${dropped.join(', ')}`)
 if (noSplit.length) console.log(`no split in JmdictFurigana for: ${noSplit.join(', ')}`)
 if (missing.length) console.log(`group members JMdict lacks, left out:\n  ${missing.join('\n  ')}`)
 
