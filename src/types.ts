@@ -210,7 +210,7 @@ export interface SourceWord {
 
 export interface SourceGroupMember {
   word: string        // word id
-  irregular: boolean  // not simply number reading + counter reading (KR74)
+  irregular: boolean  // not simply number reading + counter reading (KR74), always false when practice is 'all'
 }
 
 export interface SourceGroup {
@@ -331,3 +331,19 @@ export interface KanjiCard {
   options: string[]
   reask?: boolean
 }
+
+// a line of the kanji table on the Progress tab
+export interface KanjiRow {
+  id: string
+  kanji: string
+  keyword: string
+  order: number  // course position, the default sort
+  correct: number
+  incorrect: number
+  acc: number
+  box: number
+  due: number
+}
+
+export type KanjiSortCol = 'kanji' | 'acc' | 'box' | 'errors'
+export interface KanjiSort { col: KanjiSortCol; dir: 'asc' | 'desc' }

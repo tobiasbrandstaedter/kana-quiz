@@ -2,7 +2,7 @@
 import { provide, onMounted, watch, computed } from 'vue'
 import { useQuiz, QUIZ_KEY } from './composables/useQuiz'
 import { useAppUpdate } from './composables/useAppUpdate'
-import { course, kanjiScreen } from './kanjiShell'
+import { course, kanjiScreen, kanjiDetail } from './kanjiShell'
 import SetupScreen from './components/SetupScreen.vue'
 import QuizScreen from './components/QuizScreen.vue'
 import ResultsScreen from './components/ResultsScreen.vue'
@@ -42,6 +42,8 @@ onMounted(() => quiz.init())
     <KanjiPart v-else-if="view === 'kanji-results'" part="KanjiResults" />
   </div>
   <KanaSheet />
+  <!-- one kanji sheet for the chart, the table, the results and the Writing tab -->
+  <KanjiPart v-if="kanjiDetail" part="KanjiSheet" />
   <div v-if="notice" class="notice" role="status">
     <span>{{ notice }}</span>
     <button v-if="noticeAction" @click="runNoticeAction()">{{ noticeAction.label }}</button>

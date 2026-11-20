@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
-import { planKanji, MAX_KANJI_LEARNING } from './kanjiPlan'
+import { planKanji, pickedKanjiIds, errorPracticeIds, singleKanjiOrder, MAX_KANJI_LEARNING } from './kanjiPlan'
 import { newKanjiEntry } from './kanjiStats'
-import type { KanjiAnswerRecord, KanjiStatEntry, KanjiStatsMap } from '../types'
+import type { KanjiAnswerRecord, KanjiSetEntry, KanjiStatEntry, KanjiStatsMap } from '../types'
 
 const DAY = 24 * 60 * 60 * 1000
 const NOW = 1_800_000_000_000
@@ -61,8 +61,69 @@ describe('planKanji', () => {
     expect(p.fill).toHaveLength(10)
   })
 
+  it('takes new kanji only from the picked sets, reviews from everywhere', () => {
+    const s = statsOf(seen('k:A', 2, NOW - DAY))
+    const p = planKanji(s, [], IDS, 20, NOW, 3, ['k:E', 'k:F'])
+    expect(p.fresh).toEqual(['k:E', 'k:F'])
+    expect(p.due).toEqual(['k:A'])
+  })
+
+  it('says when the picked sets have nothing new left', () => {
+    const s = statsOf(seen('k:E', 2, NOW + DAY))
+    const p = planKanji(s, [], IDS, 20, NOW, 3, ['k:E'])
+    expect(p.fresh).toEqual([])
+    expect(p.newBlocked).toBe('sets')
+    // switched off wins, that is what the learner can change first
+    expect(planKanji(s, [], IDS, 20, NOW, 0, ['k:E']).newBlocked).toBe('off')
+  })
+
   it('ignores stored items that are not in the list', () => {
     const s = statsOf(seen('w:something', 0, NOW - DAY))
     expect(planKanji(s, [], IDS, 10, NOW, 0).due).toEqual([])
+  })
+})
+
+const seeded = (seed = 1) => () => (seed = (seed * 16807) % 2147483647) / 2147483647
+const miss = (id: string): KanjiAnswerRecord => ({ id, type: 'meaning', correct: false, given: '', ms: 1000, t: NOW })
+
+describe('pickedKanjiIds', () => {
+  const SETS: KanjiSetEntry[] = [
+    { id: 's1', title: 'One', kanji: ['A', 'B', 'C'] },
+    { id: 's2', title: 'Two', kanji: ['D', 'E'] },
+    { id: 's3', title: 'Three', kanji: ['F'] },
+  ]
+
+  it('lists the kanji of the picked sets in course order', () => {
+    expect(pickedKanjiIds(SETS, new Set(['s3', 's1']))).toEqual(['k:A', 'k:B', 'k:C', 'k:F'])
+  })
+
+  it('has nothing for no sets or sets that do not exist', () => {
+    expect(pickedKanjiIds(SETS, new Set())).toEqual([])
+    expect(pickedKanjiIds(SETS, new Set(['gone']))).toEqual([])
+  })
+})
+
+describe('errorPracticeIds', () => {
+  it('asks each error one to three times by its recent misses', () => {
+    const errors = [{ ...newKanjiEntry('k:A'), incorrect: 1 }, { ...newKanjiEntry('k:B'), incorrect: 6 }]
+    const log = [miss('k:B'), miss('k:B'), miss('k:B'), miss('k:B')]
+    const ids = errorPracticeIds(errors, log, seeded())
+    expect(ids.filter(id => id === 'k:A')).toHaveLength(1)
+    expect(ids.filter(id => id === 'k:B')).toHaveLength(3)
+  })
+})
+
+describe('singleKanjiOrder', () => {
+  it('asks the kanji three times with a known one after each', () => {
+    const order = singleKanjiOrder('k:A', ['k:A', 'k:B', 'k:C', 'k:D', 'k:E'], seeded())
+    expect(order).toHaveLength(6)
+    expect(order.filter((_, i) => i % 2 === 0)).toEqual(['k:A', 'k:A', 'k:A'])
+    expect(new Set(order.filter((_, i) => i % 2 === 1)).size).toBe(3)
+    expect(order.filter((_, i) => i % 2 === 1)).not.toContain('k:A')
+  })
+
+  it('makes do with fewer known kanji', () => {
+    expect(singleKanjiOrder('k:A', ['k:B'])).toEqual(['k:A', 'k:B', 'k:A', 'k:A'])
+    expect(singleKanjiOrder('k:A', [])).toEqual(['k:A', 'k:A', 'k:A'])
   })
 })

@@ -2,9 +2,10 @@
 import { computed } from 'vue'
 import { useKanji } from '../composables/useKanji'
 import { fromNow } from '../format'
+import { openKanji } from '../kanjiShell'
 import Icon from './Icon.vue'
 
-const { resultScore, resultLabel, missed, roundOutcome, startSmart, goHome } = useKanji()
+const { resultScore, resultLabel, missed, roundOutcome, restart, restartLabel, goHome } = useKanji()
 
 const outlookText = computed(() => {
   const o = roundOutcome.value.outlook
@@ -14,10 +15,6 @@ const outlookText = computed(() => {
   return ''
 })
 
-// nothing left to plan: back to the Practice tab, it says why
-function again(): void {
-  if (!startSmart()) goHome()
-}
 </script>
 
 <template>
@@ -49,17 +46,17 @@ function again(): void {
     </div>
 
     <div v-if="missed.length" class="missed-section">
-      <div class="missed-title">Missed this round</div>
+      <div class="missed-title">Missed this round <span>tap for details</span></div>
       <div class="missed-grid">
-        <div v-for="k in missed" :key="k.id" class="missed-entry">
-          <span class="k" lang="ja">{{ k.kanji }}</span>
-          <span class="r">{{ k.keyword }}</span>
-        </div>
+        <button v-for="entry in missed" :key="entry.id" class="missed-item" @click="openKanji(entry.kanji)">
+          <span class="k" lang="ja">{{ entry.kanji }}</span>
+          <span class="r">{{ entry.keyword }}</span>
+        </button>
       </div>
     </div>
 
     <div class="result-btns">
-      <button class="btn btn-action btn-lg" @click="again()"><Icon name="replay" :size="20" />Keep going</button>
+      <button class="btn btn-action btn-lg" @click="restart()"><Icon name="replay" :size="20" />{{ restartLabel }}</button>
       <button class="btn btn-lg" @click="goHome()"><Icon name="home" :size="20" />Home</button>
     </div>
   </div>

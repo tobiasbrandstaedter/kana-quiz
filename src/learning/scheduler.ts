@@ -57,6 +57,11 @@ export function recentErrors<R extends { correct: boolean }>(log: R[], idOf: (r:
   return out
 }
 
+/** An open error: missed at some point, not back in a mastered box and not resolved since the last miss. */
+export function hasOpenError(e: { incorrect: number; box: number; lastWrong: number; resolvedAt: number }): boolean {
+  return e.incorrect > 0 && e.box < MASTERED_BOX && e.lastWrong >= e.resolvedAt
+}
+
 export interface SmartPicks<T = KanaPair> {
   due: T[]
   weak: T[]
@@ -212,10 +217,13 @@ export interface ColumnProgress {
   due: number
 }
 
-export function columnProgress(kana: string[], stats: StatsMap, now: number): ColumnProgress {
-  const p = { total: kana.length, seen: 0, mastered: 0, due: 0 }
-  for (const k of kana) {
-    const e = stats[k]
+// kana pass the kana of a row, kanji the item ids of a set with their own stats map
+export function columnProgress(
+  ids: string[], stats: Record<string, (Schedule & { correct: number; incorrect: number }) | undefined>, now: number,
+): ColumnProgress {
+  const p = { total: ids.length, seen: 0, mastered: 0, due: 0 }
+  for (const id of ids) {
+    const e = stats[id]
     if (!isSeen(e)) continue
     p.seen++
     if (e.box >= MASTERED_BOX) p.mastered++

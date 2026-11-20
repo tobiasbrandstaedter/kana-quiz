@@ -4,7 +4,7 @@
 import { ref, computed } from 'vue'
 import type { Course, KanjiMode, KanjiStatsMap } from './types'
 import { KANJI_PREFS_KEY, KANJI_PROGRESS_KEYS, KANJI_STATS_KEY, kanjiOfId } from './kanjiKeys'
-import { isDue, isSeen } from './learning/scheduler'
+import { hasOpenError, isDue, isSeen } from './learning/scheduler'
 import { clock } from './clock'
 
 export function readJson(key: string): unknown {
@@ -20,6 +20,7 @@ export interface KanjiPrefs {
   mode?: KanjiMode
   smartSize?: number
   smartNew?: number
+  sets?: string[]  // picked for the custom quiz and as the source of new kanji
 }
 
 const MODES: KanjiMode[] = ['meaning', 'recognize', 'mixed']
@@ -37,6 +38,8 @@ export function loadKanjiPrefs(): KanjiPrefs {
   if (MODES.includes(p.mode as KanjiMode)) prefs.mode = p.mode as KanjiMode
   if (inRange(p.smartSize, 5, 100)) prefs.smartSize = p.smartSize
   if (inRange(p.smartNew, 0, 10)) prefs.smartNew = p.smartNew
+  // which set ids exist is the chunk's business, it drops the unknown ones
+  if (Array.isArray(p.sets)) prefs.sets = p.sets.filter((x): x is string => typeof x === 'string')
   return prefs
 }
 
@@ -56,6 +59,11 @@ export function setCourse(c: Course): void {
 // set by the kanji part, App.vue shows its screens from it
 export const kanjiScreen = ref<'setup' | 'quiz' | 'results'>('setup')
 
+// the kanji the sheet is open for. App.vue mounts the sheet once, wherever it was opened from
+export const kanjiDetail = ref<string | null>(null)
+export const openKanji = (kanji: string) => { kanjiDetail.value = kanji }
+export const closeKanji = () => { kanjiDetail.value = null }
+
 // bumped whenever kanji stats are written, so the counts below read them again
 export const kanjiRevision = ref(0)
 
@@ -72,10 +80,12 @@ export function resetKanji(): void {
   }
   dropLoadedState?.()
   kanjiScreen.value = 'setup'
+  closeKanji()
   kanjiRevision.value++
 }
 
 const stored = computed((): KanjiStatsMap => {
+  // only read so this runs again after every kanji write
   kanjiRevision.value
   const raw = readJson(KANJI_STATS_KEY)
   return raw && typeof raw === 'object' ? raw as KanjiStatsMap : {}
@@ -83,6 +93,9 @@ const stored = computed((): KanjiStatsMap => {
 
 /** Kanji (and later words) due now, for the dot on the switch and the tab badge. */
 export const kanjiDue = computed(() => Object.values(stored.value).filter(e => isSeen(e) && isDue(e, clock.value)).length)
+
+/** Kanji with an open error, for the badge on the Progress tab. */
+export const kanjiErrors = computed(() => Object.entries(stored.value).filter(([id, e]) => e && kanjiOfId(id) !== null && hasOpenError(e)).length)
 
 /** Kanji with stored progress, words not counted. */
 export const kanjiTracked = computed(() => Object.keys(stored.value).filter(id => kanjiOfId(id) !== null).length)

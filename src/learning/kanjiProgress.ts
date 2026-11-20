@@ -1,0 +1,37 @@
+import type { KanjiAnswerRecord, KanjiEntry, KanjiRow, KanjiSort, KanjiStatEntry, KanjiStatsMap } from '../types'
+import { accuracy } from '../format'
+import { hasOpenError, recentErrors } from './scheduler'
+
+/**
+ * The open errors among `ids` (missed, not back in a mastered box, not resolved since),
+ * most recent misses first, then most misses overall, then in the order of `ids`.
+ */
+export function openKanjiErrors(stats: KanjiStatsMap, log: KanjiAnswerRecord[], ids: string[]): KanjiStatEntry[] {
+  const recent = recentErrors(log, r => r.id)
+  const recentOf = (id: string) => recent.get(id)?.errors ?? 0
+  return ids
+    .map(id => stats[id])
+    .filter((stat): stat is KanjiStatEntry => !!stat && hasOpenError(stat))
+    .sort((a, b) => recentOf(b.id) - recentOf(a.id) || b.incorrect - a.incorrect)
+}
+
+export function kanjiRow(entry: KanjiEntry, stat: KanjiStatEntry): KanjiRow {
+  return {
+    id: stat.id, kanji: entry.kanji, keyword: entry.keyword, order: entry.order,
+    correct: stat.correct, incorrect: stat.incorrect, acc: accuracy(stat), box: stat.box, due: stat.due,
+  }
+}
+
+/** The table in the order the learner asked for, course order without a pick. */
+export function sortKanjiRows(rows: KanjiRow[], sort: KanjiSort | null): KanjiRow[] {
+  const byOrder = [...rows].sort((a, b) => a.order - b.order)
+  if (!sort) return byOrder
+  const sign = sort.dir === 'asc' ? 1 : -1
+  // ties stay in course order, the sort is stable
+  return byOrder.sort((a, b) => {
+    if (sort.col === 'kanji') return sign * (a.order - b.order)
+    if (sort.col === 'acc') return sign * (a.acc - b.acc)
+    if (sort.col === 'errors') return sign * (a.incorrect - b.incorrect)
+    return sign * (a.box - b.box || a.due - b.due)
+  })
+}

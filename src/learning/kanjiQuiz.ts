@@ -1,5 +1,5 @@
 import type { KanjiCard, KanjiEntry, KanjiMode, KanjiQuestionType, KanjiStatEntry } from '../types'
-import { isSeen } from './scheduler'
+import { isSeen, MASTERED_BOX } from './scheduler'
 import { shuffle } from './distractors'
 
 /**
@@ -75,4 +75,40 @@ export function summarizeRound(results: RoundResults): { total: number; first: n
   const first = all.filter(r => !r.missed).length
   const fixed = all.filter(r => r.missed && r.last).length
   return { total: all.length, first, fixed, open: all.length - first - fixed }
+}
+
+export type RoundSummary = ReturnType<typeof summarizeRound>
+
+/** Share of items right on the first try, as the big number on the results screen. */
+export function resultScore({ total, first }: RoundSummary): string {
+  return total ? `${Math.round((first / total) * 100)}%` : '0%'
+}
+
+export function resultLabel({ total, first, fixed, open }: RoundSummary): { title: string; jp: string; detail: string } {
+  if (!total) return { title: 'Nothing scored', jp: '', detail: 'This round only had intro cards.' }
+  const pct = Math.round((first / total) * 100)
+  const [title, jp] =
+    pct === 100 ? ['Perfect!', '完璧！'] :
+    open === 0  ? ['Got there!', 'できた！'] :
+    pct >= 80   ? ['Great work', 'よくできました'] :
+    pct >= 60   ? ['Keep practicing', 'もう少し'] :
+                  ['Keep studying', '頑張って！']
+  const parts = [`${first} of ${total} kanji on the first try`]
+  if (fixed) parts.push(`${fixed} right on retry`)
+  if (open) parts.push(`${open} still open`)
+  return { title, jp, detail: parts.join(' · ') }
+}
+
+/**
+ * How the boxes moved in a round, by item id: mastered (crossed into the mastered box),
+ * up (moved up without that, so nothing is listed twice) and down.
+ */
+export function splitMoves(moves: Record<string, { from: number; to: number }>): { up: string[]; down: string[]; mastered: string[] } {
+  const all = Object.entries(moves)
+  const mastered = all.filter(([, m]) => m.from < MASTERED_BOX && m.to >= MASTERED_BOX).map(([id]) => id)
+  return {
+    up: all.filter(([id, m]) => m.to > m.from && !mastered.includes(id)).map(([id]) => id),
+    down: all.filter(([, m]) => m.to < m.from).map(([id]) => id),
+    mastered,
+  }
 }

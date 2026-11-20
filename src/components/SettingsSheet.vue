@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { inject, ref, computed, onMounted } from 'vue'
+import { inject, ref, computed, onMounted, nextTick } from 'vue'
 import { QUIZ_KEY } from '../composables/useQuiz'
 import { KANA_FONTS, loadKanaFont } from '../fonts'
 import { THEMES } from '../theme'
@@ -8,6 +8,8 @@ import type { Backup } from '../backup'
 import { dayKey } from '../learning/progress'
 import { kanjiTracked } from '../kanjiShell'
 import BottomSheet from './BottomSheet.vue'
+import Icon from './Icon.vue'
+import KanjiPart from './KanjiPart.vue'
 
 const emit = defineEmits<{ close: [] }>()
 const { kanaFont, setKanaFont, theme, setTheme, resetAll, kanaTracked } = inject(QUIZ_KEY)!
@@ -62,6 +64,22 @@ const resetWhat = computed(() => [
 // two taps on purpose: this wipes everything and can't be undone
 const confirming = ref(false)
 
+// Sources is a screen of its own inside the sheet, the EDRDG licence asks for a separate one.
+// Its credits live in the kanji chunk with the data they describe, fetched when it opens.
+const view = ref<'settings' | 'sources'>('settings')
+const sourcesEntry = ref<HTMLElement | null>(null)
+const backButton = ref<HTMLElement | null>(null)
+
+function showView(v: 'settings' | 'sources'): void {
+  view.value = v
+  nextTick(() => {
+    const target = v === 'sources' ? backButton.value : sourcesEntry.value
+    if (v === 'sources') target?.closest('.sheet')?.scrollTo(0, 0)
+    else target?.scrollIntoView({ block: 'nearest' })
+    target?.focus()
+  })
+}
+
 function reset(): void {
   resetAll()
   confirming.value = false
@@ -70,7 +88,17 @@ function reset(): void {
 </script>
 
 <template>
-  <BottomSheet title="Settings" @close="emit('close')">
+  <BottomSheet :title="view === 'sources' ? 'Sources' : 'Settings'" @close="emit('close')">
+    <template v-if="view === 'sources'" #title>
+      <span class="sheet-title-back">
+        <button ref="backButton" class="icon-btn boxed" aria-label="Back to settings" @click="showView('settings')"><Icon name="left" :size="20" /></button>
+        Sources
+      </span>
+    </template>
+
+    <KanjiPart v-if="view === 'sources'" part="KanjiSources" />
+
+    <template v-else>
     <div class="option-title">Theme</div>
     <div class="theme-switcher">
       <button
@@ -142,5 +170,10 @@ function reset(): void {
         <button class="btn btn-sm" @click="confirming = false">Keep it</button>
       </div>
     </div>
+
+    <div class="option-title sources-title">Sources</div>
+    <p class="hint-line sources-intro">The kanji part is built from open dictionary and stroke data, each under its own licence.</p>
+    <button ref="sourcesEntry" class="btn btn-sm" @click="showView('sources')">Sources and licences <Icon name="right" :size="16" /></button>
+    </template>
   </BottomSheet>
 </template>

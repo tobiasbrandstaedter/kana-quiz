@@ -174,7 +174,7 @@ Opus, only if P0 says the stroke check holds or can be made to. Draw mode for ka
 | P1 | Data script, course content, checks | done |
 | P2 | Groundwork, no visible change | done |
 | P3a | K1 practice | done |
-| P3b | K1 the rest | open |
+| P3b | K1 the rest | done |
 | P4a | K2 words | open |
 | P4b | K2 typing and sound | open |
 | P5 | K3 groups | open |

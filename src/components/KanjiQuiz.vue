@@ -6,21 +6,20 @@ import { kanjiEntry, kanjiLookalikeHint, kanjiLookalikes, kanjiStrokes } from '.
 import { isSeen } from '../learning/scheduler'
 import type { KanjiEntry } from '../types'
 import { setCourse } from '../kanjiShell'
-import { kanjiId } from '../kanjiKeys'
 import StrokeDemo from './StrokeDemo.vue'
 import StrokeCanvas from './StrokeCanvas.vue'
 import Icon from './Icon.vue'
 
 const { notify, screen } = inject(QUIZ_KEY)!
 const {
-  stats, cards, current, card, answered, picked, gaveUp, correctCount, wrongCount, startedAt, progress,
+  statOf, cards, current, card, answered, pickedOption, gaveUp, correctCount, wrongCount, startedAt, progress,
   choose, giveUp, next, goHome, resume,
 } = useKanji()
 
 const entry = computed(() => card.value ? kanjiEntry(card.value.kanji) : null)
 const strokes = computed(() => card.value ? kanjiStrokes(card.value.kanji) ?? undefined : undefined)
 const isIntro = computed(() => card.value?.type === 'intro')
-const correct = computed(() => answered.value && picked.value === card.value?.kanji)
+const correct = computed(() => answered.value && pickedOption.value === card.value?.kanji)
 
 // first contact: watch the strokes, then trace once over the guide. Not scored.
 const introStep = ref<'watch' | 'trace' | 'traced'>('watch')
@@ -43,7 +42,7 @@ const parts = computed(() => entry.value?.parts.map(kanjiEntry).filter((p): p is
 const introWarning = computed(() => {
   const c = card.value
   if (!c || !isIntro.value) return null
-  const met = (k: string) => isSeen(stats.value[kanjiId(k)]) || cards.value.some(x => x.kanji === k)
+  const met = (k: string) => isSeen(statOf(k)) || cards.value.some(x => x.kanji === k)
   const others = kanjiLookalikes(c.kanji).filter(met)
   if (others.length === 0) return null
   return { others, hint: kanjiLookalikeHint(c.kanji, others[0]) }
@@ -53,7 +52,7 @@ const introWarning = computed(() => {
 const explanation = computed(() => {
   const c = card.value
   if (!c || !answered.value || correct.value) return null
-  const yours = picked.value ? kanjiEntry(picked.value) : null
+  const yours = pickedOption.value ? kanjiEntry(pickedOption.value) : null
   return { yours, right: entry.value, hint: yours ? kanjiLookalikeHint(c.kanji, yours.kanji) : null }
 })
 
@@ -141,8 +140,8 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 
 const optionClass = (opt: string) => ({
   correct: answered.value && opt === card.value?.kanji,
-  wrong: answered.value && opt === picked.value && opt !== card.value?.kanji,
-  dim: answered.value && opt !== card.value?.kanji && opt !== picked.value,
+  wrong: answered.value && opt === pickedOption.value && opt !== card.value?.kanji,
+  dim: answered.value && opt !== card.value?.kanji && opt !== pickedOption.value,
 })
 </script>
 
@@ -204,7 +203,7 @@ const optionClass = (opt: string) => ({
           >
             <span class="opt-n" aria-hidden="true">{{ i + 1 }}</span>{{ card.type === 'meaning' ? kanjiEntry(opt)?.keyword : opt }}
             <span v-if="answered && opt === card.kanji" class="opt-mark"><Icon name="check" :size="16" /></span>
-            <span v-else-if="answered && opt === picked" class="opt-mark"><Icon name="x" :size="16" /></span>
+            <span v-else-if="answered && opt === pickedOption" class="opt-mark"><Icon name="x" :size="16" /></span>
           </button>
         </div>
 

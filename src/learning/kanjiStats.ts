@@ -1,5 +1,6 @@
 import type { KanjiAnswerInput, KanjiStatEntry, KanjiStatsMap } from '../types'
 import { review } from './scheduler'
+import { kanjiOfId } from '../kanjiKeys'
 
 export function newKanjiEntry(id: string): KanjiStatEntry {
   return {
@@ -45,4 +46,15 @@ export function applyKanjiAnswer(old: KanjiStatEntry | undefined, a: KanjiAnswer
     e.count++
   }
   return e
+}
+
+/** The kanji picked instead of this item, most often first, with how often. Words and Don't know aren't in there. */
+export function confusedKanji(stat: KanjiStatEntry | undefined): Array<{ kanji: string; n: number }> {
+  if (!stat) return []
+  const out: Array<{ kanji: string; n: number }> = []
+  for (const [id, n] of Object.entries(stat.confusions)) {
+    const kanji = kanjiOfId(id)
+    if (kanji) out.push({ kanji, n })
+  }
+  return out.sort((a, b) => b.n - a.n)
 }

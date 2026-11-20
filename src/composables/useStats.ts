@@ -1,7 +1,7 @@
 import { ref, computed } from 'vue'
 import type { StatsMap, StatEntry, AnswerInput, AnswerRecord, StrokeFault } from '../types'
 import { normalizeStats, newEntry } from '../learning/statsMigration'
-import { review, recentErrors, MASTERED_BOX } from '../learning/scheduler'
+import { review, recentErrors, hasOpenError } from '../learning/scheduler'
 import { dayKey, streak } from '../learning/progress'
 import { clock } from '../clock'
 import { days, countAnswer, reloadDays, DAYS_KEY } from '../days'
@@ -46,7 +46,7 @@ export function useStats() {
   // or when the user marked it as resolved and hasn't missed it since
   const errorPairs = computed<StatEntry[]>(() =>
     Object.values(statsData.value)
-      .filter(e => e.incorrect > 0 && e.box < MASTERED_BOX && e.lastWrong >= e.resolvedAt)
+      .filter(hasOpenError)
       .sort((a, b) => recentErrorCount(b.kana) - recentErrorCount(a.kana) || b.incorrect - a.incorrect)
   )
 

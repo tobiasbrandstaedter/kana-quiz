@@ -10,7 +10,7 @@ import { fluencyLimits, dayKey } from '../learning/progress'
 import { shuffle } from '../learning/distractors'
 import { accuracy, accClass } from '../format'
 import { clock } from '../clock'
-import { setCourse, resetKanji, kanjiScreen } from '../kanjiShell'
+import { setCourse, resetKanji, kanjiScreen, closeKanji } from '../kanjiShell'
 import { useStats } from './useStats'
 import type { BoxMove } from './useStats'
 import { useSetup } from './useSetup'
@@ -412,6 +412,8 @@ export function useQuiz() {
           // the learner may have switched to Kanji in the meantime, even started a kanji session
           setCourse('kana')
           kanjiScreen.value = 'setup'
+          // a kanji sheet left open would sit over the quiz while its keys answer behind it
+          closeKanji()
           session.questionStartTime.value = Date.now()
           screen.value = 'quiz'
         },

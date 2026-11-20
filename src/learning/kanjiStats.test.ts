@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { applyKanjiAnswer, newKanjiEntry, normalizeKanjiStats } from './kanjiStats'
+import { applyKanjiAnswer, confusedKanji, newKanjiEntry, normalizeKanjiStats } from './kanjiStats'
 import type { KanjiAnswerInput } from '../types'
 
 const DAY = 24 * 60 * 60 * 1000
@@ -63,5 +63,13 @@ describe('normalizeKanjiStats', () => {
     const out = normalizeKanjiStats({ 'k:A': { correct: 2, box: 1 }, 'k:B': 'nonsense' })
     expect(out).toEqual({ 'k:A': { ...newKanjiEntry('k:A'), correct: 2, box: 1 } })
     expect(normalizeKanjiStats(null)).toEqual({})
+  })
+})
+
+describe('confusedKanji', () => {
+  it('gives the kanji picked instead, most often first, words left out', () => {
+    const stat = { ...newKanjiEntry('k:A'), confusions: { 'k:B': 1, 'k:C': 3, 'w:x:y': 5 } }
+    expect(confusedKanji(stat)).toEqual([{ kanji: 'C', n: 3 }, { kanji: 'B', n: 1 }])
+    expect(confusedKanji(undefined)).toEqual([])
   })
 })

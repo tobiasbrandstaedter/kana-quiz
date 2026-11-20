@@ -5,7 +5,7 @@ import { QUIZ_KEY } from '../composables/useQuiz'
 import { fromNow } from '../format'
 import { MAX_LEARNING, isDue, isSeen } from '../learning/scheduler'
 import { clock } from '../clock'
-import { course, setCourse, kanjiDue } from '../kanjiShell'
+import { course, setCourse, kanjiDue, kanjiErrors } from '../kanjiShell'
 import ColumnSelector from './ColumnSelector.vue'
 import ProgressTab from './ProgressTab.vue'
 import StrokesTab from './StrokesTab.vue'
@@ -134,10 +134,9 @@ function showErrors(): void {
 }
 
 function badge(tab: SetupTab): number {
-  // the kanji Progress tab has no error list yet
-  if (course.value === 'kanji') return tab === 'practice' ? kanjiDue.value : 0
-  if (tab === 'practice') return smartSummary.value.outlook.now
-  if (tab === 'progress') return errorPairs.value.length
+  // due reviews on Practice, open errors on Progress, each for the course on screen
+  if (tab === 'practice') return course.value === 'kanji' ? kanjiDue.value : smartSummary.value.outlook.now
+  if (tab === 'progress') return course.value === 'kanji' ? kanjiErrors.value : errorPairs.value.length
   return 0
 }
 </script>
@@ -318,13 +317,12 @@ function badge(tab: SetupTab): number {
       <ProgressTab />
     </div>
 
-    <!-- kanji Writing and Progress come with the next step -->
-    <div v-if="course === 'kanji' && activeTab !== 'practice'" class="tab-page">
-      <div class="no-stats-state">
-        <span class="msg">{{ activeTab === 'strokes'
-          ? 'Kanji writing comes with the next update. Until then every new kanji is traced once on its intro card.'
-          : 'Kanji progress comes with the next update. Your answers are saved already and will show up here.' }}</span>
-      </div>
+    <div v-if="course === 'kanji' && activeTab === 'strokes'" class="tab-page">
+      <KanjiPart part="KanjiWriting" />
+    </div>
+
+    <div v-if="course === 'kanji' && activeTab === 'progress'" class="tab-page">
+      <KanjiPart part="KanjiProgress" />
     </div>
 
     <nav class="tabbar" aria-label="Sections">

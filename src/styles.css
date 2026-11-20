@@ -159,8 +159,8 @@ body {
 .kana { font-family: var(--kana-font); font-synthesis: none; }
 
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
-.q-main, .option-btn, .error-kana, .missed-item .k, .missed-entry .k, .col-btn .kana-sample, .stats-kana-cell,
-.cc-kana, .stroke-kana, .stroke-pick, .row-chip, .explain-item .k, .hero-kana, .fb-kana {
+.q-main, .option-btn, .error-kana, .missed-item .k, .col-btn .kana-sample, .set-kanji, .stats-kana-cell,
+.cc-kana, .stroke-kana, .stroke-pick, .row-chip, .kc-kanji, .explain-item .k, .hero-kana, .fb-kana {
   font-family: var(--kana-font);
   /* a font without a bold cut shows as it is, smeared fake bold is no help when learning shapes */
   font-synthesis: none;
@@ -184,7 +184,7 @@ body {
 
 /* ---------- pressable surfaces ---------- */
 /* everything that sits on a hard shadow; each one sets its own --lift */
-.btn, .tile, .option-btn, .chip, .col-btn, .icon-btn.boxed, .stroke-ctl, .row-chip, .stroke-pick,
+.btn, .tile, .option-btn, .chip, .col-btn, .icon-btn.boxed, .stroke-ctl, .row-chip, .kanji-chip, .stroke-pick,
 .quick-btn, .chart-more, .chart-cell, .font-btn, .theme-btn, .audio-btn, .listen-btn, .action-primary, .action-secondary,
 .missed-item, .stat-tile.bad, .hero-options, .seg-btn.active {
   --lift: var(--lift-2);
@@ -192,7 +192,7 @@ body {
   transition: transform 0.08s ease-out, box-shadow 0.08s ease-out, background-color 0.15s, color 0.15s;
 }
 
-:is(.btn, .tile, .option-btn, .chip, .col-btn, .icon-btn.boxed, .stroke-ctl, .row-chip, .stroke-pick,
+:is(.btn, .tile, .option-btn, .chip, .col-btn, .icon-btn.boxed, .stroke-ctl, .row-chip, .kanji-chip, .stroke-pick,
 .quick-btn, .chart-more, .chart-cell, .font-btn, .theme-btn, .audio-btn, .listen-btn, .action-primary, .action-secondary,
 .missed-item, .stat-tile.bad, .hero-options):active:not(:disabled),
 /* selected toggles stay pressed in */
@@ -203,7 +203,7 @@ body {
 }
 
 @media (hover: hover) {
-  :is(.btn, .tile, .option-btn, .chip, .col-btn, .icon-btn.boxed, .stroke-ctl, .row-chip, .stroke-pick,
+  :is(.btn, .tile, .option-btn, .chip, .col-btn, .icon-btn.boxed, .stroke-ctl, .row-chip, .kanji-chip, .stroke-pick,
   .quick-btn, .chart-more, .chart-cell, .font-btn, .theme-btn, .audio-btn, .listen-btn, .action-primary, .action-secondary,
   .missed-item, .stat-tile.bad, .hero-options):not(.active):not(:disabled):hover {
     transform: translate(-1px, -1px);
@@ -567,6 +567,13 @@ body {
 .col-btn .col-progress .learning { background: var(--primary); opacity: 0.55; }
 .col-btn.active .col-progress { background: color-mix(in srgb, var(--on-primary) 25%, transparent); }
 .col-btn.active .col-progress .learning { background: var(--on-primary); opacity: 0.55; }
+
+/* a kanji set in the picker: a row button with title and kanji, bar and error dot as for rows */
+.set-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+.col-btn.set-btn { align-items: flex-start; justify-content: flex-start; gap: 2px; padding: 8px 12px 16px; text-align: left; }
+.set-title { padding-right: 12px; font-size: 14px; font-weight: 900; line-height: 1.2; }
+.set-kanji { font-size: 20px; font-weight: 700; line-height: 1.3; letter-spacing: 0.06em; color: var(--ink-2); overflow-wrap: anywhere; }
+.col-btn.active .set-kanji { color: var(--on-primary); }
 
 .custom-start { display: flex; gap: 12px; align-items: stretch; margin-top: 22px; }
 /* with rows picked the start stays above the tab bar while the row grid scrolls behind it */
@@ -1019,8 +1026,7 @@ body {
   --lift: var(--lift-1);
   cursor: pointer;
 }
-/* a missed kanji looks like a missed kana, but it is no button (yet) */
-.missed-item, .missed-entry {
+.missed-item {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -1030,8 +1036,8 @@ body {
   background: var(--bad-soft);
   color: var(--ink);
 }
-.missed-item .k, .missed-entry .k { font-size: 40px; font-weight: 700; line-height: 1.15; color: var(--bad-text); padding-left: 4px; }
-.missed-item .r, .missed-entry .r { font-size: 15px; font-weight: 800; color: var(--ink-2); }
+.missed-item .k { font-size: 40px; font-weight: 700; line-height: 1.15; color: var(--bad-text); padding-left: 4px; }
+.missed-item .r { font-size: 15px; font-weight: 800; color: var(--ink-2); }
 .missed-drawing { width: calc(56px * var(--w, 1)); height: 56px; flex-shrink: 0; border: 1.5px solid var(--edge); border-radius: 10px; background: var(--surface); }
 .missed-drawing path, .missed-drawing polyline { fill: none; stroke-linecap: round; stroke-linejoin: round; }
 .missed-drawing .ref { stroke: var(--line-soft); stroke-width: 4; }
@@ -1077,6 +1083,7 @@ body {
 .stat-card.purple { background: var(--primary-soft); }
 .stat-card .sc-value { font-size: 28px; font-weight: 900; line-height: 1.1; }
 .stat-card .sc-label { font-size: 13px; font-weight: 800; color: var(--ink-2); }
+.stat-card .sc-value small { font-size: 15px; font-weight: 800; color: var(--ink-2); }
 
 .chart { margin-bottom: 28px; }
 .chart-script + .chart-script { margin-top: 20px; }
@@ -1123,6 +1130,9 @@ body {
 .error-accuracy.good { color: var(--good-text); }
 /* the errors tile on the Practice tab jumps here */
 #open-errors { scroll-margin-top: 16px; }
+/* a keyword is longer than romaji, it takes the room the facts don't need */
+.kanji-errors .error-row { grid-template-columns: 64px minmax(0, 1fr) auto auto; }
+.kanji-errors .error-romaji { overflow-wrap: anywhere; }
 
 /* a folded group of the kana chart */
 .chart-more {
@@ -1147,15 +1157,17 @@ body {
 }
 .chart-more small { margin-left: 6px; font-size: 13px; font-weight: 700; color: var(--ink-2); }
 
-.no-errors-state, .no-stats-state { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 28px 20px; margin-bottom: 8px; border: var(--bw) dashed var(--line-soft); border-radius: 18px; color: var(--ink-2); text-align: center; }
+.no-errors-state, .no-stats-state, .kanji-load { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 28px 20px; margin-bottom: 8px; border: var(--bw) dashed var(--line-soft); border-radius: 18px; color: var(--ink-2); text-align: center; }
 .no-errors-state .big { width: 64px; height: 64px; display: flex; align-items: center; justify-content: center; border: var(--bw) solid var(--edge); border-radius: 50%; background: var(--good-soft); color: var(--good-text); }
 .no-stats-state .big { font-family: var(--kana-font); font-size: 48px; line-height: 1; opacity: 0.5; }
-.no-errors-state .msg, .no-stats-state .msg { font-size: 15px; font-weight: 800; }
+.no-errors-state .msg, .no-stats-state .msg, .kanji-load .msg { font-size: 15px; font-weight: 800; }
 .kanji-load-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin-top: 6px; }
 
 .stats-practice-row { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 18px; }
 
 .stats-table-header, .stats-row { display: grid; grid-template-columns: 72px 80px 1fr 110px 70px 80px; align-items: center; padding: 0 16px; }
+.kanji-table :is(.stats-table-header, .stats-row) { grid-template-columns: 72px minmax(0, 1fr) minmax(0, 1fr) 110px 70px; }
+.kanji-table .stats-romaji-cell { padding-right: 8px; overflow-wrap: anywhere; }
 .stats-table-header { background: var(--surface-2); border-bottom: var(--bw) solid var(--edge); font-size: 13px; font-weight: 800; color: var(--ink-2); }
 .stats-th { min-height: 44px; display: flex; align-items: center; gap: 4px; padding: 0; border: 0; background: none; color: var(--ink-2); font-size: 13px; font-weight: 800; text-align: left; white-space: nowrap; cursor: pointer; }
 @media (hover: hover) { .stats-th:hover { color: var(--primary-text); } }
@@ -1243,6 +1255,7 @@ body {
 .stroke-kana { min-width: 64px; font-size: 60px; font-weight: 700; line-height: 1; text-align: center; }
 .stroke-kana.hidden { color: var(--ink-2); }
 .stroke-romaji { font-size: 28px; font-weight: 900; letter-spacing: 0.04em; color: var(--primary-text); }
+.stroke-keyword { font-size: 22px; font-weight: 900; line-height: 1.2; color: var(--primary-text); }
 .stroke-nav { display: flex; gap: 10px; margin-left: auto; }
 .stroke-tips { display: flex; flex-direction: column; gap: 6px; }
 .stroke-mnemonic { font-size: 15px; font-weight: 700; line-height: 1.5; }
@@ -1436,10 +1449,39 @@ label.btn:focus-within { outline: 3px solid var(--focus); outline-offset: 2px; }
 .kd-dir-label { font-weight: 900; }
 .kd-dir-text { margin-left: auto; font-size: 14px; font-weight: 700; color: var(--ink-2); text-align: right; }
 .kd-block-title { font-size: 12px; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-2); margin-bottom: 8px; }
+/* a wrapping row of chips: facts in the kana sheet, links to other kanji in the kanji sheet and the Writing panel */
 .kd-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+/* a link to another kanji, pressable, wraps with the others instead of scrolling like a row chip */
+.kanji-chip {
+  --lift: var(--lift-1);
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 12px;
+  border: var(--bw) solid var(--edge);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 15px;
+  font-weight: 800;
+  cursor: pointer;
+}
+.kc-kanji { font-size: 22px; font-weight: 700; line-height: 1.15; }
 .kd-chip { padding: 2px 10px; border: 1.5px solid var(--edge); border-radius: 10px; background: var(--surface); font-size: 14px; font-weight: 800; }
 .kd-chip .kana { font-size: 20px; font-weight: 700; }
 .kd-hint { font-size: 15px; font-weight: 700; line-height: 1.5; }
+.kd-keyword { font-size: 22px; font-weight: 900; line-height: 1.2; color: var(--primary-text); }
+.kd-chips + .kd-hint { margin-top: 8px; }
+
+.sources-title { margin-top: 26px; }
+.sources-intro { margin: 0 0 12px; }
+.sheet-title-back { display: flex; align-items: center; gap: 12px; }
+.sources { display: flex; flex-direction: column; gap: 10px; }
+.sources-note { margin: 0 0 4px; }
+.source-row { display: flex; flex-direction: column; gap: 2px; padding: 12px 14px; border: var(--bw) solid var(--edge); border-radius: var(--r); background: var(--surface); font-size: 14px; font-weight: 700; line-height: 1.45; color: var(--ink-2); overflow-wrap: anywhere; }
+.source-name { font-size: 15px; font-weight: 900; color: var(--primary-text); }
+.source-line a { color: var(--primary-text); font-weight: 800; }
 
 /* ---------- toasts ---------- */
 
@@ -1508,6 +1550,12 @@ label.btn:focus-within { outline: 3px solid var(--focus); outline-offset: 2px; }
   .stats-romaji-cell { font-size: 14px; }
 
   .error-row { grid-template-columns: 44px 34px 1fr auto; padding: 4px 8px 4px 10px; }
+  /* the facts go under the keyword, three columns don't fit */
+  .kanji-errors .error-row { grid-template-columns: 44px minmax(0, 1fr) auto; }
+  .kanji-errors :is(.error-kana, .btn) { grid-row: span 2; }
+  .kanji-errors .error-facts { grid-column: 2; grid-row: 2; }
+  .kanji-table :is(.stats-table-header, .stats-row) { grid-template-columns: 48px minmax(0, 1fr) minmax(0, 1fr) 90px; }
+  .kanji-table .col-errors { display: none; }
   .error-kana { font-size: 30px; }
   .error-romaji, .error-facts { font-size: 14px; }
 
@@ -1530,11 +1578,11 @@ label.btn:focus-within { outline: 3px solid var(--focus); outline-offset: 2px; }
 :root[data-theme] { --lift-1: 0px; --lift-2: 0px; --lift-3: 0px; --drop: transparent; --bw: 1px; --dot: transparent; }
 
 /* !important because the hover and pressed rules above are more specific and only move things */
-:root[data-theme] :is(.btn, .tile, .option-btn, .chip, .col-btn, .icon-btn.boxed, .stroke-ctl, .row-chip, .stroke-pick,
+:root[data-theme] :is(.btn, .tile, .option-btn, .chip, .col-btn, .icon-btn.boxed, .stroke-ctl, .row-chip, .kanji-chip, .stroke-pick,
 .quick-btn, .chart-more, .chart-cell, .font-btn, .theme-btn, .audio-btn, .listen-btn, .action-primary, .action-secondary,
 .missed-item, .stat-tile.bad, .hero-options, .seg-btn.active) { --lift: 0px; transform: none !important; }
 
-:root[data-theme] :is(.btn, .tile, .option-btn, .chip, .col-btn, .icon-btn.boxed, .stroke-ctl, .row-chip, .stroke-pick,
+:root[data-theme] :is(.btn, .tile, .option-btn, .chip, .col-btn, .icon-btn.boxed, .stroke-ctl, .row-chip, .kanji-chip, .stroke-pick,
 .quick-btn, .chart-more, .chart-cell, .font-btn, .theme-btn, .audio-btn, .listen-btn, .action-primary, .action-secondary,
 .missed-item, .stat-tile.bad, .hero-options):active:not(:disabled) { opacity: 0.7; }
 
@@ -1634,8 +1682,8 @@ label.btn:focus-within { outline: 3px solid var(--focus); outline-offset: 2px; }
 :root[data-theme="sumi"] body::before { background: #1d1b18; }
 
 :root[data-theme="sumi"] :is(.btn, .tile, .option-btn, .col-btn, .question-card, .result-card, .outcome-section, .missed-section,
-.missed-item, .missed-entry, .pattern-card, .stat-card, .chart-more, .error-table, .stats-table, .stroke-svg, .stroke-pick, .danger-zone,
-.explain, .explain-item, .type-field, .listen-btn, .kd-dirs, .no-errors-state, .no-stats-state, .missed-drawing, .hero-kana,
+.missed-item, .pattern-card, .stat-card, .chart-more, .error-table, .stats-table, .stroke-svg, .stroke-pick, .danger-zone,
+.explain, .explain-item, .type-field, .listen-btn, .kd-dirs, .no-errors-state, .no-stats-state, .kanji-load, .missed-drawing, .hero-kana,
 .seg-btn, .stroke-view) { border-radius: var(--r); }
 :root[data-theme="sumi"] .sheet { border-radius: 8px 8px 0 0; }
 
@@ -1766,8 +1814,8 @@ label.btn:focus-within { outline: 3px solid var(--focus); outline-offset: 2px; }
 :root[data-theme="sumi"] .outcome-line.down :is(.outcome-tag, .kana) { color: var(--shu); }
 :root[data-theme="sumi"] .outcome-next { padding: 10px 0 0; border-top: 0; color: var(--ink-2); font-weight: 500; }
 :root[data-theme="sumi"] .missed-section { padding: 0; border: 0; background: transparent; }
-:root[data-theme="sumi"] :is(.missed-item, .missed-entry) { background: var(--surface); }
-:root[data-theme="sumi"] :is(.missed-item, .missed-entry) .k { color: var(--shu); }
+:root[data-theme="sumi"] .missed-item { background: var(--surface); }
+:root[data-theme="sumi"] .missed-item .k { color: var(--shu); }
 :root[data-theme="sumi"] .pattern-card { background: transparent; }
 
 /* kana chart: mastered is solid ink, an open error is underlined in vermilion */
@@ -1978,8 +2026,8 @@ label.btn:focus-within { outline: 3px solid var(--focus); outline-offset: 2px; }
 :root[data-theme="yoru"] .outcome-line.down { border-color: var(--bad); }
 :root[data-theme="yoru"] .outcome-line.down :is(.outcome-tag, .kana) { color: var(--bad); }
 :root[data-theme="yoru"] .outcome-next { padding: 4px 4px 0; border-top: 0; color: var(--ink-2); }
-:root[data-theme="yoru"] :is(.missed-item, .missed-entry) { background: var(--surface); }
-:root[data-theme="yoru"] :is(.missed-item, .missed-entry) .k { color: var(--bad); }
+:root[data-theme="yoru"] .missed-item { background: var(--surface); }
+:root[data-theme="yoru"] .missed-item .k { color: var(--bad); }
 :root[data-theme="yoru"] .pattern-card { background: var(--surface); }
 :root[data-theme="yoru"] .pattern-card.confusion { border-color: var(--bad); }
 

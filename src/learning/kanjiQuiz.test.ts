@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { kanjiQuestionType, pickKanjiOptions, makeKanjiCard, noteResult, summarizeRound } from './kanjiQuiz'
+import { kanjiQuestionType, pickKanjiOptions, makeKanjiCard, noteResult, summarizeRound, resultScore, resultLabel, splitMoves } from './kanjiQuiz'
 import type { RoundResults } from './kanjiQuiz'
 import { newKanjiEntry } from './kanjiStats'
 import type { KanjiEntry } from '../types'
@@ -108,5 +108,30 @@ describe('round scoring', () => {
     r = noteResult(r, 'k:C', false)
     expect(summarizeRound(r)).toEqual({ total: 3, first: 1, fixed: 1, open: 1 })
     expect(summarizeRound({})).toEqual({ total: 0, first: 0, fixed: 0, open: 0 })
+  })
+})
+
+describe('resultScore and resultLabel', () => {
+  const round = (total: number, first: number, fixed = 0) => ({ total, first, fixed, open: total - first - fixed })
+
+  it('scores the share right on the first try', () => {
+    expect(resultScore(round(4, 3))).toBe('75%')
+    expect(resultScore(round(0, 0))).toBe('0%')
+  })
+
+  it('says what happened in the round', () => {
+    expect(resultLabel(round(0, 0)).title).toBe('Nothing scored')
+    expect(resultLabel(round(5, 5)).title).toBe('Perfect!')
+    // everything fixed on retry
+    expect(resultLabel(round(5, 2, 3)).title).toBe('Got there!')
+    expect(resultLabel(round(5, 4)).title).toBe('Great work')
+    expect(resultLabel(round(5, 1, 1)).detail).toBe('1 of 5 kanji on the first try · 1 right on retry · 3 still open')
+  })
+})
+
+describe('splitMoves', () => {
+  it('lists mastered ones once, not also as moved up', () => {
+    const moves = { 'k:A': { from: 1, to: 2 }, 'k:B': { from: 2, to: 3 }, 'k:C': { from: 2, to: 0 }, 'k:D': { from: 1, to: 1 } }
+    expect(splitMoves(moves)).toEqual({ up: ['k:A'], down: ['k:C'], mastered: ['k:B'] })
   })
 })
