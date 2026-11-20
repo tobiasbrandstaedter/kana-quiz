@@ -11,7 +11,9 @@ import { orderKanjiSession, readyCard } from '../learning/kanjiSession'
 import type { PlannedCard } from '../learning/kanjiSession'
 import { noteResult, summarizeRound, resultScore, resultLabel, splitMoves } from '../learning/kanjiQuiz'
 import type { RoundResults } from '../learning/kanjiQuiz'
-import { itemInfo, itemOrder, makeCard, storedAnswer, wordReadingMistake, wordTypedVerdict, PLAN_COURSE } from '../learning/kanjiCards'
+import { itemInfo, itemOrder, makeCard, storedAnswer, wordReadingMistake, wordTypedVerdict, PATTERN_COURSE, PLAN_COURSE } from '../learning/kanjiCards'
+import { detectKanjiPatterns, kanjiStatsFromLog, patternCards } from '../learning/kanjiPatterns'
+import type { KanjiPattern } from '../learning/kanjiPatterns'
 import { cleanTyped, hasKanji } from '../learning/kanaInput'
 import type { ReadingMistake, TypedVerdict } from '../learning/readings'
 import { isWordType } from '../learning/wordQuiz'
@@ -181,6 +183,8 @@ function createKanji() {
     return sortKanjiRows(shown.map(stat => itemRow(itemInfo(stat.id)!, itemOrder(stat.id), stat)), tableSort.value)
   })
 
+  const allPatterns = computed(() => detectKanjiPatterns(stats.value, log.value, 'all', PATTERN_COURSE, clock.value))
+
   // set by the errors tile on the Practice tab, the Progress tab scrolls to its list and clears it
   const errorsScrollPending = ref(false)
 
@@ -288,6 +292,14 @@ function createKanji() {
     return true
   }
 
+  function startPattern(p: KanjiPattern): boolean {
+    const items = patternCards(p, stats.value)
+    if (items.length === 0) return false
+    remember(() => startPattern(p), 'Again')
+    begin(items)
+    return true
+  }
+
   // from the kanji sheet: this one kanji, with kanji the learner knows in between.
   // One never met gets its intro card first, like in smart practice.
   function startKanji(kanji: string): boolean {
@@ -318,7 +330,7 @@ function createKanji() {
     saveStats(data)
 
     const nextLog = loadLog()
-    nextLog.push({ id: a.id, type: a.type, correct: a.correct, given: a.given, ms, t: now })
+    nextLog.push({ id: a.id, type: a.type, correct: a.correct, given: a.given, ms, t: now, ...(a.mistake ? { mistake: a.mistake } : {}) })
     if (nextLog.length > MAX_ANSWERS) nextLog.splice(0, nextLog.length - MAX_ANSWERS)
     writeJson(KANJI_ANSWERS_KEY, nextLog)
     log.value = nextLog
@@ -430,6 +442,11 @@ function createKanji() {
     .map(([id]) => itemInfo(id))
     .filter((item): item is ItemInfo => !!item))
 
+  const roundPatterns = computed(() => {
+    const round = log.value.filter(r => r.t >= startedAt.value)
+    return detectKanjiPatterns(kanjiStatsFromLog(round), round, 'round', PATTERN_COURSE)
+  })
+
   const roundOutcome = computed(() => {
     const { up, down, mastered } = splitMoves(moves.value)
     const text = (ids: string[]) => ids.map(id => itemInfo(id)?.text ?? '')
@@ -450,12 +467,12 @@ function createKanji() {
     sets, mode, setMode, wordMode, smartSize, smartNew, setSmartSize, setSmartNew,
     pickedSets, toggleSet, selectAllSets, selectNoneSets,
     statOf, lockOf, groupLockOf, hasError, summary, progressBySet,
-    openErrors, resolveErrors, resolveAllErrors, rows, tableShow, tableSort, setTableSort, errorsScrollPending,
+    openErrors, resolveErrors, resolveAllErrors, rows, tableShow, tableSort, setTableSort, errorsScrollPending, allPatterns,
     cards, current, card, answered, pickedOption, gaveUp, mistake, correct, correctCount, wrongCount, startedAt, progress,
     typedAnswer, slipped, verdict,
-    startSmart, startCustom, startErrors, startKanji, restart, restartLabel,
+    startSmart, startCustom, startErrors, startKanji, startPattern, restart, restartLabel,
     choose, giveUp, submitTyped, next, goHome, resume,
-    resultScore: score, resultLabel: label, missed, roundOutcome,
+    resultScore: score, resultLabel: label, missed, roundOutcome, roundPatterns,
   }
 }
 

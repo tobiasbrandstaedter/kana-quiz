@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { seeded } from './seeded'
 import {
-  itemInfo, itemOrder, makeCard, optionText, spellDiff, storedAnswer, typedReadings, wordReadingMistake, wordTypedVerdict, PLAN_COURSE,
+  itemInfo, itemOrder, makeCard, optionText, spellDiff, storedAnswer, typedReadings, wordReadingMistake, wordTypedVerdict, PATTERN_COURSE, PLAN_COURSE,
 } from './kanjiCards'
 import { toKana } from './kanaInput'
 import { looksLikeReading } from './readings'
@@ -34,6 +34,28 @@ const everything: CardContext = {
 }
 // one who has met nothing yet
 const nothing: CardContext = { stats: {}, mode: 'mixed', knownKanji: new Set(), knownWords: new Set() }
+
+describe('PATTERN_COURSE', () => {
+  it('names items, puts a word into the set of its home kanji, finds the lookalikes and their hint', () => {
+    const k = KANJI.find(x => kanjiLookalikes(x.kanji).length)!
+    const other = kanjiLookalikes(k.kanji)[0]
+    expect(PATTERN_COURSE.text(k.id)).toBe(k.kanji)
+    expect(PATTERN_COURSE.text('w:none')).toBeNull()
+    expect(PATTERN_COURSE.lookalikes(k.id)).toContain(`k:${other}`)
+    expect(PATTERN_COURSE.hint(k.id, `k:${other}`)).toBeTruthy()
+    for (const w of WORDS) expect(PATTERN_COURSE.setOf(w.id)?.id).toBe(kanjiEntry(w.home)!.set)
+    expect(PATTERN_COURSE.setOf(k.id)?.id).toBe(k.set)
+  })
+
+  it('lists the practiced words that have a kanji and tells which kanji a wrong form swapped', () => {
+    for (const k of KANJI) expect(PATTERN_COURSE.wordsWith(k.id)).toEqual(WORDS.filter(w => w.kanji.includes(k.kanji)).map(w => w.id))
+    const w = WORDS.find(x => x.kanji.length === 2)!
+    const swapped = KANJI.find(x => !w.kanji.includes(x.kanji))!.kanji
+    const form = w.form.replace(w.kanji[0], swapped)
+    expect(PATTERN_COURSE.swap(w.id, form)).toEqual([`k:${w.kanji[0]}`, `k:${swapped}`])
+    expect(PATTERN_COURSE.swap(w.id, w.form)).toBeNull()
+  })
+})
 
 describe('PLAN_COURSE', () => {
   it('has every kanji and course word, each word on its home kanji, the first word marked', () => {

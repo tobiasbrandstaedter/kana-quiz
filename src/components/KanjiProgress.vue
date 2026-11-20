@@ -7,11 +7,12 @@ import { clock } from '../clock'
 import { fromNow, stageOf, accuracy, accClass, STAGE_LABEL } from '../format'
 import { openKanji } from '../kanjiShell'
 import KanjiChart from './KanjiChart.vue'
+import KanjiPatternCards from './KanjiPatternCards.vue'
 import Icon from './Icon.vue'
 
 const {
   summary, openErrors, resolveErrors, resolveAllErrors, startErrors,
-  rows, tableShow, tableSort, setTableSort, errorsScrollPending,
+  rows, tableShow, tableSort, setTableSort, errorsScrollPending, allPatterns, startPattern,
 } = useKanji()
 
 // the errors tile on the Practice tab led here
@@ -53,6 +54,14 @@ function sortState(col: KanjiSortCol): string {
     <h2 class="section-title">Kanji chart</h2>
     <p class="section-note">Tap a kanji to see how it's written, how you're doing with it and when it comes back.</p>
     <KanjiChart />
+
+    <KanjiPatternCards
+      v-if="summary.itemsSeen > 0"
+      :patterns="allPatterns"
+      title="Detected patterns"
+      empty-text="No patterns yet. Keep practicing, this fills in as errors pile up."
+      @practice="startPattern"
+    />
 
     <div id="open-errors" class="errors-header">
       <h2 class="section-title">Open errors <span class="count-tag">{{ openErrors.length }}</span></h2>

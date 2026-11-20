@@ -3,9 +3,10 @@ import { computed } from 'vue'
 import { useKanji } from '../composables/useKanji'
 import { fromNow } from '../format'
 import { openKanji } from '../kanjiShell'
+import KanjiPatternCards from './KanjiPatternCards.vue'
 import Icon from './Icon.vue'
 
-const { resultScore, resultLabel, missed, roundOutcome, restart, restartLabel, goHome } = useKanji()
+const { resultScore, resultLabel, missed, roundOutcome, roundPatterns, startPattern, restart, restartLabel, goHome } = useKanji()
 
 const outlookText = computed(() => {
   const o = roundOutcome.value.outlook
@@ -61,6 +62,13 @@ const outlookText = computed(() => {
         </button>
       </div>
     </div>
+
+    <KanjiPatternCards
+      v-if="roundPatterns.length > 0"
+      :patterns="roundPatterns"
+      title="Patterns this round"
+      @practice="startPattern"
+    />
 
     <div class="result-btns">
       <button class="btn btn-action btn-lg" @click="restart()"><Icon name="replay" :size="20" />{{ restartLabel }}</button>

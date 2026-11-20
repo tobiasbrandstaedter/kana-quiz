@@ -338,6 +338,9 @@ export interface KanjiAnswerRecord {
   given: string
   ms: number
   t: number
+  // the kind of a wrong reading, so the patterns of one round can count reading habits.
+  // Records written before P6 don't have it
+  mistake?: ReadingKind
 }
 
 export interface KanjiCard {

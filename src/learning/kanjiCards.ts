@@ -1,14 +1,15 @@
-// Cards over the course content: the course as the plan sees it, what an item id stands for,
-// the card for a planned item with its options, and what an option means per question type.
+// Cards over the course content: the course as the plan and the pattern rules see it, what an
+// item id stands for, the card for a planned item with its options, and what an option means per question type.
 // Reads kanjiData, holds no state.
 import type { ItemInfo, KanjiCard, KanjiMode, KanjiStatsMap, WordEntry } from '../types'
 import {
-  allKanji, groupById, groupPractice, homeWords, kanjiEntry, kanjiLookalikes, kanjiReadings, kanjiWithReading, practicedWords,
-  sameForm, tooClose, wordById, wordGroups,
+  allKanji, groupById, groupPractice, homeWords, kanjiEntry, kanjiLookalikeHint, kanjiLookalikes, kanjiReadings, kanjiSets, kanjiWithReading,
+  practicedWords, sameForm, tooClose, wordById, wordGroups,
 } from '../data/kanjiData'
 import { cardGroup, kanjiId, kanjiOfId } from '../kanjiKeys'
 import type { PlanCourse, PlanWord } from './kanjiPlan'
 import type { PlannedCard } from './kanjiSession'
+import type { PatternCourse } from './kanjiPatterns'
 import { confusedKanji } from './kanjiStats'
 import { kanjiQuestionType, makeKanjiCard, pickKanjiOptions } from './kanjiQuiz'
 import { isWordType, pickMeaningOptions, pickReadingOptions, pickSpellOptions, wordQuestionType } from './wordQuiz'
@@ -49,7 +50,29 @@ export function itemInfo(id: string): ItemInfo | null {
   return w && { id, kind: 'word', text: w.form, meaning: w.gloss, reading: w.reading, home: w.home }
 }
 
-/** Where an item sits in the course: a kanji at its position, its words right after it in teaching order, then its group words. */
+const SETS = new Map(kanjiSets().map(s => [s.id, s]))
+// kanji id -> the practiced words that have it
+const WORDS_WITH = new Map<string, string[]>()
+for (const w of PRACTICED) for (const k of w.kanji) WORDS_WITH.set(kanjiId(k), [...(WORDS_WITH.get(kanjiId(k)) ?? []), w.id])
+
+/** The course as the pattern rules see it. */
+export const PATTERN_COURSE: PatternCourse = {
+  text: id => itemInfo(id)?.text ?? null,
+  setOf: id => {
+    const info = itemInfo(id)
+    return (info && SETS.get(kanjiEntry(info.home)!.set)) ?? null
+  },
+  lookalikes: id => kanjiLookalikes(kanjiOfId(id) ?? '').map(kanjiId),
+  hint: (a, b) => kanjiLookalikeHint(kanjiOfId(a) ?? '', kanjiOfId(b) ?? ''),
+  wordsWith: id => WORDS_WITH.get(id) ?? [],
+  swap: (id, form) => {
+    const w = wordById(id)
+    const diff = w && spellDiff(w.form, form)
+    return diff ? [kanjiId(diff.right), kanjiId(diff.given)] : null
+  },
+}
+
+/** Where an item sits in the course:a kanji at its position, its words right after it in teaching order, then its group words. */
 export function itemOrder(id: string): number {
   const info = itemInfo(id)
   if (!info) return Infinity
