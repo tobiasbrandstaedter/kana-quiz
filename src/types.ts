@@ -288,9 +288,11 @@ export interface KanjiReading {
 // meaning (V1), 'read-choice' for its reading (R1), 'read-type' has the reading typed (R2), 'spell'
 // shows reading and meaning and asks for the written form (S1). The mode Reading is
 // 'read-choice' and asks R1 or R2 by the box, there is no mode of its own for R2.
+// 'write' shows the keyword and has the kanji drawn from memory (W1). It is an offer: never
+// in smart practice or Mixed, and it never moves a box (KD11, KR26).
 export type KanjiQuestionType = 'meaning' | 'recognize'
 export type WordQuestionType = 'word-meaning' | 'read-choice' | 'read-type' | 'spell'
-export type QuestionType = KanjiQuestionType | WordQuestionType
+export type QuestionType = KanjiQuestionType | WordQuestionType | 'write'
 export type KanjiMode = Exclude<QuestionType, 'read-type'> | 'mixed'
 export type Course = 'kana' | 'kanji'
 
@@ -313,6 +315,9 @@ export interface KanjiStatEntry {
   mistakes: Partial<Record<ReadingKind, number>>  // wrong readings by kind, words only
   box: number
   due: number
+  // written answers, kanji only, as kana store them: rejected attempts per stroke index and by fault
+  strokeErrors: number[]
+  strokeFaults: Partial<Record<StrokeFault, number>>
 }
 
 export type KanjiStatsMap = Record<string, KanjiStatEntry>
@@ -329,6 +334,7 @@ export interface KanjiAnswerInput {
   holdBox?: boolean  // right after a miss in the same session: counts, but can't promote
   typo?: boolean     // a typed reading slipped twice: counts as wrong, but leaves the Leitner box alone
   mistake?: ReadingKind  // the kind of a wrong reading, when it has one
+  strokes?: StrokeTally  // written answers only
 }
 
 export interface KanjiAnswerRecord {
@@ -349,7 +355,7 @@ export interface KanjiCard {
   type: QuestionType | 'intro'
   // kanji for 'meaning' and 'recognize' (a meaning card shows their keywords), word ids for
   // 'word-meaning' (shown as glosses), readings for 'read-choice', written forms for 'spell',
-  // none for 'read-type'
+  // none for 'read-type' and 'write'
   options: string[]
   answer: string  // the right one of the options, the reading shown first for 'read-type'
   // the intro of a new kanji's first word: the kanji item that has to be answered right in

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch, nextTick } from 'vue'
-import type { KanjiQuestionType } from '../types'
+import type { QuestionType } from '../types'
 import { useKanji } from '../composables/useKanji'
 import {
   courseEntries, groupOf, groupPractice, homeWords, kanjiEntry, kanjiLookalikeHint, kanjiLookalikes, kanjiReadings, kanjiStrokes, wordById,
@@ -35,16 +35,18 @@ const hints = computed(() => {
   return [...new Set(all.filter((h): h is string => !!h))]
 })
 
-const TYPES: Array<[KanjiQuestionType, string]> = [
+const TYPES: Array<[QuestionType, string]> = [
   ['meaning', 'Meaning'],
   ['recognize', 'Recognize'],
+  ['write', 'Write'],
 ]
 
+// writing is an offer, its line only shows once something was written
 const byType = computed(() => TYPES.map(([t, label]) => {
   const s = stat.value?.byType[t]
   const tried = !!s && s.correct + s.incorrect > 0
-  return { label, state: tried ? accClass(accuracy(s)) : 'none', text: tried ? `${s.correct} right, ${s.incorrect} wrong` : 'not tried' }
-}))
+  return { type: t, label, tried, state: tried ? accClass(accuracy(s)) : 'none', text: tried ? `${s.correct} right, ${s.incorrect} wrong` : 'not tried' }
+}).filter(r => r.tried || r.type !== 'write'))
 
 // what the learner picked instead, most often first, only kanji the course still has
 const confusions = computed(() => confusedKanji(stat.value).filter(c => kanjiEntry(c.kanji)).slice(0, 4))

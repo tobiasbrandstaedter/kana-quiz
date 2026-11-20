@@ -1,6 +1,7 @@
 import { ref, computed, effectScope } from 'vue'
 import type {
-  ItemInfo, KanjiAnswerInput, KanjiAnswerRecord, KanjiCard, KanjiMode, KanjiSort, KanjiSortCol, KanjiStatEntry, KanjiStatsMap, QuestionType,
+  DrawResult, ItemInfo, KanjiAnswerInput, KanjiAnswerRecord, KanjiCard, KanjiMode, KanjiSort, KanjiSortCol, KanjiStatEntry, KanjiStatsMap, Point,
+  QuestionType,
 } from '../types'
 import { allKanji, groupById, kanjiSets } from '../data/kanjiData'
 import { applyKanjiAnswer, normalizeKanjiStats } from '../learning/kanjiStats'
@@ -11,7 +12,8 @@ import { orderKanjiSession, readyCard } from '../learning/kanjiSession'
 import type { PlannedCard } from '../learning/kanjiSession'
 import { noteResult, summarizeRound, resultScore, resultLabel, splitMoves } from '../learning/kanjiQuiz'
 import type { RoundResults } from '../learning/kanjiQuiz'
-import { itemInfo, itemOrder, makeCard, storedAnswer, wordReadingMistake, wordTypedVerdict, PATTERN_COURSE, PLAN_COURSE } from '../learning/kanjiCards'
+import { itemInfo, itemOrder, makeCard, storedAnswer, wordReadingMistake, wordTypedVerdict, writeCue, PATTERN_COURSE, PLAN_COURSE } from '../learning/kanjiCards'
+import { recallAnswers, writePractice, writeQuizIds } from '../learning/kanjiWrite'
 import { detectKanjiPatterns, kanjiStatsFromLog, patternCards } from '../learning/kanjiPatterns'
 import type { KanjiPattern } from '../learning/kanjiPatterns'
 import { cleanTyped, hasKanji } from '../learning/kanaInput'
@@ -48,6 +50,8 @@ function createKanji() {
 
   const stats = ref<KanjiStatsMap>(loadStats())
   const log = ref<KanjiAnswerRecord[]>(loadLog())
+  // the plan, the error list and the patterns judge knowing an item on sight, writing is apart (KD11)
+  const recallLog = computed(() => recallAnswers(log.value))
 
   const kanjiList = allKanji()
   const kanjiIds = kanjiList.map(k => k.id)
@@ -72,7 +76,7 @@ function createKanji() {
 
   const planAt = (now: number) => {
     const newIds = pickedSets.value.size ? pickedKanjiIds(sets, pickedSets.value) : kanjiIds
-    return planKanji(stats.value, log.value, PLAN_COURSE, smartSize.value, now, smartNew.value, newIds)
+    return planKanji(stats.value, recallLog.value, PLAN_COURSE, smartSize.value, now, smartNew.value, newIds)
   }
   const plan = computed(() => planAt(clock.value))
 
@@ -149,7 +153,7 @@ function createKanji() {
 
   // --- progress ---
 
-  const openErrors = computed(() => openKanjiErrors(stats.value, log.value, itemIds).map(stat => ({ ...stat, item: itemInfo(stat.id)! })))
+  const openErrors = computed(() => openKanjiErrors(stats.value, recallLog.value, itemIds).map(stat => ({ ...stat, item: itemInfo(stat.id)! })))
   const errorIds = computed(() => new Set(openErrors.value.map(e => e.id)))
   const hasError = (kanji: string) => errorIds.value.has(kanjiId(kanji))
 
@@ -183,7 +187,7 @@ function createKanji() {
     return sortKanjiRows(shown.map(stat => itemRow(itemInfo(stat.id)!, itemOrder(stat.id), stat)), tableSort.value)
   })
 
-  const allPatterns = computed(() => detectKanjiPatterns(stats.value, log.value, 'all', PATTERN_COURSE, clock.value))
+  const allPatterns = computed(() => detectKanjiPatterns(stats.value, recallLog.value, 'all', PATTERN_COURSE, clock.value))
 
   // set by the errors tile on the Practice tab, the Progress tab scrolls to its list and clears it
   const errorsScrollPending = ref(false)
@@ -202,6 +206,10 @@ function createKanji() {
   const typedAnswer = ref('')
   const slipped = ref(false)
   const verdict = ref<TypedVerdict | null>(null)
+  // a write card: what was drawn, shown next to the kanji once answered
+  const drawn = ref<DrawResult | null>(null)
+  // the ink of missed writes by item id, for the results screen
+  const drawings = ref<Record<string, Array<Point[] | null>>>({})
   const correctCount = ref(0)
   const wrongCount = ref(0)
   const startedAt = ref(0)
@@ -230,6 +238,7 @@ function createKanji() {
     typedAnswer.value = ''
     slipped.value = false
     verdict.value = null
+    drawn.value = null
     questionStart = Date.now()
   }
 
@@ -241,6 +250,7 @@ function createKanji() {
     rightIds = new Set()
     moves.value = {}
     results.value = {}
+    drawings.value = {}
     correctCount.value = 0
     wrongCount.value = 0
     cards.value = items.map(buildCard)
@@ -272,20 +282,23 @@ function createKanji() {
 
   // the word modes ask words, the custom quiz then runs over the words met so far (KR47)
   const wordMode = computed(() => isWordType(mode.value))
+  // the kanji a custom quiz in the mode Write asks: those of the picked sets met so far (KR26)
+  const writeIds = computed(() => writeQuizIds(pickedKanjiIds(sets, pickedSets.value), stats.value))
 
   // every kanji of the picked sets once, no intro, a kanji not met yet is asked like any other.
-  // In a word mode every word of their kanji that has been introduced.
+  // In a word mode every word of their kanji that has been introduced, in Write every kanji met.
   function startCustom(): boolean {
     const kanji = pickedKanjiIds(sets, pickedSets.value)
-    const ids = shuffle(wordMode.value ? pickedWordIds(kanji, PLAN_COURSE.words, stats.value) : kanji)
+    const write = mode.value === 'write'
+    const ids = shuffle(write ? writeIds.value : wordMode.value ? pickedWordIds(kanji, PLAN_COURSE.words, stats.value) : kanji)
     if (ids.length === 0) return false
     remember(startCustom, 'Again')
-    begin(questionsOnly(ids))
+    begin(write ? ids.map(id => ({ id, type: 'write' as const })) : questionsOnly(ids))
     return true
   }
 
   function startErrors(): boolean {
-    const ids = errorPracticeIds(openErrors.value, log.value)
+    const ids = errorPracticeIds(openErrors.value, recallLog.value)
     if (ids.length === 0) return false
     remember(startErrors, 'Again')
     begin(questionsOnly(ids))
@@ -320,9 +333,8 @@ function createKanji() {
   }
 
   /** Applies the answer to the stored stats and the log, returns how the box moved. */
-  function saveAnswer(a: Omit<KanjiAnswerInput, 'ms'>): BoxMove {
+  function saveAnswer(a: Omit<KanjiAnswerInput, 'ms'>, ms = Date.now() - questionStart): BoxMove {
     const now = Date.now()
-    const ms = now - questionStart
     // read storage again, another tab may have written in between
     const data = loadStats()
     const from = data[a.id]?.box ?? 0
@@ -361,7 +373,8 @@ function createKanji() {
     const slot = planReask(qs.map(x => x.id), current.value, id, asked.map(x => x.id), reasked[id] ?? 0)
     if (!slot) return
     reasked[id] = (reasked[id] ?? 0) + 1
-    const padding = slot.pad.map(p => buildCard({ id: p }))
+    // in a write quiz the cards in between are writes too
+    const padding = slot.pad.map(p => buildCard({ id: p, ...(type === 'write' ? { type } : {}) }))
     qs.splice(slot.index, 0, ...padding, { ...buildCard({ id, type }), reask: true })
   }
 
@@ -374,9 +387,10 @@ function createKanji() {
       return
     }
     // A word card waits for Next: its reading and meaning are to be read (KR34), and a card
-    // that changes under the finger would take the tap meant for Next. A kanji card moves on
-    // shortly, unless Next was pressed first.
-    if (!kanjiOfId(a.id)) return
+    // that changes under the finger would take the tap meant for Next. So does a write card,
+    // the drawing is to be compared with the kanji. A kanji card moves on shortly, unless Next
+    // was pressed first.
+    if (!kanjiOfId(a.id) || a.type === 'write') return
     const session = startedAt.value
     const at = current.value
     setTimeout(() => {
@@ -408,6 +422,32 @@ function createKanji() {
       settle({ id: c.id, type: c.type, correct: false, given: v.given, typo: v.typo, mistake: v.mistake?.kind })
     }
   }
+
+  // a write card once every stroke is down: correct means no hint and no order or direction fault
+  function submitWrite(result: DrawResult): void {
+    const c = card.value
+    if (!c || c.type !== 'write' || answered.value) return
+    drawn.value = result
+    if (!result.correct) drawings.value = { ...drawings.value, [c.id]: result.ink }
+    settle({ id: c.id, type: 'write', correct: result.correct, given: '', strokes: { errors: result.errors, faults: result.faults } })
+  }
+
+  /**
+   * A clean write on the Writing tab (KR50): stored once per kanji and day, without a time,
+   * only for a kanji in practice and not when it was on screen since it was picked. Says what
+   * happened, null for a write that wasn't clean (nothing is stored).
+   */
+  function recordWrite(kanji: string, result: DrawResult, peeked: boolean): 'saved' | 'repeat' | 'new' | 'peeked' | null {
+    if (!result.correct) return null
+    const id = kanjiId(kanji)
+    const outcome = writePractice(stats.value[id], log.value, id, peeked, Date.now())
+    if (outcome !== 'save') return outcome
+    saveAnswer({ id, type: 'write', correct: true, given: '', strokes: { errors: result.errors, faults: result.faults } }, 0)
+    return 'saved'
+  }
+
+  /** The reading cue of a write question, see writeCue. */
+  const cueOf = (kanji: string) => writeCue(kanji, stats.value)
 
   const choose = (option: string) => answer(option)
   const giveUp = () => answer(null)
@@ -443,7 +483,7 @@ function createKanji() {
     .filter((item): item is ItemInfo => !!item))
 
   const roundPatterns = computed(() => {
-    const round = log.value.filter(r => r.t >= startedAt.value)
+    const round = recallLog.value.filter(r => r.t >= startedAt.value)
     return detectKanjiPatterns(kanjiStatsFromLog(round), round, 'round', PATTERN_COURSE)
   })
 
@@ -469,9 +509,9 @@ function createKanji() {
     statOf, lockOf, groupLockOf, hasError, summary, progressBySet,
     openErrors, resolveErrors, resolveAllErrors, rows, tableShow, tableSort, setTableSort, errorsScrollPending, allPatterns,
     cards, current, card, answered, pickedOption, gaveUp, mistake, correct, correctCount, wrongCount, startedAt, progress,
-    typedAnswer, slipped, verdict,
+    typedAnswer, slipped, verdict, drawn, drawings, writeIds, cueOf, recordWrite,
     startSmart, startCustom, startErrors, startKanji, startPattern, restart, restartLabel,
-    choose, giveUp, submitTyped, next, goHome, resume,
+    choose, giveUp, submitTyped, submitWrite, next, goHome, resume,
     resultScore: score, resultLabel: label, missed, roundOutcome, roundPatterns,
   }
 }

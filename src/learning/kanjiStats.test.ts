@@ -83,6 +83,32 @@ describe('applyKanjiAnswer', () => {
   })
 })
 
+describe('applyKanjiAnswer with a written kanji', () => {
+  const write = (patch: Partial<KanjiAnswerInput> = {}) =>
+    answer({ type: 'write', given: '', strokes: { errors: [0, 2, 1], faults: { order: 1, shape: 2 } }, ...patch })
+  const known = { ...newKanjiEntry('k:A'), correct: 4, incorrect: 1, streak: 2, box: 3, due: NOW, lastSeen: NOW - DAY, lastWrong: NOW - 9 * DAY, totalMs: 9000, count: 5 }
+
+  it('counts it under write with the stroke tallies, and moves no box either way', () => {
+    const wrong = applyKanjiAnswer(known, write({ correct: false }), NOW)
+    expect(wrong).toEqual({
+      ...known, byType: { write: { correct: 0, incorrect: 1 } }, strokeErrors: [0, 2, 1], strokeFaults: { order: 1, shape: 2 },
+    })
+    const right = applyKanjiAnswer(wrong, write({ strokes: { errors: [1, 0, 0, 3], faults: { direction: 1 } } }), NOW)
+    expect(right).toMatchObject({ box: 3, due: NOW, correct: 4, incorrect: 1, streak: 2 })
+    expect(right.byType.write).toEqual({ correct: 1, incorrect: 1 })
+    expect(right.strokeErrors).toEqual([1, 2, 1, 3])
+    expect(right.strokeFaults).toEqual({ order: 1, shape: 2, direction: 1 })
+  })
+
+  it('leaves the old entry alone', () => {
+    const before = { ...known, strokeErrors: [1], strokeFaults: { order: 1 } }
+    applyKanjiAnswer(before, write({ correct: false }), NOW)
+    expect(before.strokeErrors).toEqual([1])
+    expect(before.strokeFaults).toEqual({ order: 1 })
+    expect(before.byType).toEqual({})
+  })
+})
+
 describe('normalizeKanjiStats', () => {
   it('fills missing fields and drops what is not an entry', () => {
     const out = normalizeKanjiStats({ 'k:A': { correct: 2, box: 1 }, 'k:B': 'nonsense' })
@@ -90,6 +116,13 @@ describe('normalizeKanjiStats', () => {
     expect(normalizeKanjiStats(null)).toEqual({})
     // an entry stored before words came has no mistakes field and gets an empty one
     expect(normalizeKanjiStats({ 'k:A': { correct: 1, confusions: {}, byType: {} } })['k:A'].mistakes).toEqual({})
+  })
+
+  it('gives an entry stored before writing came empty stroke tallies, so a write needs no migration', () => {
+    const stored = normalizeKanjiStats({ 'k:A': { correct: 1, confusions: {}, byType: { meaning: { correct: 1, incorrect: 0 } }, mistakes: {} } })['k:A']
+    expect(stored).toMatchObject({ strokeErrors: [], strokeFaults: {} })
+    const e = applyKanjiAnswer(stored, answer({ type: 'write', given: '', strokes: { errors: [2], faults: { shape: 2 } } }), NOW)
+    expect(e).toMatchObject({ strokeErrors: [2], strokeFaults: { shape: 2 }, byType: { meaning: { correct: 1, incorrect: 0 }, write: { correct: 1, incorrect: 0 } } })
   })
 })
 

@@ -4,12 +4,14 @@ import type { DrawResult } from '../types'
 import { useKanji } from '../composables/useKanji'
 import { allKanji, courseEntries, kanjiEntry, kanjiLookalikes, kanjiStrokes, ownWords } from '../data/kanjiData'
 import { openKanji } from '../kanjiShell'
+import { kanjiId } from '../kanjiKeys'
+import { writtenClean } from '../learning/kanjiWrite'
 import StrokeDemo from './StrokeDemo.vue'
 import StrokeCanvas from './StrokeCanvas.vue'
 import Icon from './Icon.vue'
 import SpeakButton from './SpeakButton.vue'
 
-const { sets } = useKanji()
+const { sets, statOf, cueOf, recordWrite } = useKanji()
 
 const all = allKanji()
 const picked = ref(all[0].kanji)
@@ -22,19 +24,28 @@ const parts = computed(() => courseEntries(entry.value.parts))
 const lookalikes = computed(() => courseEntries(kanjiLookalikes(picked.value)))
 const words = computed(() => ownWords(picked.value))
 
-// writing from memory comes in a later release (KD11), watch and trace are here from the start
-type View = 'watch' | 'trace'
-const VIEWS: Array<[View, string]> = [['watch', 'Watch'], ['trace', 'Trace']]
+// watch the animation, trace over it, then write it from memory (KR50, the same rules as kana)
+type View = 'watch' | 'trace' | 'recall'
+const VIEWS: Array<[View, string]> = [['watch', 'Watch'], ['trace', 'Trace'], ['recall', 'Write']]
 const view = ref<View>('watch')
 const attempt = ref(0)  // bumped to give the canvas a fresh start
 const outcome = ref<DrawResult | null>(null)
+// the kanji was on screen since it was picked, so a write isn't really from memory
+let peeked = true
+const saved = ref<ReturnType<typeof recordWrite>>(null)
 const stageEl = ref<HTMLElement | null>(null)
+
+// writing from memory is pointless with the answer on screen: the kanji, its words, parts
+// and lookalikes go while writing, the keyword and the reading of its first word stay
+const hideKanji = computed(() => view.value === 'recall' && !outcome.value)
+const cue = computed(() => cueOf(picked.value))
 
 function setView(v: View): void {
   view.value = v
+  if (v !== 'recall') peeked = true
   retry()
   // on a phone the canvas starts below the fold, and it can't be scrolled by dragging on it
-  if (v === 'trace') nextTick(() => stageEl.value?.scrollIntoView({ block: 'start' }))
+  if (v !== 'watch') nextTick(() => stageEl.value?.scrollIntoView({ block: 'start' }))
 }
 
 function retry(): void {
@@ -42,12 +53,38 @@ function retry(): void {
   attempt.value++
 }
 
+function onDone(result: DrawResult): void {
+  outcome.value = result
+  if (view.value === 'recall') saved.value = recordWrite(picked.value, result, peeked)
+  // the finished kanji is shown, anything after this is a repeat with the answer seen
+  peeked = true
+}
+
+const CLEAN_TEXT = {
+  saved: 'Clean, saved as written from memory.',
+  repeat: 'Clean again. One write a day counts per kanji.',
+  new: 'Clean! It will count once this kanji is part of your practice.',
+  peeked: 'Clean, but the kanji was on screen just before, so this one is not saved. Come back to it after another one.',
+}
+
+const outcomeText = computed(() => {
+  if (!outcome.value?.correct) return 'Done, with some help. Once more?'
+  if (view.value === 'trace') return 'Clean trace. Now try it from memory.'
+  return saved.value ? CLEAN_TEXT[saved.value] : ''
+})
+
 function pick(kanji: string): void {
   // the canvas is keyed by the kanji, the same one again keeps it and so keeps its outcome too
   if (kanji === picked.value) return
   picked.value = kanji
   outcome.value = null
+  peeked = view.value !== 'recall'
 }
+
+// checked once written cleanly from memory, here or in a write quiz
+const written = (kanji: string) => writtenClean(statOf(kanjiId(kanji)))
+// the kanji being written stays hidden wherever a chip would show it
+const shown = (kanji: string) => hideKanji.value && kanji === picked.value ? '?' : kanji
 
 function move(delta: number): void {
   const i = all.findIndex(x => x.kanji === picked.value)
@@ -74,27 +111,31 @@ watch(set, s => {
         class="row-chip" :class="{ active: s.id === set.id }"
         role="tab" :aria-selected="s.id === set.id"
         @click="pick(s.kanji[0])"
-      ><span class="kana" lang="ja">{{ s.kanji[0] }}</span> {{ s.title }}</button>
+      ><span class="kana" lang="ja">{{ shown(s.kanji[0]) }}</span> {{ s.title }}</button>
     </div>
     <div class="stroke-picks">
       <button
         v-for="x in set.kanji" :key="x"
-        class="stroke-pick kana" :class="{ active: x === picked }"
+        class="stroke-pick kana" :class="{ active: x === picked, written: written(x) }"
         :aria-pressed="x === picked"
+        :aria-label="hideKanji && x === picked ? 'The kanji to write' : undefined"
         @click="pick(x)"
-      ><span lang="ja">{{ x }}</span></button>
+      ><span lang="ja">{{ shown(x) }}</span><span v-if="written(x)" class="sr-only">, written cleanly before</span></button>
     </div>
 
     <div class="stroke-panel">
       <div class="stroke-info">
-        <div class="stroke-kana kana" lang="ja">{{ entry.kanji }}</div>
-        <div class="stroke-keyword">{{ entry.keyword }}</div>
+        <div class="stroke-kana kana" lang="ja" :class="{ hidden: hideKanji }">{{ hideKanji ? '?' : entry.kanji }}</div>
+        <div class="stroke-keyword">
+          {{ entry.keyword }}
+          <span v-if="hideKanji && cue" class="stroke-cue">as in <span class="kana" lang="ja">{{ cue }}</span></span>
+        </div>
         <div class="stroke-nav">
           <button class="icon-btn boxed" aria-label="Previous kanji" @click="move(-1)"><Icon name="left" :size="20" /></button>
           <button class="icon-btn boxed" aria-label="Next kanji" @click="move(1)"><Icon name="right" :size="20" /></button>
         </div>
       </div>
-      <div class="stroke-tips">
+      <div v-if="!hideKanji" class="stroke-tips">
         <div v-if="entry.hook" class="stroke-mnemonic">{{ entry.hook }}</div>
         <div v-if="parts.length" class="kd-block">
           <div class="kd-block-title">Built from</div>
@@ -137,10 +178,15 @@ watch(set, s => {
         <template v-if="strokes">
           <StrokeDemo v-if="view === 'watch'" :key="picked" :kana="picked" :glyph="strokes" controls />
           <template v-else>
-            <StrokeCanvas :key="`${picked}-${attempt}`" :kana="picked" :glyph="strokes" mode="trace" @done="outcome = $event" />
+            <!-- named by its keyword while writing, the kanji would give the answer away to a screen reader -->
+            <StrokeCanvas
+              :key="`${picked}-${attempt}`" :kana="view === 'recall' ? entry.keyword : picked" :glyph="strokes" :mode="view"
+              @done="onDone"
+            />
             <div v-if="outcome" class="stroke-outcome" :class="{ good: outcome.correct }">
-              {{ outcome.correct ? 'Clean trace.' : 'Done, with some help. Once more?' }}
-              <button v-if="outcome.correct" class="stroke-ctl" @click="move(1)">Next kanji</button>
+              {{ outcomeText }}
+              <button v-if="outcome.correct && view === 'trace'" class="stroke-ctl" @click="setView('recall')">Write it</button>
+              <button v-else-if="outcome.correct" class="stroke-ctl" @click="move(1)">Next kanji</button>
               <button class="stroke-ctl" @click="retry()">Again</button>
             </div>
           </template>
@@ -148,7 +194,9 @@ watch(set, s => {
       </div>
     </div>
 
-    <p class="stroke-note">Tap a part or a lookalike for its details. Writing kanji from memory comes in a later update.</p>
+    <p class="stroke-note">
+      <Icon name="check" :size="14" /> marks kanji you have written cleanly from memory. Tap a part or a lookalike for its details.
+    </p>
 
     <div class="credit">
       Stroke data from <a href="https://kanjivg.tagaini.net" target="_blank" rel="noopener">KanjiVG</a>

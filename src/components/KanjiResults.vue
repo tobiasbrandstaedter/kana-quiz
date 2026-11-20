@@ -3,10 +3,19 @@ import { computed } from 'vue'
 import { useKanji } from '../composables/useKanji'
 import { fromNow } from '../format'
 import { openKanji } from '../kanjiShell'
+import { kanjiStrokes } from '../data/kanjiData'
+import { glyphShift, polylinePoints } from '../data/strokeGlyphs'
 import KanjiPatternCards from './KanjiPatternCards.vue'
 import Icon from './Icon.vue'
 
-const { resultScore, resultLabel, missed, roundOutcome, roundPatterns, startPattern, restart, restartLabel, goHome } = useKanji()
+const { resultScore, resultLabel, missed, drawings, roundOutcome, roundPatterns, startPattern, restart, restartLabel, goHome } = useKanji()
+
+// a missed write shows what was drawn over the kanji, as missed kana do
+const missedItems = computed(() => missed.value.map(item => {
+  const ink = drawings.value[item.id]
+  const glyph = ink ? kanjiStrokes(item.text) : null
+  return { item, drawn: glyph && { glyph, ink } }
+}))
 
 const outlookText = computed(() => {
   const o = roundOutcome.value.outlook
@@ -51,9 +60,17 @@ const outlookText = computed(() => {
       <div class="missed-grid">
         <!-- a word opens the sheet of its home kanji, which lists it -->
         <button
-          v-for="item in missed" :key="item.id" class="missed-item" :class="{ word: item.kind === 'word' }"
+          v-for="{ item, drawn } in missedItems" :key="item.id" class="missed-item" :class="{ word: item.kind === 'word' }"
           @click="openKanji(item.home)"
         >
+          <!-- your drawing over the reference, strokes the app had to draw in red -->
+          <svg v-if="drawn" class="missed-drawing" :viewBox="`0 0 ${drawn.glyph.width} 109`" :aria-label="`Your drawing of ${item.meaning}`">
+            <path v-for="(s, i) in drawn.glyph.strokes" :key="`r${i}`" class="ref" :d="s.d" :transform="glyphShift(s.dx)" />
+            <template v-for="(stroke, i) in drawn.ink" :key="i">
+              <polyline v-if="stroke" class="ink" :points="polylinePoints(stroke)" />
+              <path v-else class="given" :d="drawn.glyph.strokes[i].d" :transform="glyphShift(drawn.glyph.strokes[i].dx)" />
+            </template>
+          </svg>
           <span class="k" lang="ja">{{ item.text }}</span>
           <span class="r">
             <span v-if="item.reading" class="missed-reading" lang="ja">{{ item.reading }}</span>

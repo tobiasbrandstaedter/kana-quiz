@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { seeded } from './seeded'
 import {
-  itemInfo, itemOrder, makeCard, optionText, spellDiff, storedAnswer, typedReadings, wordReadingMistake, wordTypedVerdict, PATTERN_COURSE, PLAN_COURSE,
+  itemInfo, itemOrder, makeCard, optionText, spellDiff, storedAnswer, typedReadings, wordReadingMistake, wordTypedVerdict, writeCue, PATTERN_COURSE, PLAN_COURSE,
 } from './kanjiCards'
 import { toKana } from './kanaInput'
 import { looksLikeReading } from './readings'
@@ -127,6 +127,37 @@ describe('makeCard for kanji', () => {
     const k = KANJI.find(x => kanjiLookalikes(x.kanji).length)!
     const card = makeCard({ id: k.id, type: 'recognize' }, everything, seeded())
     expect(card.options.some(o => kanjiLookalikes(k.kanji).includes(o))).toBe(true)
+  })
+
+  it('gives a write card only when the plan names it, never from the mode alone (KR26)', () => {
+    const k = KANJI[0]
+    expect(makeCard({ id: k.id, type: 'write' }, nothing)).toEqual({ id: k.id, home: k.kanji, type: 'write', options: [], answer: k.kanji })
+    // smart practice and pattern cards leave the type open, the mode Write then asks as Mixed does
+    const write = { ...nothing, mode: 'write' as const }
+    for (const box of [0, 1, 2, 3, 5]) {
+      const stats: KanjiStatsMap = { [k.id]: { ...newKanjiEntry(k.id), correct: 1, box } }
+      expect(makeCard({ id: k.id }, { ...write, stats }, seeded()).type).not.toBe('write')
+    }
+    const w = WORDS[0]
+    expect(makeCard({ id: w.id }, write, seeded()).type).not.toBe('write')
+  })
+})
+
+describe('writeCue', () => {
+  it('gives the reading of the first word once that word is met, else nothing', () => {
+    for (const k of KANJI) {
+      const first = wordById(k.words[0])!
+      expect(writeCue(k.kanji, {})).toBeNull()
+      const stats = { [first.id]: applyKanjiAnswer(undefined, { id: first.id, type: 'read-choice', correct: true, given: first.reading, ms: 1 }, NOW) }
+      expect(writeCue(k.kanji, stats)).toBe(first.reading)
+    }
+  })
+
+  it('does not count a met word other than the first', () => {
+    const k = KANJI.find(x => x.words.length > 1)!
+    const other = k.words[1]
+    const stats = { [other]: applyKanjiAnswer(undefined, { id: other, type: 'word-meaning', correct: true, given: other, ms: 1 }, NOW) }
+    expect(writeCue(k.kanji, stats)).toBeNull()
   })
 })
 

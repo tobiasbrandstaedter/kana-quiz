@@ -15,7 +15,7 @@ const { today, statsData, notify, showTab } = inject(QUIZ_KEY)!
 const {
   sets, summary, mode, setMode, smartSize, smartNew, setSmartSize, setSmartNew,
   pickedSets, toggleSet, selectAllSets, selectNoneSets, progressBySet, openErrors, hasError, errorsScrollPending,
-  startSmart, startCustom, wordMode,
+  startSmart, startCustom, wordMode, writeIds,
 } = useKanji()
 
 const optionsOpen = ref(false)
@@ -78,6 +78,8 @@ const MODES: Array<{ mode: KanjiMode; label: string; hint: string; icon: string;
   { mode: 'word-meaning', label: 'Words', hint: 'word, pick its meaning', icon: 'bulb', tint: 'peach' },
   { mode: 'read-choice', label: 'Reading', hint: 'word, pick or type its reading', icon: 'speaker', tint: 'butter' },
   { mode: 'spell', label: 'Spelling', hint: 'reading, pick the kanji', icon: 'pen', tint: 'mint' },
+  // an offer, never part of Practice now (KR26)
+  { mode: 'write', label: 'Write', hint: 'custom quiz only: draw the kanji from memory', icon: 'brush', tint: 'peach' },
   { mode: 'mixed', label: 'Mixed', hint: 'by how well you know each', icon: 'shuffle', tint: 'sky' },
 ]
 
@@ -89,7 +91,9 @@ function start(): void {
 }
 
 function startQuiz(): void {
-  if (!startCustom() && wordMode.value) notify('No words of these sets yet, they come with their kanji in Practice now.')
+  if (startCustom()) return
+  if (wordMode.value) notify('No words of these sets yet, they come with their kanji in Practice now.')
+  else if (mode.value === 'write') notify('No kanji of these sets met yet, they come in Practice now.')
 }
 
 // the errors tile leads to the list, not to the top of a long tab
@@ -189,7 +193,8 @@ function progressText(p: ColumnProgress): string {
   <p class="hint-line">Kanji and words counted together.</p>
 
   <h2 class="section-title spaced">How to practice</h2>
-  <p class="section-note">Used by Practice now and by the custom quiz.</p>
+  <p v-if="mode === 'write'" class="section-note">Write is for the custom quiz. Practice now asks as in Mixed.</p>
+  <p v-else class="section-note">Used by Practice now and by the custom quiz.</p>
   <div class="mode-grid">
     <button
       v-for="m in MODES" :key="m.mode"
@@ -251,7 +256,11 @@ function progressText(p: ColumnProgress): string {
         <Icon v-if="pickedSets.size" name="arrow" :size="20" />
       </button>
     </div>
-    <p v-if="wordMode" class="hint-line">Every word of the picked sets you have met so far once, in the mode above.</p>
+    <template v-if="mode === 'write'">
+      <p v-if="pickedSets.size && !writeIds.length" class="hint-line">You haven't met a kanji of the picked sets yet. Practice now brings them in.</p>
+      <p v-else class="hint-line">Every kanji of the picked sets you have met so far, written from memory. It doesn't move them up or down.</p>
+    </template>
+    <p v-else-if="wordMode" class="hint-line">Every word of the picked sets you have met so far once, in the mode above.</p>
     <p v-else class="hint-line">Every kanji of the picked sets once, in the mode above. Kanji you haven't met yet are asked too.</p>
   </section>
 

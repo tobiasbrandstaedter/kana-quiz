@@ -1,11 +1,11 @@
-import type { KanjiAnswerInput, KanjiStatEntry, KanjiStatsMap } from '../types'
+import type { KanjiAnswerInput, KanjiStatEntry, KanjiStatsMap, StrokeFault } from '../types'
 import { review, KANJI_INTERVALS } from './scheduler'
 import { kanjiOfId } from '../kanjiKeys'
 
 export function newKanjiEntry(id: string): KanjiStatEntry {
   return {
     id, correct: 0, incorrect: 0, totalMs: 0, count: 0, lastSeen: 0, lastWrong: 0, resolvedAt: 0,
-    streak: 0, confusions: {}, byType: {}, mistakes: {}, box: 0, due: 0,
+    streak: 0, confusions: {}, byType: {}, mistakes: {}, box: 0, due: 0, strokeErrors: [], strokeFaults: {},
   }
 }
 
@@ -24,9 +24,10 @@ export function normalizeKanjiStats(raw: unknown): KanjiStatsMap {
  * `review` with the kanji intervals (up to box 7, 120 days), except with holdBox (right on the re-ask after a miss in the same session) and
  * for a typo (a typed reading that slipped twice), as for kana.
  * "Don't know" comes with an empty `given` and leaves no confusion behind. A wrong reading
- * with a name counts its kind in `mistakes`.
+ * with a name counts its kind in `mistakes`. A written answer goes to `applyWrite`.
  */
 export function applyKanjiAnswer(old: KanjiStatEntry | undefined, a: KanjiAnswerInput, now: number): KanjiStatEntry {
+  if (a.type === 'write') return applyWrite(old, a)
   const e = old
     ? { ...old, confusions: { ...old.confusions }, byType: { ...old.byType }, mistakes: { ...old.mistakes } }
     : newKanjiEntry(a.id)
@@ -50,6 +51,25 @@ export function applyKanjiAnswer(old: KanjiStatEntry | undefined, a: KanjiAnswer
     e.totalMs += a.ms
     e.count++
   }
+  return e
+}
+
+/**
+ * A written kanji (KD11): counted under `write` with its stroke tallies, nothing else. The box,
+ * the totals, the streak and the errors say how well the kanji is known on sight, writing
+ * from memory is an offer on top and must not move them either way.
+ */
+function applyWrite(old: KanjiStatEntry | undefined, a: KanjiAnswerInput): KanjiStatEntry {
+  const e = old
+    ? { ...old, byType: { ...old.byType }, strokeErrors: [...old.strokeErrors], strokeFaults: { ...old.strokeFaults } }
+    : newKanjiEntry(a.id)
+  const write = { ...(e.byType.write ?? { correct: 0, incorrect: 0 }) }
+  if (a.correct) write.correct++
+  else write.incorrect++
+  e.byType.write = write
+  a.strokes?.errors.forEach((n, i) => { e.strokeErrors[i] = (e.strokeErrors[i] ?? 0) + n })
+  for (const [fault, n] of Object.entries(a.strokes?.faults ?? {}) as Array<[StrokeFault, number]>)
+    e.strokeFaults[fault] = (e.strokeFaults[fault] ?? 0) + n
   return e
 }
 

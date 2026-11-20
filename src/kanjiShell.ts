@@ -24,7 +24,7 @@ export interface KanjiPrefs {
   onKunSeen?: boolean  // the one line on on and kun readings was shown in the kanji sheet (KR55)
 }
 
-const MODES: KanjiMode[] = ['meaning', 'recognize', 'word-meaning', 'read-choice', 'spell', 'mixed']
+const MODES: KanjiMode[] = ['meaning', 'recognize', 'word-meaning', 'read-choice', 'spell', 'write', 'mixed']
 
 const inRange = (n: unknown, min: number, max: number): n is number =>
   typeof n === 'number' && Number.isInteger(n) && n >= min && n <= max

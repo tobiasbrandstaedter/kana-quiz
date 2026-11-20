@@ -5,6 +5,7 @@ import { useKanji } from '../composables/useKanji'
 import { courseEntries, groupById, kanjiEntry, kanjiLookalikeHint, kanjiLookalikes, kanjiStrokes, sameForm, wordById } from '../data/kanjiData'
 import { isSeen } from '../learning/scheduler'
 import { optionText, spellDiff } from '../learning/kanjiCards'
+import { glyphShift, polylinePoints } from '../data/strokeGlyphs'
 import { setCourse } from '../kanjiShell'
 import { cardGroup, kanjiId } from '../kanjiKeys'
 import StrokeDemo from './StrokeDemo.vue'
@@ -18,8 +19,8 @@ import ReadingInput from './ReadingInput.vue'
 const { notify, screen } = inject(QUIZ_KEY)!
 const {
   statOf, cards, current, card, answered, pickedOption, gaveUp, mistake, correct, correctCount, wrongCount, startedAt, progress,
-  verdict,
-  choose, giveUp, next, goHome, resume,
+  verdict, drawn, cueOf,
+  choose, giveUp, submitWrite, next, goHome, resume,
 } = useKanji()
 
 // a word card carries its word, a kanji card its kanji, a table card the group that opens
@@ -32,7 +33,12 @@ const newGroup = computed(() => {
 const entry = computed(() => card.value ? kanjiEntry(card.value.home) : null)
 const isIntro = computed(() => card.value?.type === 'intro')
 const kanjiIntro = computed(() => isIntro.value && !word.value && !newGroup.value)
-const strokes = computed(() => kanjiIntro.value ? kanjiStrokes(card.value!.home) ?? undefined : undefined)
+const isWrite = computed(() => card.value?.type === 'write')
+const strokes = computed(() => kanjiIntro.value || isWrite.value ? kanjiStrokes(card.value!.home) ?? undefined : undefined)
+// the reading of the kanji's first word as a second cue, once that word is met (W1)
+const cue = computed(() => isWrite.value ? cueOf(card.value!.home) : null)
+// after a write: the drawing next to the kanji, whose stroke demo replays on a tap or with Replay
+const writeDemo = ref<InstanceType<typeof StrokeDemo> | null>(null)
 
 // a word of a group: the group, whether it is one of the irregular ones or the question word (KR77)
 const wordGroup = computed(() => word.value?.group ? groupById(word.value.group) : null)
@@ -75,6 +81,7 @@ const label = computed(() => {
     'read-choice': 'How is this word read?',
     'read-type': 'How is this word read? Type it',
     spell: 'How is this word written?',
+    write: 'Write the kanji for',
   }[c.type]
 })
 
@@ -124,6 +131,11 @@ const mistakeWord = computed(() => mistake.value?.kind === 'other-reading' ? wor
 const feedbackText = computed(() => {
   if (!answered.value) return ''
   if (correct.value) return 'Correct'
+  // the same words as for kana: what made the drawing not count
+  if (isWrite.value && drawn.value) {
+    const { faults } = drawn.value
+    return faults.order ? 'Not quite: stroke order' : faults.direction ? 'Not quite: stroke direction' : 'Not quite: needed a hint'
+  }
   if (verdict.value?.result === 'wrong' && verdict.value.typo) return 'Looks like a typo again'
   return gaveUp.value ? 'Here it is' : 'Not quite'
 })
@@ -251,7 +263,7 @@ const formLength = computed(() => Math.max(1, ...(card.value?.options ?? []).map
 </script>
 
 <template>
-  <div class="quiz" :class="{ compact, 'q-trace': kanjiIntro }">
+  <div class="quiz" :class="{ compact, 'q-trace': kanjiIntro, 'q-write': isWrite && !answered }">
     <div class="quiz-top">
       <div class="quiz-topbar">
         <button class="icon-btn boxed" aria-label="End session" @click="endSession()"><Icon name="x" :size="20" /></button>
@@ -271,8 +283,8 @@ const formLength = computed(() => Math.max(1, ...(card.value?.options ?? []).map
       </div>
     </div>
 
-    <div v-if="card && entry" class="quiz-body" :class="{ wide: kanjiIntro && introStep !== 'watch' }">
-      <div class="question-card" :class="{ slim: kanjiIntro && introStep !== 'watch' }">
+    <div v-if="card && entry" class="quiz-body" :class="{ wide: isWrite || (kanjiIntro && introStep !== 'watch') }">
+      <div class="question-card" :class="{ slim: isWrite || (kanjiIntro && introStep !== 'watch') }">
         <div class="q-label">
           <span v-if="card.reask" class="reask-tag">again</span>{{ label }}
         </div>
@@ -308,6 +320,12 @@ const formLength = computed(() => Math.max(1, ...(card.value?.options ?? []).map
           <div class="intro-keyword">{{ entry.keyword }}</div>
         </template>
 
+        <!-- write it from memory: the keyword, and the reading of its first word once that is met -->
+        <template v-else-if="isWrite">
+          <div class="kanji-keyword write-keyword">{{ entry.keyword }}</div>
+          <div v-if="cue" class="write-cue">as in the word <span class="kana" lang="ja">{{ cue }}</span></div>
+        </template>
+
         <div v-else-if="card.type === 'meaning'" class="q-main" lang="ja">{{ card.home }}</div>
         <div v-else-if="card.type === 'recognize'" class="kanji-keyword">{{ entry.keyword }}</div>
       </div>
@@ -318,6 +336,32 @@ const formLength = computed(() => Math.max(1, ...(card.value?.options ?? []).map
           :key="`trace${cardKey}`" :kana="card.home" :glyph="strokes" mode="trace"
           @done="introStep = 'traced'"
         />
+
+        <template v-if="isWrite && strokes">
+          <!-- the keyword names the canvas, the kanji itself would give the answer away to a screen reader -->
+          <StrokeCanvas v-if="!answered" :key="`write${cardKey}`" :kana="entry.keyword" :glyph="strokes" mode="recall" @done="submitWrite" />
+          <template v-else>
+            <div class="write-compare" :class="{ alone: !drawn }">
+              <figure v-if="drawn" class="write-side">
+                <!-- what was drawn, strokes the app had to draw in red -->
+                <svg class="write-drawing" :viewBox="`0 0 ${strokes.width} 109`" role="img" :aria-label="`Your drawing of ${entry.keyword}`">
+                  <template v-for="(stroke, i) in drawn.ink" :key="i">
+                    <polyline v-if="stroke" class="ink" :points="polylinePoints(stroke)" />
+                    <path v-else class="given" :d="strokes.strokes[i].d" :transform="glyphShift(strokes.strokes[i].dx)" />
+                  </template>
+                </svg>
+                <figcaption>Yours</figcaption>
+              </figure>
+              <figure class="write-side">
+                <StrokeDemo ref="writeDemo" :key="`demo${cardKey}`" :kana="card.home" :glyph="strokes" />
+                <figcaption>Stroke order</figcaption>
+              </figure>
+            </div>
+            <div class="write-replay">
+              <button class="stroke-ctl" @click="writeDemo?.replay()"><Icon name="replay" :size="18" />Replay</button>
+            </div>
+          </template>
+        </template>
 
         <template v-if="word && isIntro">
           <p v-if="aloneAsWord" class="intro-note">This kanji is also a word on its own, read like this.</p>

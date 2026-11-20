@@ -16,6 +16,7 @@ import { isWordType, pickMeaningOptions, pickReadingOptions, pickSpellOptions, w
 import { readingMistake, typedVerdict } from './readings'
 import type { ReadingMistake, TypedVerdict } from './readings'
 import { shuffle } from './distractors'
+import { isSeen } from './scheduler'
 
 const KANJI = allKanji()
 // practiced words: the course words and the practiced words of the groups. Wrong options
@@ -100,7 +101,7 @@ export function makeCard(item: PlannedCard, ctx: CardContext, rng: () => number 
   const kanji = kanjiOfId(item.id)
   if (kanji) {
     const entry = kanjiEntry(kanji)!
-    if (item.type === 'intro') return { id: item.id, home: kanji, type: 'intro', options: [], answer: kanji }
+    if (item.type === 'intro' || item.type === 'write') return { id: item.id, home: kanji, type: item.type, options: [], answer: kanji }
     const type = item.type === 'meaning' || item.type === 'recognize' ? item.type : kanjiQuestionType(ctx.stats[item.id], ctx.mode, rng)
     const wrong = pickKanjiOptions(entry, KANJI, preferredFor(ctx.stats)(kanji), ctx.knownKanji, tooClose, rng)
     return makeKanjiCard(entry, type, wrong, rng)
@@ -127,6 +128,16 @@ export function makeCard(item: PlannedCard, ctx: CardContext, rng: () => number 
     wrong = pickSpellOptions(word, KANJI, preferredFor(ctx.stats), ctx.knownKanji, kanjiWithReading, isPracticed, rng)
   }
   return { ...base, type, options: shuffle([answer, ...wrong], rng), answer }
+}
+
+/**
+ * The second cue of a write question next to the keyword (W1): the reading of the kanji's
+ * first word in hiragana, once the learner has met that word. Null before that.
+ */
+export function writeCue(kanji: string, stats: KanjiStatsMap): string | null {
+  const first = kanjiEntry(kanji)?.words[0]
+  const word = first && isSeen(stats[first]) ? wordById(first) : null
+  return word?.reading ?? null
 }
 
 /** What an option shows: keywords and glosses in English, kanji, readings and forms as they are. */
