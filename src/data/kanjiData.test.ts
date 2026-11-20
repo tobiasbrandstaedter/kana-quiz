@@ -145,7 +145,7 @@ describe.skipIf(WORD_GROUPS.length === 0)('word groups', () => {
     })
   })
 
-  it('practice every irregular member, one regular member and the question word, or all (KR75)', () => {
+  it('practice every irregular member, one regular member and the question word, or all without marks (KR75)', () => {
     // a member that is also a course word is practiced as that and not again in the group
     const isCourseWord = (id: string) => wordById(id)!.group === null
     for (const g of wordGroups()) {
@@ -154,6 +154,7 @@ describe.skipIf(WORD_GROUPS.length === 0)('word groups', () => {
       const practiced = own.filter(m => m.practiced)
       if (g.practice === 'all') {
         expect(practiced.length, g.id).toBe(own.length)
+        expect(g.members.filter(m => m.irregular).map(m => m.word), `${g.id} is practiced in full, no marks`).toEqual([])
         continue
       }
       for (const m of own.filter(m => m.irregular)) expect(m.practiced, m.word).toBe(true)

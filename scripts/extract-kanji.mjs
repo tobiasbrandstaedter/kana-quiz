@@ -342,6 +342,8 @@ for (const g of WORD_GROUPS) {
     return addWord(w, m, where)
   }
   const members = g.members.map(m => ({ m, id: resolve(m) })).filter(x => x.id).map(({ m, id }) => {
+    // a group practiced in full has no number in front of a counter (weekdays, 一つ), a mark would mislead
+    if (g.practice === 'all') return { word: id, irregular: false }
     const irregular = isIrregular(m.form, words[id].reading, g.counter)
     if (irregular === null) {
       const lacking = [...numberPart(m.form, g.counter)].filter(ch => !ownReading.has(ch))
@@ -465,19 +467,20 @@ if (drafted.length !== SET.length || SET.some(k => !drafted.includes(k)))
   fail('section 12 of docs/kanji-requirements.md does not list the 104 kanji of the set once each')
 const setNo = new Map(draft.flatMap(s => s.kanji.map(k => [k, s.n])))
 
-// KR73, forms only. The counter splits a member into number and counter for the irregular mark.
+// KR73, forms only. The counter splits a member into number and counter for the irregular mark,
+// which only groups practiced by exception get.
 const NUM = ['一', '二', '三', '四', '五', '六', '七', '八', '九', '十', '十一', '十二']
 const nums = (from, to, suffix) => NUM.slice(from - 1, to).map(n => n + suffix)
 const GROUP_DRAFT = [
-  { title: 'Days of the week', counter: '曜', members: ['日', '月', '火', '水', '木', '金', '土'].map(d => d + '曜日'), question: '何曜日' },
-  { title: 'Counting things', counter: '', members: [...nums(1, 9, 'つ'), '十'] },
-  { title: 'People', counter: '人', members: nums(1, 10, '人'), question: '何人' },
-  { title: 'Hundreds', counter: '百', members: ['百', ...nums(2, 9, '百')], question: '何百' },
-  { title: 'Thousands', counter: '千', members: ['千', ...nums(2, 9, '千')], question: '何千' },
-  { title: 'Hours', counter: '時', members: nums(1, 12, '時'), question: '何時' },
-  { title: 'Minutes', counter: '分', members: nums(1, 10, '分'), question: '何分' },
-  { title: 'Months', counter: '月', members: nums(1, 12, '月'), question: '何月' },
-  { title: 'Days of the month', counter: '日', members: [...nums(1, 10, '日'), '二十日'], question: '何日' },
+  { title: 'Days of the week', counter: '曜', practice: 'all', members: ['日', '月', '火', '水', '木', '金', '土'].map(d => d + '曜日'), question: '何曜日' },
+  { title: 'Counting things', counter: '', practice: 'all', members: [...nums(1, 9, 'つ'), '十'] },
+  { title: 'People', counter: '人', practice: 'irregular', members: nums(1, 10, '人'), question: '何人' },
+  { title: 'Hundreds', counter: '百', practice: 'irregular', members: ['百', ...nums(2, 9, '百')] },
+  { title: 'Thousands', counter: '千', practice: 'irregular', members: ['千', ...nums(2, 9, '千')] },
+  { title: 'Hours', counter: '時', practice: 'irregular', members: nums(1, 12, '時'), question: '何時' },
+  { title: 'Minutes', counter: '分', practice: 'irregular', members: nums(1, 10, '分'), question: '何分' },
+  { title: 'Months', counter: '月', practice: 'irregular', members: nums(1, 12, '月'), question: '何月' },
+  { title: 'Days of the month', counter: '日', practice: 'all', members: [...nums(1, 10, '日'), '二十日'], question: '何日' },
 ]
 
 const mark = irregular => irregular === null ? '?' : irregular ? 'I' : 'R'
@@ -534,13 +537,17 @@ for (const s of draft) {
   }
 }
 
+const numberKanji = new Set(GROUP_DRAFT.filter(g => g.practice === 'irregular')
+  .flatMap(g => g.members.flatMap(form => [...numberPart(form, g.counter)])))
 out.push('## Word groups (KR73), full JMdict', '',
   'Member: id shown reading, R regular or I irregular, c common entry. Missing: no JMdict entry with that form.',
+  'Marks exist only for groups practiced by exception (practice irregular). Groups practiced in full',
+  '(weekdays, counting things, days of the month) and question words get none (-).',
   'R means: the number read the way its kanji read as words of their own in the course, then a common reading of the rest.',
-  '? means: a kanji of the number has no word of its own in the course yet. Question words get no mark.',
-  `Number readings from the course now: ${[...ownReading].map(([k, r]) => `${k} ${r}`).join(', ') || 'none'}`, '')
+  '? means: a kanji of the number has no word of its own in the course yet.',
+  `Number readings from the course now: ${[...ownReading].filter(([k]) => numberKanji.has(k)).map(([k, r]) => `${k} ${r}`).join(', ') || 'none'}`, '')
 for (const g of GROUP_DRAFT) {
-  out.push(`### ${g.title}, counter ${g.counter || 'none (split after the number)'}`)
+  out.push(`### ${g.title}, counter ${g.counter || 'none'}, practiced ${g.practice === 'all' ? 'in full' : 'by exception'}`)
   const lacking = []
   for (const form of [...g.members, g.question].filter(Boolean)) {
     const entries = byForm.get(form) ?? []
@@ -548,7 +555,7 @@ for (const g of GROUP_DRAFT) {
     const found = entries.map(w => {
       const reading = shownReading(w, form, undefined, `group ${g.title}`)
       const also = readingsFor(w, form).filter(r => r !== reading)
-      return `${w.id} ${reading}${also.length ? ` (also ${also.join(' ')})` : ''} ${form === g.question ? '-' : mark(isIrregular(form, reading, g.counter))}${isCommon(w) ? ' c' : ''}`
+      return `${w.id} ${reading}${also.length ? ` (also ${also.join(' ')})` : ''} ${form === g.question || g.practice === 'all' ? '-' : mark(isIrregular(form, reading, g.counter))}${isCommon(w) ? ' c' : ''}`
     })
     out.push(`- ${form}${form === g.question ? ' (question)' : ''}: ${found.join(' | ')}`)
   }

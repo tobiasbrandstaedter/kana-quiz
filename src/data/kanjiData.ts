@@ -90,9 +90,10 @@ const GROUPS: WordGroupEntry[] = WORD_GROUPS.map(g => {
   }
   src.members.forEach(m => add(m.word))
   if (src.question) add(src.question)
-  // KR75: the irregular ones, plus one regular member so the pattern is practiced too
+  // KR75: all of them, or the irregular ones plus one regular member so the pattern is
+  // practiced too. Groups practiced in full carry no marks.
   const isCourseWord = (id: string) => COURSE_IDS.has(id)
-  const firstRegular = src.members.find(m => !m.irregular && !isCourseWord(m.word))?.word
+  const firstRegular = g.practice === 'irregular' ? src.members.find(m => !m.irregular && !isCourseWord(m.word))?.word : undefined
   return {
     id: g.id,
     title: g.title,

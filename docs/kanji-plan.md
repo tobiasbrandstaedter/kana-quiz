@@ -171,9 +171,9 @@ Opus, only if P0 says the stroke check holds or can be made to. Draw mode for ka
 | Phase | Content | Status |
 |---|---|---|
 | P0 | Measure the list, stroke check, fonts, size, number words, licence, voice | done, voice not measured |
-| P1 | Data script, course content, checks | open |
+| P1 | Data script, course content, checks | done |
 | P2 | Groundwork, no visible change | done |
-| P3a | K1 practice | open |
+| P3a | K1 practice | done |
 | P3b | K1 the rest | open |
 | P4a | K2 words | open |
 | P4b | K2 typing and sound | open |

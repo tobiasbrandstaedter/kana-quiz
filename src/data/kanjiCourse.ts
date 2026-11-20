@@ -60,7 +60,7 @@ export const KANJI_SETS: CourseSet[] = [
         // same as for 四: 七百 and 七千 come out regular, 七月 and 七時 do not
         words: [{
           form: '七', jmdict: '1319210', reading: 'なな', gloss: 'seven',
-          why: 'the N5 list has the other reading, this is the one in 七つ, 十七 and 七百',
+          why: 'the N5 list has the other reading, this is the one in 七つ and 七百',
         }],
       },
       {
@@ -90,7 +90,7 @@ export const KANJI_SETS: CourseSet[] = [
     kanji: [
       {
         kanji: '百', keyword: 'hundred',
-        hook: 'A bar on top of a box split in two. Read it top down as a 1 and two zeros: hundred',
+        hook: 'A bar, a short tick and a box split in two. Read it top down as a 1 and two zeros: hundred',
         words: [{ form: '百', jmdict: '1488000', gloss: 'hundred' }],
       },
       {
@@ -106,10 +106,7 @@ export const KANJI_SETS: CourseSet[] = [
       {
         kanji: '円', keyword: 'yen',
         hook: 'A frame open at the bottom with an upright and a cross bar inside, a shop window with the price in it: yen',
-        words: [
-          { form: '円', jmdict: '1175570', gloss: 'yen', why: 'N5 has it only as a counter (～円)' },
-          { form: '円い', jmdict: '1604230', gloss: 'round', meanings: { 円: 'round' } },
-        ],
+        words: [{ form: '円', jmdict: '1175570', gloss: 'yen', why: 'N5 has it only as a counter (～円)' }],
       },
     ],
   },
@@ -128,13 +125,7 @@ export const KANJI_SETS: CourseSet[] = [
       {
         kanji: '月', keyword: 'month',
         hook: 'Two bars in a frame that stands on two open legs, the moon. One moon, one month: month',
-        words: [
-          {
-            form: '月', jmdict: '1255430', gloss: 'moon, month',
-            why: 'the kanji as a word, N5 has it only inside other words',
-          },
-          { form: '一月', jmdict: '1162130', gloss: 'one month' },
-        ],
+        words: [{ form: '月', jmdict: '1255430', gloss: 'moon, month', why: 'the kanji as a word, N5 has it only inside other words' }],
       },
       {
         kanji: '火', keyword: 'fire',
@@ -154,15 +145,12 @@ export const KANJI_SETS: CourseSet[] = [
       {
         kanji: '金', keyword: 'gold',
         hook: 'A roof, and under it bars with two small dots between them, nuggets kept safe: gold',
-        words: [
-          { form: '金', jmdict: '1242600', gloss: 'gold', why: 'the kanji as a word, read as in 金曜日' },
-          { form: 'お金', jmdict: '1001820', gloss: 'money' },
-        ],
+        words: [{ form: 'お金', jmdict: '1001820', gloss: 'money' }],
       },
       {
-        kanji: '土', keyword: 'earth',
-        hook: 'A cross standing on a long bar, a sprout pushing out of the ground: earth',
-        words: [{ form: '土', jmdict: '1445270', gloss: 'earth, soil', why: 'the kanji as a word, its N5 word 土曜日 comes with the weekdays' }],
+        kanji: '土', keyword: 'soil',
+        hook: 'A cross standing on a long bar, a sprout pushing out of the ground: soil',
+        words: [{ form: '土', jmdict: '1445270', gloss: 'soil, earth', why: 'the kanji as a word, its N5 word 土曜日 comes with the weekdays' }],
       },
     ],
   },
@@ -199,7 +187,7 @@ export const KANJI_SETS: CourseSet[] = [
         hook: 'Two short strokes on top, two long ones crossing below like folded arms: father',
         words: [
           { form: '父', jmdict: '1497610', gloss: 'father' },
-          { form: 'お父さん', jmdict: '1002590', gloss: 'dad' },
+          { form: 'お父さん', jmdict: '1002590', gloss: 'father, dad' },
         ],
       },
       {
@@ -207,7 +195,7 @@ export const KANJI_SETS: CourseSet[] = [
         hook: 'A tilted frame with two dots inside, a mother holding two little ones: mother',
         words: [
           { form: '母', jmdict: '1514990', gloss: 'mother' },
-          { form: 'お母さん', jmdict: '1002650', gloss: 'mom' },
+          { form: 'お母さん', jmdict: '1002650', gloss: 'mother, mom' },
         ],
       },
       {
@@ -238,7 +226,7 @@ export const KANJI_SETS: CourseSet[] = [
       },
       {
         kanji: '手', keyword: 'hand',
-        hook: 'A hooked stem with three strokes across it, the lines of an open palm: hand',
+        hook: 'A hooked stem with two bars across it and a slanted stroke on top, the lines of an open palm: hand',
         words: [{ form: '手', jmdict: '1327190', gloss: 'hand' }],
       },
       {
@@ -250,8 +238,8 @@ export const KANJI_SETS: CourseSet[] = [
   },
   {
     // 少 right after 小, which it is built from and looks like, then its opposite 多
-    id: 'size',
-    title: 'Big and small',
+    id: 'describing',
+    title: 'Describing things',
     kanji: [
       {
         kanji: '大', keyword: 'big',
@@ -282,7 +270,7 @@ export const KANJI_SETS: CourseSet[] = [
       {
         kanji: '高', keyword: 'tall', parts: ['口'],
         hook: 'A tower with a pointed roof, a 口 as the upper window and a wide frame with another 口 below: tall',
-        words: [{ form: '高い', jmdict: '1283190', gloss: 'tall, expensive' }],
+        words: [{ form: '高い', jmdict: '1283190', gloss: 'high, tall, expensive' }],
       },
       {
         kanji: '長', keyword: 'long',
@@ -375,12 +363,12 @@ export const KANJI_SETS: CourseSet[] = [
       },
       {
         kanji: '外', keyword: 'outside',
-        hook: 'Left a shape like katakana タ, right one like ト. The ト stands apart, out in the open: outside',
+        hook: 'On the left one half of 多, on the right the top of 上 without its base line. That part stands off on its own, out in the open: outside',
         words: [{ form: '外', jmdict: '1203250', gloss: 'outside' }],
       },
       {
         kanji: '左', keyword: 'left',
-        hook: 'A bar and a long sweep for the arm, and under it a shape like katakana エ, a tool. The hand that holds the tool steady: left',
+        hook: 'A bar and a long sweep for the arm, and under it a short upright between two bars, a tool. The hand that holds the tool steady: left',
         words: [{ form: '左', jmdict: '1290800', gloss: 'left' }],
       },
       {
@@ -448,16 +436,16 @@ export const KANJI_SETS: CourseSet[] = [
     kanji: [
       {
         kanji: '時', keyword: 'time', parts: ['日', '土'],
-        hook: '日 on the left, the sun that people read the time from. On the right 土 on top and a hooked stem below: time',
+        hook: '日 on the left, the sun that people read the time from. On the right 土 over a bar with a hooked stem and a dot: time',
         words: [{ form: '時', jmdict: '1315840', gloss: 'time, moment', why: 'N5 has it only as a counter (～時)' }],
       },
       {
         kanji: '分', keyword: 'part', parts: ['八'],
-        hook: '八 opening up on top, a blade underneath. A knife cuts a thing in pieces: part',
+        hook: '八 opening up on top, a blade underneath. A knife cuts a thing in pieces, and a minute is a small piece of the hour: part',
         words: [
           {
             form: '分', jmdict: '1502840', gloss: 'minute', meanings: { 分: 'minute of time' },
-            why: 'N5 has it only as a counter (～分)',
+            why: 'the Clock set needs the minute first, and the minutes group builds on this reading',
           },
           { form: '分かる', jmdict: '1606560', gloss: 'to understand', meanings: { 分: 'understand' } },
           { form: '多分', jmdict: '1407980', gloss: 'probably' },
@@ -541,7 +529,7 @@ export const KANJI_SETS: CourseSet[] = [
       },
       {
         kanji: '名', keyword: 'name', parts: ['口'],
-        hook: 'A 口 under a three stroke shape like katakana タ, a mouth calling out who you are: name',
+        hook: 'A 口 under one half of 多, a mouth calling out who you are: name',
         words: [{ form: '名前', jmdict: '1531710', gloss: 'name' }],
       },
       {
@@ -581,7 +569,7 @@ export const KANJI_SETS: CourseSet[] = [
       },
       {
         kanji: '読', keyword: 'read', parts: ['言'],
-        hook: '言 on the left, the words on the page. On the right a small cross on a lid on two legs, a reader walking around with a book: read',
+        hook: '言 on the left, the words on the page. On the right a cross on a bar, then a lid and two legs, a reader walking around with a book: read',
         words: [{ form: '読む', jmdict: '1456360', gloss: 'to read' }],
       },
       {
@@ -592,7 +580,7 @@ export const KANJI_SETS: CourseSet[] = [
       {
         kanji: '聞', keyword: 'hear', parts: ['耳'],
         hook: 'An ear, 耳, at the gate, listening to what goes on inside: hear',
-        words: [{ form: '聞く', jmdict: '1591110', gloss: 'to hear, to listen' }],
+        words: [{ form: '聞く', jmdict: '1591110', gloss: 'to hear, to listen, to ask' }],
       },
       {
         kanji: '見', keyword: 'see', parts: ['目'],
@@ -666,7 +654,7 @@ export const KANJI_SETS: CourseSet[] = [
     kanji: [
       {
         kanji: '年', keyword: 'year',
-        hook: 'A tick like the one on 生, three bars and a long upright that drops below them, one more notch on the pole: year',
+        hook: 'A tick like the one on 生, three bars with a short upright joining the lower two on the left, and a long pole through them all. One more notch on the pole every year: year',
         words: [
           { form: '年', jmdict: '1468060', gloss: 'year' },
           { form: '来年', jmdict: '1548220', gloss: 'next year', meanings: { 来: 'next' } },
@@ -678,8 +666,8 @@ export const KANJI_SETS: CourseSet[] = [
         hook: 'A shape like 母 with a cap of two strokes on top. Mother puts her cap on, morning after morning: every',
         words: [
           { form: '毎日', jmdict: '1524720', gloss: 'every day' },
-          { form: '毎月', jmdict: '1584350', gloss: 'every month' },
-          { form: '毎年', jmdict: '1584360', gloss: 'every year' },
+          { form: '毎月', jmdict: '1584350', reading: 'まいつき', gloss: 'every month' },
+          { form: '毎年', jmdict: '1584360', reading: 'まいとし', gloss: 'every year' },
         ],
       },
       {
@@ -694,7 +682,7 @@ export const KANJI_SETS: CourseSet[] = [
       },
       {
         kanji: '曜', keyword: 'weekday', parts: ['日'],
-        hook: '日 on the left, on the right two ヨ shapes like wings over a tall bird of many bars. The days fly by, each with a name: weekday',
+        hook: '日 on the left. On the right two small wings, each a hooked frame with two ticks, over a tall bird of many bars. The days fly by, each with a name: weekday',
         words: [{ form: '曜日', jmdict: '1545770', gloss: 'day of the week', why: 'no word for 曜 outside the weekdays, this is their base' }],
       },
     ],
@@ -710,12 +698,12 @@ export const KANJI_SETS: CourseSet[] = [
       },
       {
         kanji: '飲', keyword: 'drink', parts: ['食'],
-        hook: '食 pressed to the left, on the right someone leaning in with the mouth wide open: drink',
+        hook: '食 squeezed to the left, its two feet turned into one short tick, and on the right someone leaning in with the mouth wide open: drink',
         words: [{ form: '飲む', jmdict: '1169870', gloss: 'to drink' }],
       },
       {
         kanji: '買', keyword: 'buy', parts: ['目'],
-        hook: 'A flat net on top, below it 目 on two short legs. You eye it and into the net it goes: buy',
+        hook: 'A flat net on top, below it 目 on two short feet that do not touch it, not the long legs of 見. You eye it and into the net it goes: buy',
         words: [{ form: '買う', jmdict: '1473740', gloss: 'to buy' }],
       },
       {
@@ -759,7 +747,7 @@ export const KANJI_SETS: CourseSet[] = [
       },
       {
         kanji: '社', keyword: 'company', parts: ['土'],
-        hook: 'A narrow shape like katakana ネ on the left, 土 on the right, the ground the firm stands on: company',
+        hook: 'On the left a narrow shape, a dot over a bent stroke with an upright and a tick. On the right 土, the ground the firm stands on: company',
         words: [{ form: '会社', jmdict: '1198550', gloss: 'company' }],
       },
       {
@@ -772,7 +760,7 @@ export const KANJI_SETS: CourseSet[] = [
         hook: '雨 on top, and under the rain a box with a tail that kicks out, a flash coming down: electricity',
         words: [
           { form: '電車', jmdict: '1443530', gloss: 'train' },
-          { form: '電気', jmdict: '1443000', gloss: 'electricity' },
+          { form: '電気', jmdict: '1443000', gloss: 'electricity, light' },
           { form: '電話', jmdict: '1443840', gloss: 'phone, phone call' },
         ],
       },
@@ -781,9 +769,9 @@ export const KANJI_SETS: CourseSet[] = [
 ]
 
 // Hours, months, days of the month ... (KR73). The counter is the home kanji of the group.
-// A word is listed once in the course, so 百 and 千, which are the first words of their
-// kanji, are not repeated as members here. Thousands: JMdict has no entry for 二千, 五千,
-// 六千 and 九千.
+// A member can be a course word too (百, 千): it shows in the table and is practiced as
+// the course word. Thousands: JMdict has no entry for 二千, 五千, 六千 and 九千. 何百 and
+// 何千 are no question words, JMdict has them as "hundreds" and "many thousands".
 export const WORD_GROUPS: CourseGroup[] = [
   {
     // no counter kanji in these words, the group hangs on 十, the last kanji in it
@@ -810,6 +798,7 @@ export const WORD_GROUPS: CourseGroup[] = [
     counter: '百',
     practice: 'irregular',
     members: [
+      { form: '百', jmdict: '1488000' },
       { form: '二百', jmdict: '1656380' },
       { form: '三百', jmdict: '1301490' },
       { form: '四百', jmdict: '1767090' },
@@ -819,7 +808,6 @@ export const WORD_GROUPS: CourseGroup[] = [
       { form: '八百', jmdict: '2038570' },
       { form: '九百', jmdict: '2220410' },
     ],
-    question: { form: '何百', jmdict: '1189290' },
   },
   {
     id: 'thousands',
@@ -827,12 +815,12 @@ export const WORD_GROUPS: CourseGroup[] = [
     counter: '千',
     practice: 'irregular',
     members: [
+      { form: '千', jmdict: '1388740' },
       { form: '三千', jmdict: '1301110' },
       { form: '四千', jmdict: '1766960' },
       { form: '七千', jmdict: '2839886' },
       { form: '八千', jmdict: '2220420' },
     ],
-    question: { form: '何千', jmdict: '1189120' },
   },
   {
     id: 'days-of-month',
@@ -850,7 +838,10 @@ export const WORD_GROUPS: CourseGroup[] = [
       { form: '八日', jmdict: '1476920' },
       { form: '九日', jmdict: '1243850' },
       { form: '十日', jmdict: '1335000' },
+      { form: '十二日', jmdict: '2736890' },
+      { form: '十四日', jmdict: '1629290' },
       { form: '二十日', jmdict: '1600850' },
+      { form: '二十四日', jmdict: '1629300' },
     ],
     question: { form: '何日', jmdict: '1189240' },
   },
@@ -960,8 +951,10 @@ export const KANJI_LOOKALIKES: KanjiLookalikeGroup[] = [
   { kanji: ['日', '目', '白', '百'], hint: '日 has one bar inside, 目 has two. 白 is 日 with a tick on top, 百 is 白 with a bar above the tick' },
   { kanji: ['月', '目'], hint: 'Both have two bars inside. 目 is a closed box, 月 is open at the bottom and stands on two legs' },
   { kanji: ['土', '上'], hint: '土 is a cross on a base line. In 上 the short stroke sticks out to the right only and does not cross the upright' },
+  { kanji: ['午', '年'], hint: 'Both start with a tick and a bar. 年 has three bars and a short upright on the left joining the lower two, 午 has two bars and nothing on the left' },
+  { kanji: ['六', '立'], hint: 'Same top, a dot over a bar. Under it 六 has two legs spreading apart, 立 has two short strokes standing on a long ground line' },
   { kanji: ['千', '午'], hint: 'Both are 十 with something on top. 千 has one slanted stroke there, 午 has a slanted stroke and a bar' },
-  { kanji: ['左', '右'], hint: '右 has a 口 under the arm, 左 has a shape like katakana エ' },
+  { kanji: ['左', '右', '友'], hint: 'Same arm on the upper left. Under it 左 has a short upright between two bars, 右 a 口, 友 two strokes crossing. 左 starts with the bar, 右 with the sweep' },
   { kanji: ['小', '少'], hint: '少 is 小 with a long slanted stroke under it' },
   { kanji: ['多', '名'], hint: '名 ends in a 口. 多 has no 口, it is the same top shape twice' },
   { kanji: ['今', '会', '食'], hint: 'Same roof on all three. 今 has only two strokes under it, 会 has 二 and a folded shape, 食 is the big one with nine strokes in all' },
@@ -989,21 +982,22 @@ export const CLOSE_MEANINGS: Array<[string, string]> = [
   ['part', 'half'],
   ['day', 'weekday'],
   ['week', 'weekday'],
+  ['study', 'school'],
+  ['say', 'language'],
   // glosses
   ['day, sun', 'one day'],
   ['day, sun', 'day of the week'],
-  ['moon, month', 'one month'],
-  ['gold', 'money'],
+  ['person', 'man'],
   ['yen', 'money'],
-  ['father', 'dad'],
-  ['mother', 'mom'],
+  ['father', 'father, dad'],
+  ['mother', 'mother, mom'],
   ['child', 'boy'],
   ['child', 'girl'],
   ['few', 'a little'],
   ['small', 'a little'],
   ['white (the color)', 'white'],
   ['sky, heaven', 'sky'],
-  ['above, top', 'tall, expensive'],
+  ['above, top', 'high, tall, expensive'],
   ['in front, before', 'tip, ahead'],
   ['back, behind', 'after, later'],
   ['time, moment', 'time, hour'],

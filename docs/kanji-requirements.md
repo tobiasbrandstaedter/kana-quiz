@@ -205,9 +205,9 @@ Rules for picking words:
 
 ### Word groups
 
-- KR73: the groups are: days of the week (日曜日 to 土曜日, 何曜日), counting things (一つ to 十), people (一人, 二人, 三人 ...), hundreds, thousands, hours, minutes, months, days of the month (一日 to 十日, 二十日). A group has a counter kanji, which is its home kanji.
-- KR74: a group table lists only members that are JMdict entries, with the JMdict reading. A member is marked irregular when its reading is not simply the reading of the number followed by the reading of the counter. That mark is computed, not set by hand.
-- KR75: practiced as words are: every irregular member, one regular member per group so the pattern itself is practiced, and the question word (何時, 何人) where there is one. Days of the week, counting things and days of the month are practiced in full, they are N5 words each.
+- KR73: the groups are: days of the week (日曜日 to 土曜日, 何曜日), counting things (一つ to 十), people (一人, 二人, 三人 ...), hundreds, thousands, hours, minutes, months, days of the month (一日 to 十日, one regular day like 十二日, 十四日, 二十日, 二十四日). A group has a counter kanji, which is its home kanji. A table may start with the counter itself (百, 千), which is a course word and is practiced as one.
+- KR74: a group table lists only members that are JMdict entries, with the JMdict reading. In the groups practiced by exception a member is marked irregular when it is not read as the number, the way the learner learned it first, followed by a reading of the counter (四時 is よじ, not よん and じ). That mark is computed, not set by hand. Groups practiced in full have no marks: the days of the week have no number in them, and a mark there would call six plain readings exceptions.
+- KR75: practiced as words are, in the groups practiced by exception: every irregular member, one regular member per group so the pattern itself is practiced, and the question word (何時, 何人) where there is one. Days of the week, counting things and days of the month are practiced in full, they are N5 words each.
 - KR76: a group is ready when its home kanji is in box 2 or higher and all kanji in it have been seen. It starts with a group card: the table, irregular members marked, not scored. After that its practiced members come in as further words (KR29, KR30), in table order.
 - KR77: the group card can be opened again at any time from the sheet of its home kanji and from the feedback of any of its members.
 
