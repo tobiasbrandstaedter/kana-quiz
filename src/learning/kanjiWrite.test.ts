@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { recallAnswers, writePractice, writeQuizIds, writtenClean } from './kanjiWrite'
+import { recallAnswers, trimLog, writeCorrect, writePractice, writeQuizIds, writtenClean } from './kanjiWrite'
 import { newKanjiEntry } from './kanjiStats'
 import { pickedKanjiIds } from './kanjiPlan'
 import type { KanjiAnswerRecord, KanjiStatsMap } from '../types'
@@ -68,5 +68,34 @@ describe('writtenClean', () => {
     expect(writtenClean(undefined)).toBe(false)
     expect(writtenClean({ ...seen('k:A'), byType: { write: { correct: 0, incorrect: 2 } } })).toBe(false)
     expect(writtenClean({ ...seen('k:A'), byType: { write: { correct: 1, incorrect: 2 } } })).toBe(true)
+  })
+})
+
+describe('trimLog', () => {
+  const at = (t: number, type: 'write' | 'meaning') => record({ type, t })
+
+  it('keeps everything while both kinds are under their cap', () => {
+    const log = [at(1, 'meaning'), at(2, 'write'), at(3, 'meaning')]
+    expect(trimLog(log, 5, 5)).toEqual(log)
+  })
+
+  it('trims each kind on its own and keeps the order', () => {
+    const log = [at(1, 'meaning'), at(2, 'write'), at(3, 'write'), at(4, 'meaning'), at(5, 'write'), at(6, 'meaning')]
+    expect(trimLog(log, 2, 1).map(r => r.t)).toEqual([4, 5, 6])
+  })
+
+  it('lets lots of writing push out no other answer', () => {
+    const log = [at(0, 'meaning'), ...Array.from({ length: 50 }, (_, i) => at(i + 1, 'write'))]
+    const out = trimLog(log, 1000, 10)
+    expect(out[0].t).toBe(0)
+    expect(out.filter(r => r.type === 'write').map(r => r.t)).toEqual(Array.from({ length: 10 }, (_, i) => i + 41))
+  })
+})
+
+describe('writeCorrect', () => {
+  it('counts a clean drawing only when the card was not left and resumed', () => {
+    expect(writeCorrect(true, false)).toBe(true)
+    expect(writeCorrect(true, true)).toBe(false)
+    expect(writeCorrect(false, false)).toBe(false)
   })
 })

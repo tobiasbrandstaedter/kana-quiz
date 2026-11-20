@@ -683,6 +683,7 @@ body {
   .quiz.q-trace { --draw-chrome: 470px; }
   .quiz.q-listen { --draw-chrome: 530px; }
   .quiz.q-write { --draw-chrome: 395px; }
+  .quiz.q-write.q-resumed { --draw-chrome: 425px; }
   @supports (height: 100dvh) {
     .quiz { --draw-size: min(86vw, max(200px, calc(100dvh - var(--draw-chrome)))); }
   }
@@ -1418,6 +1419,7 @@ body {
 .question-card .write-keyword { padding: 2px 0 0; }
 .write-cue { margin-top: 2px; font-size: 16px; font-weight: 800; line-height: 1.3; color: var(--ink-2); }
 .write-cue .kana, .stroke-cue .kana { font-size: 1.25em; color: var(--ink); }
+.write-left-note { margin: 0 0 10px; font-size: 14px; font-weight: 800; line-height: 1.4; color: var(--ink-2); text-align: center; }
 .stroke-cue { display: block; margin-top: 2px; font-size: 15px; font-weight: 800; color: var(--ink-2); }
 /* after the answer: the drawing next to the kanji. The kanji side is the larger one, its stroke
    numbers have to stay readable on 14 and 18 strokes */

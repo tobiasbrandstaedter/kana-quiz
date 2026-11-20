@@ -19,7 +19,7 @@ import ReadingInput from './ReadingInput.vue'
 const { notify, screen } = inject(QUIZ_KEY)!
 const {
   statOf, cards, current, card, answered, pickedOption, gaveUp, mistake, correct, correctCount, wrongCount, startedAt, progress,
-  verdict, drawn, cueOf,
+  verdict, drawn, resumedWrite, cueOf,
   choose, giveUp, submitWrite, next, goHome, resume,
 } = useKanji()
 
@@ -133,7 +133,8 @@ const feedbackText = computed(() => {
   if (correct.value) return 'Correct'
   // the same words as for kana: what made the drawing not count
   if (isWrite.value && drawn.value) {
-    const { faults } = drawn.value
+    const { faults, correct: clean } = drawn.value
+    if (clean && resumedWrite.value) return 'Clean, counted as practice'
     return faults.order ? 'Not quite: stroke order' : faults.direction ? 'Not quite: stroke direction' : 'Not quite: needed a hint'
   }
   if (verdict.value?.result === 'wrong' && verdict.value.typo) return 'Looks like a typo again'
@@ -263,7 +264,7 @@ const formLength = computed(() => Math.max(1, ...(card.value?.options ?? []).map
 </script>
 
 <template>
-  <div class="quiz" :class="{ compact, 'q-trace': kanjiIntro, 'q-write': isWrite && !answered }">
+  <div class="quiz" :class="{ compact, 'q-trace': kanjiIntro, 'q-write': isWrite && !answered, 'q-resumed': resumedWrite }">
     <div class="quiz-top">
       <div class="quiz-topbar">
         <button class="icon-btn boxed" aria-label="End session" @click="endSession()"><Icon name="x" :size="20" /></button>
@@ -339,6 +340,7 @@ const formLength = computed(() => Math.max(1, ...(card.value?.options ?? []).map
 
         <template v-if="isWrite && strokes">
           <!-- the keyword names the canvas, the kanji itself would give the answer away to a screen reader -->
+          <p v-if="resumedWrite" class="write-left-note">You left this card, so it counts as practice.</p>
           <StrokeCanvas v-if="!answered" :key="`write${cardKey}`" :kana="entry.keyword" :glyph="strokes" mode="recall" @done="submitWrite" />
           <template v-else>
             <div class="write-compare" :class="{ alone: !drawn }">

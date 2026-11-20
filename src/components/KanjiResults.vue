@@ -10,7 +10,7 @@ import { glyphShift, polylinePoints } from '../data/strokeGlyphs'
 import KanjiPatternCards from './KanjiPatternCards.vue'
 import Icon from './Icon.vue'
 
-const { resultScore, resultLabel, missed, drawings, roundOutcome, roundPatterns, startPattern, restart, restartLabel, goHome } = useKanji()
+const { resultScore, resultLabel, missed, drawings, writeRound, roundOutcome, roundPatterns, startPattern, restart, restartLabel, goHome } = useKanji()
 const { notify } = inject(QUIZ_KEY)!
 
 function practice(p: KanjiPattern): void {
@@ -56,7 +56,11 @@ const outlookText = computed(() => {
         <span class="outcome-tag">Back to learning</span>
         <span class="kana" lang="ja">{{ roundOutcome.down.join(' ') }}</span>
       </div>
-      <div v-if="!roundOutcome.up.length && !roundOutcome.down.length && !roundOutcome.mastered.length" class="outcome-line quiet">
+      <!-- writing never moves a kanji, the usual reason would be wrong here -->
+      <div v-if="writeRound" class="outcome-line quiet">
+        Writing is extra practice: it never moves a kanji up or down, the check marks on the Writing tab show what you can write.
+      </div>
+      <div v-else-if="!roundOutcome.up.length && !roundOutcome.down.length && !roundOutcome.mastered.length" class="outcome-line quiet">
         Nothing moved: kanji and words only move up when they are due, extra practice still sharpens them.
       </div>
       <div v-if="outlookText" class="outcome-next">{{ outlookText }}</div>

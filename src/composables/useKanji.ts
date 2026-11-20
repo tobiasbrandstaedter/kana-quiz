@@ -13,7 +13,7 @@ import type { PlannedCard } from '../learning/kanjiSession'
 import { noteResult, summarizeRound, resultScore, resultLabel, splitMoves } from '../learning/kanjiQuiz'
 import type { RoundResults } from '../learning/kanjiQuiz'
 import { itemInfo, itemOrder, makeCard, storedAnswer, wordReadingMistake, wordTypedVerdict, writeCue, PATTERN_COURSE, PLAN_COURSE } from '../learning/kanjiCards'
-import { recallAnswers, writePractice, writeQuizIds } from '../learning/kanjiWrite'
+import { recallAnswers, trimLog, writeCorrect, writePractice, writeQuizIds } from '../learning/kanjiWrite'
 import { detectKanjiPatterns, kanjiStatsFromLog, patternCards } from '../learning/kanjiPatterns'
 import type { KanjiPattern } from '../learning/kanjiPatterns'
 import { cleanTyped, hasKanji } from '../learning/kanaInput'
@@ -30,7 +30,6 @@ import { clock } from '../clock'
 import { accuracy } from '../format'
 import type { BoxMove } from './useStats'
 
-const MAX_ANSWERS = 1000
 
 const loadStats = () => normalizeKanjiStats(readJson(KANJI_STATS_KEY))
 
@@ -208,6 +207,9 @@ function createKanji() {
   const verdict = ref<TypedVerdict | null>(null)
   // a write card: what was drawn, shown next to the kanji once answered
   const drawn = ref<DrawResult | null>(null)
+  // the write card was left unanswered and resumed: its new canvas forgot the hints shown
+  // before, so a clean drawing only counts as practice
+  const resumedWrite = ref(false)
   // the ink of missed writes by item id, for the results screen
   const drawings = ref<Record<string, Array<Point[] | null>>>({})
   const correctCount = ref(0)
@@ -241,6 +243,7 @@ function createKanji() {
     slipped.value = false
     verdict.value = null
     drawn.value = null
+    resumedWrite.value = false
     questionStart = Date.now()
   }
 
@@ -346,9 +349,9 @@ function createKanji() {
 
     const nextLog = loadLog()
     nextLog.push({ id: a.id, type: a.type, correct: a.correct, given: a.given, ms, t: now, box: from, ...(a.mistake ? { mistake: a.mistake } : {}) })
-    if (nextLog.length > MAX_ANSWERS) nextLog.splice(0, nextLog.length - MAX_ANSWERS)
-    writeJson(KANJI_ANSWERS_KEY, nextLog)
-    log.value = nextLog
+    const trimmed = trimLog(nextLog)
+    writeJson(KANJI_ANSWERS_KEY, trimmed)
+    log.value = trimmed
 
     countAnswer(now)
     return { from, to: data[a.id].box }
@@ -431,8 +434,9 @@ function createKanji() {
     const c = card.value
     if (!c || c.type !== 'write' || answered.value) return
     drawn.value = result
-    if (!result.correct) drawings.value = { ...drawings.value, [c.id]: result.ink }
-    settle({ id: c.id, type: 'write', correct: result.correct, given: '', strokes: { errors: result.errors, faults: result.faults } })
+    const correct = writeCorrect(result.correct, resumedWrite.value)
+    if (!correct) drawings.value = { ...drawings.value, [c.id]: result.ink }
+    settle({ id: c.id, type: 'write', correct, given: '', strokes: { errors: result.errors, faults: result.faults } })
   }
 
   /**
@@ -472,9 +476,13 @@ function createKanji() {
     if (!startedAt.value || current.value >= cards.value.length) return
     // a sheet left open would sit over the quiz while its keys answer behind it
     closeKanji()
+    if (card.value?.type === 'write' && !answered.value) resumedWrite.value = true
     questionStart = Date.now()
     kanjiScreen.value = 'quiz'
   }
+
+  // a round of write cards only: nothing in it can move a box
+  const writeRound = computed(() => cards.value.length > 0 && cards.value.every(c => c.type === 'write'))
 
   const roundSummary = computed(() => summarizeRound(results.value))
   const score = computed(() => resultScore(roundSummary.value))
@@ -512,7 +520,7 @@ function createKanji() {
     statOf, lockOf, groupLockOf, hasError, summary, progressBySet,
     openErrors, resolveErrors, resolveAllErrors, rows, tableShow, tableSort, setTableSort, errorsScrollPending, allPatterns,
     cards, current, card, answered, pickedOption, gaveUp, mistake, correct, correctCount, wrongCount, startedAt, progress,
-    typedAnswer, slipped, verdict, drawn, drawings, writeIds, cueOf, recordWrite,
+    typedAnswer, slipped, verdict, drawn, resumedWrite, writeRound, drawings, writeIds, cueOf, recordWrite,
     startSmart, startCustom, startErrors, startKanji, startPattern, restart, restartLabel,
     choose, giveUp, submitTyped, submitWrite, next, goHome, resume,
     resultScore: score, resultLabel: label, missed, roundOutcome, roundPatterns,

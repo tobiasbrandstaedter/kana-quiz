@@ -41,8 +41,9 @@ const hideKanji = computed(() => view.value === 'recall' && !outcome.value)
 const cue = computed(() => cueOf(picked.value))
 
 function setView(v: View): void {
+  // tapping Write again in the middle of a drawing starts over, the strokes shown so far stay seen
+  if (v !== 'recall' || view.value === 'recall') peeked = true
   view.value = v
-  if (v !== 'recall') peeked = true
   retry()
   // on a phone the canvas starts below the fold, and it can't be scrolled by dragging on it
   if (v !== 'watch') nextTick(() => stageEl.value?.scrollIntoView({ block: 'start' }))

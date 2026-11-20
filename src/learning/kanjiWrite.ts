@@ -31,5 +31,25 @@ export function recallAnswers(log: KanjiAnswerRecord[]): KanjiAnswerRecord[] {
   return log.filter(r => r.type !== 'write')
 }
 
+/**
+ * The answer log after a new record, trimmed for each kind on its own: the last `max` records
+ * that are not writes and the last `maxWrites` writes, order kept. Writes only feed the once
+ * per kanji and day rule, so lots of writing must not push out the history the plan reads.
+ */
+export function trimLog(log: KanjiAnswerRecord[], max = 1000, maxWrites = 300): KanjiAnswerRecord[] {
+  let recall = log.length - log.filter(r => r.type === 'write').length
+  let writes = log.length - recall
+  return log.filter(r => {
+    if (r.type === 'write') return writes-- <= maxWrites
+    return recall-- <= max
+  })
+}
+
+/**
+ * Whether a finished drawing on a write card counts as right: clean, and the card wasn't left
+ * and resumed. A new canvas after Resume has forgotten the hints and faults of the old one.
+ */
+export const writeCorrect = (clean: boolean, resumed: boolean): boolean => clean && !resumed
+
 /** Written cleanly from memory at least once, the check mark on the Writing tab. */
 export const writtenClean = (stat: KanjiStatEntry | undefined): boolean => (stat?.byType.write?.correct ?? 0) > 0

@@ -179,7 +179,7 @@ Opus, only if P0 says the stroke check holds or can be made to. Draw mode for ka
 | P4b | K2 typing and sound | done, speech and on screen keyboard not tried on a device |
 | P5 | K3 groups | done |
 | P6 | K4 patterns | done |
-| P7 | K5 writing | done, review running |
+| P7 | K5 writing | done |
 
 ## 6. Results of P0
 
