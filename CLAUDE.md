@@ -16,7 +16,7 @@ node scripts/make-icons.mjs     # redraw public/icon.svg and the PNG icons, no d
 
 Tests exist only for the pure modules (`src/learning/*`, `src/data/lookalikes.ts`, `src/data/mnemonics.ts`, `src/data/strokeGlyphs.ts`, `src/backup.ts`), run with vitest. No linter.
 
-The roadmap for learning features lives in `docs/learning-improvements-plan.md`, the iOS/iPad UX review with its findings (F1, S1, D2, ...) in `docs/ux-review-ios.md`.
+The roadmap for learning features lives in `docs/learning-improvements-plan.md`, the iOS/iPad UX review with its findings (F1, S1, D2, ...) in `docs/ux-review-ios.md`. The kanji extension for JLPT N5 is specified in `docs/kanji-requirements.md` (ids KD, KR) and planned in `docs/kanji-plan.md` (phases P0 to P7 with their status). Nothing of it is built yet.
 
 ## Architecture
 
