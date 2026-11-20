@@ -8,6 +8,9 @@ const DAY = 24 * 60 * 60 * 1000
 const INTERVALS = [0, 1, 3, 7, 14, 30].map(d => d * DAY)
 export const MAX_BOX = INTERVALS.length - 1
 export const MASTERED_BOX = 3
+// Kanji and words go on to 60 and 120 days: with a ceiling of 30 the reviews of some 350
+// items would fill every session for good and nothing new would come
+export const KANJI_INTERVALS = [...INTERVALS, 60 * DAY, 120 * DAY]
 
 // reviews done a few hours early still count, nobody studies at the exact same time every day
 const DUE_SLACK = 4 * 60 * 60 * 1000
@@ -34,12 +37,13 @@ export function isDue(s: Schedule, now: number): boolean {
 /**
  * Wrong answers drop back to box 0. Correct answers only promote when the kana
  * was actually due, so answering it five times in one sitting doesn't fake mastery.
+ * `intervals` is the rest per box, the last one is the top box.
  */
-export function review(s: Schedule, correct: boolean, now: number): Schedule {
+export function review(s: Schedule, correct: boolean, now: number, intervals: number[] = INTERVALS): Schedule {
   if (!correct) return { box: 0, due: now }
   if (!isDue(s, now)) return s
-  const box = Math.min(MAX_BOX, s.box + 1)
-  return { box, due: now + INTERVALS[box] }
+  const box = Math.min(intervals.length - 1, s.box + 1)
+  return { box, due: now + intervals[box] }
 }
 
 /** Errors per item within its last RECENT_WINDOW answers in the log. `idOf` says which item a record is about. */

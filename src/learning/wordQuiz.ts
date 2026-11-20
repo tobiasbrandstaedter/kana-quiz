@@ -32,25 +32,29 @@ export function knownThenNearest<W extends { id: string }>(id: string, words: W[
   return [...shuffle(words.filter(w => known.has(w.id)), rng), ...nearest]
 }
 
-// the senses JMdict gives a word, each split into its glosses
-const sourceGlosses = (w: { glosses: string[] }) => w.glosses.flatMap(g => g.split(';').map(x => x.trim()))
+// a gloss as the parts it is made of: split at ";", case and punctuation ignored, so
+// "what day" and "what day?; what day of the week?" share a part
+const partsOf = (gloss: string) => gloss.split(';').map(x => x.toLowerCase().replace(/[^\p{L}\p{N} ]/gu, '').replace(/\s+/g, ' ').trim())
+// every part of every sense JMdict gives a word
+const sourceParts = (w: { glosses: string[] }) => w.glosses.flatMap(partsOf)
+const shares = (a: string[], b: string[]) => a.some(x => b.includes(x))
 
 /**
  * Three wrong meanings for a meaning question, as word ids (KR72): glosses of words the
- * learner has met first, then of the words closest in course order. Never a gloss equal to
- * the right one, too close to it, or one of the source glosses of either word, and no gloss
- * twice.
+ * learner has met first, then of the words closest in course order. Never a gloss that shares
+ * a part with the right one or with its source glosses, or whose source glosses hold a part
+ * of the right one, never one too close to it, and no two options that share a part.
  */
 export function pickMeaningOptions<W extends { id: string; gloss: string; glosses: string[] }>(
   answer: W, words: W[], known: Set<string>, tooClose: (a: string, b: string) => boolean, rng: () => number = Math.random,
 ): string[] {
-  const answerSources = sourceGlosses(answer)
-  const clash = (w: W) => w.gloss === answer.gloss || tooClose(w.gloss, answer.gloss)
-    || answerSources.includes(w.gloss) || sourceGlosses(w).includes(answer.gloss)
+  const answerParts = partsOf(answer.gloss)
+  const answerSources = [...answerParts, ...sourceParts(answer)]
+  const clash = (w: W) => tooClose(w.gloss, answer.gloss) || shares(partsOf(w.gloss), answerSources) || shares(answerParts, sourceParts(w))
   const picked: W[] = []
   for (const w of knownThenNearest(answer.id, words, known, rng)) {
     if (picked.length === 3) break
-    if (w.id === answer.id || clash(w) || picked.some(p => p.gloss === w.gloss)) continue
+    if (w.id === answer.id || clash(w) || picked.some(p => shares(partsOf(p.gloss), partsOf(w.gloss)))) continue
     picked.push(w)
   }
   return picked.map(p => p.id)
@@ -73,7 +77,7 @@ export function pickReadingOptions<W extends { id: string; reading: string; read
  * kanji swapped for, in this order, a kanji this learner confused with it or a lookalike
  * (`preferred`), a kanji with the same reading for that part, a kanji of the same set, a kanji
  * met so far, then the kanji closest in learning order. Never a kanji the word has already,
- * and never the form of a course word with the same reading (`isWord`), that would be right too.
+ * and never the form of a practiced word with the same reading (`isWord`), that would be right too.
  */
 export function pickSpellOptions(
   word: { form: string; reading: string; split: ReadingPart[]; kanji: string[] }, all: KanjiEntry[],
@@ -104,7 +108,9 @@ export function pickSpellOptions(
       for (const { k, swaps } of lists) {
         const swap = swaps.shift()
         if (!swap || picked.length === 3) continue
-        const form = chars.map(ch => ch === k ? swap : ch).join('')
+        // a kanji the word has twice is swapped once, the other one stays as a hint
+        const at = chars.indexOf(k)
+        const form = chars.map((ch, i) => i === at ? swap : ch).join('')
         if (picked.includes(form) || isWord(form, word.reading)) continue
         picked.push(form)
       }

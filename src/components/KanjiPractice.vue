@@ -58,6 +58,7 @@ const NEW_BLOCKED = {
   off: 'New kanji and words are switched off in the session options.',
   sets: 'You have seen every kanji in the sets you picked, their next words come once those settle.',
   cap: `Nothing new for now: ${MAX_KANJI_LEARNING} or more kanji and words are still settling, they come first.`,
+  reviews: 'Reviews fill this session. A second session today or a longer one in the session options makes room for something new.',
 }
 
 // picked sets also decide where new kanji come from, so say it on the card
@@ -135,6 +136,11 @@ function progressText(p: ColumnProgress): string {
     <div v-if="!caughtUp && summary.nextNew.length" class="hero-new">
       <span class="hero-new-label">New</span>
       <span v-for="k in summary.nextNew" :key="k" class="hero-kana kana" lang="ja">{{ k }}</span>
+    </div>
+    <!-- a word group opens with its table in this session -->
+    <div v-if="!caughtUp && summary.newGroup" class="hero-new">
+      <span class="hero-new-label">Opens</span>
+      <span class="hero-kana hero-group">{{ summary.newGroup }} table</span>
     </div>
     <div v-if="summary.newBlocked" class="hero-note">{{ NEW_BLOCKED[summary.newBlocked] }}</div>
     <div v-if="caughtUp && summary.fill" class="hero-note">

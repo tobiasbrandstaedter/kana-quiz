@@ -11,7 +11,7 @@ import { hasKanji, isAllKana, isRomajiSlip, kanaWays } from './kanaInput'
 export type ReadingMistake =
   | { kind: Exclude<ReadingKind, 'other-reading'> }
   // `reading` is what was put in for `kanji`, `right` what it is in this word, `word` the
-  // first course word that has the other reading
+  // first practiced word that has the other reading
   | { kind: 'other-reading'; kanji: string; reading: string; right: string; word: string }
 
 const VOWELS: Record<string, string> = {
@@ -80,7 +80,7 @@ function swappedReadings(split: ReadingPart[], readingsOf: (kanji: string) => Ka
  * name. The named near misses (vowel length, small っ, voicing, a long vowel held with the
  * wrong kana) go first, then another reading of one of the word's kanji put in for its part
  * of the word. `split` is the word's reading over its form, `readingsOf` gives the readings
- * of a kanji as the course words show them.
+ * of a kanji as the practiced words show them.
  */
 export function readingMistake(
   given: string, right: string, split: ReadingPart[], readingsOf: (kanji: string) => KanjiReading[],

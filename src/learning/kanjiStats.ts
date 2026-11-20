@@ -1,5 +1,5 @@
 import type { KanjiAnswerInput, KanjiStatEntry, KanjiStatsMap } from '../types'
-import { review } from './scheduler'
+import { review, KANJI_INTERVALS } from './scheduler'
 import { kanjiOfId } from '../kanjiKeys'
 
 export function newKanjiEntry(id: string): KanjiStatEntry {
@@ -21,7 +21,7 @@ export function normalizeKanjiStats(raw: unknown): KanjiStatsMap {
 
 /**
  * The entry after one answer, the old one stays untouched. The Leitner box moves through
- * `review`, except with holdBox (right on the re-ask after a miss in the same session) and
+ * `review` with the kanji intervals (up to box 7, 120 days), except with holdBox (right on the re-ask after a miss in the same session) and
  * for a typo (a typed reading that slipped twice), as for kana.
  * "Don't know" comes with an empty `given` and leaves no confusion behind. A wrong reading
  * with a name counts its kind in `mistakes`.
@@ -45,7 +45,7 @@ export function applyKanjiAnswer(old: KanjiStatEntry | undefined, a: KanjiAnswer
     if (a.given) e.confusions[a.given] = (e.confusions[a.given] ?? 0) + 1
     if (a.mistake) e.mistakes[a.mistake] = (e.mistakes[a.mistake] ?? 0) + 1
   }
-  if (!a.holdBox && !a.typo) Object.assign(e, review(e, a.correct, now))
+  if (!a.holdBox && !a.typo) Object.assign(e, review(e, a.correct, now, KANJI_INTERVALS))
   if (a.ms > 0 && a.ms < 30_000) {
     e.totalMs += a.ms
     e.count++

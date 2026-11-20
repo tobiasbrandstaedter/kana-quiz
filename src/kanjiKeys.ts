@@ -12,3 +12,7 @@ export const kanjiId = (kanji: string) => `k:${kanji}`
 
 /** The kanji of a kanji item id, null for a word or anything else. */
 export const kanjiOfId = (id: string): string | null => id.startsWith('k:') ? id.slice(2) : null
+
+// the table card of a group that opens in a session is `g:<group id>`: shown, never an item, nothing stored
+export const groupCardId = (group: string) => `g:${group}`
+export const cardGroup = (id: string): string | null => id.startsWith('g:') ? id.slice(2) : null

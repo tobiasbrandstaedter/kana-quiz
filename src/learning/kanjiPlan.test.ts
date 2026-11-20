@@ -1,22 +1,16 @@
 import { describe, it, expect } from 'vitest'
 import { seeded } from './seeded'
 import {
-  planKanji, planCards, orderKanjiSession, readyCard, spreadCards, pickedKanjiIds, pickedWordIds, errorPracticeIds, singleKanjiOrder, wordLock,
+  planKanji, planCards, pickedKanjiIds, pickedWordIds, errorPracticeIds, singleKanjiOrder, wordLock, groupLock, groupStarted,
   MAX_KANJI_LEARNING,
 } from './kanjiPlan'
-import type { PlanCourse, PlanWord, PlannedCard } from './kanjiPlan'
+import type { PlanCourse } from './kanjiPlan'
 import { newKanjiEntry } from './kanjiStats'
-import type { KanjiAnswerRecord, KanjiSetEntry, KanjiStatEntry, KanjiStatsMap } from '../types'
+import { C, DAY, G, GROUP, IDS, NOW, READY, WORDS, readyWith, seen, statsOf } from './kanjiFixtures'
+import type { KanjiAnswerRecord, KanjiSetEntry } from '../types'
 
-const DAY = 24 * 60 * 60 * 1000
-const NOW = 1_800_000_000_000
-
-const IDS = Array.from({ length: 30 }, (_, i) => `k:${String.fromCharCode(65 + i)}`)
 // kanji only, the tests further down add words
-const K: PlanCourse = { kanji: IDS, words: [] }
-
-const seen = (id: string, box: number, due: number): KanjiStatEntry => ({ ...newKanjiEntry(id), correct: 1, box, due })
-const statsOf = (...entries: KanjiStatEntry[]): KanjiStatsMap => Object.fromEntries(entries.map(e => [e.id, e]))
+const K: PlanCourse = { kanji: IDS, words: [], groups: [] }
 
 describe('planKanji over kanji', () => {
   it('brings new kanji in learning order, each worth three cards', () => {
@@ -84,6 +78,14 @@ describe('planKanji over kanji', () => {
     expect(planKanji(s, [], K, 20, NOW, 0, ['k:E']).newBlocked).toBe('off')
   })
 
+  it('says when the reviews fill the session although something new is readyWith()', () => {
+    const s = statsOf(seen('k:A', 2, NOW - DAY), seen('k:B', 2, NOW - DAY))
+    const full = planKanji(s, [], K, 2, NOW, 3)
+    expect(full.fresh).toEqual([])
+    expect(full.newBlocked).toBe('reviews')
+    expect(planKanji(s, [], K, 5, NOW, 3).newBlocked).toBeNull()
+  })
+
   it('ignores stored items that are not in the list', () => {
     const s = statsOf(seen('w:something', 0, NOW - DAY))
     expect(planKanji(s, [], K, 10, NOW, 0).due).toEqual([])
@@ -134,16 +136,6 @@ describe('singleKanjiOrder', () => {
   })
 })
 
-// A course with words: every kanji has its own first word, A has two further words, one
-// of them special, the first word of D needs A too
-const word = (id: string, kanji: string[], first: boolean, special = false): PlanWord =>
-  ({ id: `w:${id}`, kanji: kanji.map(k => `k:${k}`), home: `k:${kanji[kanji.length - 1]}`, first, special })
-const WORDS: PlanWord[] = [
-  word('a', ['A'], true), word('a-special', ['A'], false, true), word('a2', ['A'], false),
-  word('b', ['B'], true), word('c', ['C'], true), word('ad', ['A', 'D'], true), word('e', ['E'], true),
-]
-const C: PlanCourse = { kanji: ['k:A', 'k:B', 'k:C', 'k:D', 'k:E'], words: WORDS }
-
 describe('planKanji with words', () => {
   it('starts a new kanji only with room for all six cards, its first word along (KR14)', () => {
     const p = planKanji({}, [], C, 10, NOW, 3)
@@ -172,7 +164,7 @@ describe('planKanji with words', () => {
   it('puts a first word left behind first in line, before new kanji', () => {
     const s = statsOf(seen('k:A', 1, NOW + DAY))
     const p = planKanji(s, [], C, 10, NOW, 3)
-    expect(p.newWords).toEqual(['w:a'])
+    expect(p.waitingWords).toEqual(['w:a'])
     // three cards for the word, six for the next kanji with its word, the last one fills
     expect(p.fresh).toEqual(['k:B'])
     expect(p.fill).toEqual(['k:A'])
@@ -181,33 +173,33 @@ describe('planKanji with words', () => {
 
   it('unlocks further words once the home kanji is in box 2, the special one last (KR29)', () => {
     const early = statsOf(seen('k:A', 1, NOW + DAY), seen('w:a', 1, NOW + DAY))
-    expect(planKanji(early, [], C, 30, NOW, 3).newWords).toEqual([])
-    const ready = statsOf(seen('k:A', 2, NOW + DAY), seen('w:a', 1, NOW + DAY))
-    expect(planKanji(ready, [], C, 30, NOW, 3).newWords).toEqual(['w:a2', 'w:a-special'])
+    expect(planKanji(early, [], C, 30, NOW, 3).waitingWords).toEqual([])
+    const reviewed = statsOf(seen('k:A', 2, NOW + DAY), seen('w:a', 1, NOW + DAY))
+    expect(planKanji(reviewed, [], C, 30, NOW, 3).waitingWords).toEqual(['w:a2', 'w:a-special'])
   })
 
   it('takes at most as many words as new kanji, words first when room is short (KR30)', () => {
     const s = statsOf(seen('k:A', 2, NOW + DAY), seen('w:a', 1, NOW + DAY))
     const one = planKanji(s, [], C, 30, NOW, 1)
-    expect(one.newWords).toEqual(['w:a2'])
+    expect(one.waitingWords).toEqual(['w:a2'])
     expect(one.fresh).toEqual(['k:B'])
     const short = planKanji(s, [], C, 5, NOW, 3)
-    expect(short.newWords).toEqual(['w:a2'])
+    expect(short.waitingWords).toEqual(['w:a2'])
     expect(short.fresh).toEqual([])
   })
 
   it('counts words toward the twelve that stop new material (KR31)', () => {
     const shaky = [...IDS.slice(0, 6), ...WORDS.slice(0, 6).map(w => w.id)].map(id => seen(id, 1, NOW + DAY))
-    const p = planKanji(statsOf(...shaky), [], { kanji: [...C.kanji, ...IDS.slice(5, 6)], words: WORDS }, 30, NOW, 3)
+    const p = planKanji(statsOf(...shaky), [], { kanji: [...C.kanji, ...IDS.slice(5, 6)], words: WORDS, groups: [] }, 30, NOW, 3)
     expect(p.fresh).toEqual([])
-    expect(p.newWords).toEqual([])
+    expect(p.waitingWords).toEqual([])
     expect(p.newBlocked).toBe('cap')
   })
 
   it('takes new words only from the picked sets', () => {
     const s = statsOf(seen('k:A', 2, NOW + DAY), seen('w:a', 1, NOW + DAY), seen('k:B', 1, NOW + DAY))
     const p = planKanji(s, [], C, 30, NOW, 3, ['k:B', 'k:C'])
-    expect(p.newWords).toEqual(['w:b'])
+    expect(p.waitingWords).toEqual(['w:b'])
     expect(p.fresh).toEqual(['k:C'])
   })
 
@@ -234,110 +226,101 @@ describe('wordLock', () => {
   })
 })
 
-// the same item twice in a row where both cards are questions
-const backToBack = (cards: PlannedCard[]) =>
-  cards.filter((c, i) => i > 0 && c.id === cards[i - 1].id && c.type !== 'intro' && cards[i - 1].type !== 'intro')
-
-describe('orderKanjiSession', () => {
-  it('spreads a lone new kanji and its first word as far as six cards allow (KR12, KR14)', () => {
-    const p = planKanji({}, [], C, 10, NOW, 3)
-    expect(orderKanjiSession(p, seeded())).toEqual([
-      { id: 'k:A', type: 'intro' },
-      { id: 'k:A' },
-      { id: 'w:a', type: 'intro', needs: 'k:A' },
-      { id: 'w:a', type: 'read-choice' },
-      { id: 'k:A' },
-      { id: 'w:a', type: 'word-meaning' },
-    ])
-  })
-
-  // reviews of seen kanji and words, so the new ones come on top of real reviews
-  const reviews = (n: number) => statsOf(...IDS.slice(10, 10 + n).map(id => seen(id, 2, NOW - DAY)))
-  const course = (n: number): PlanCourse => ({ kanji: [...C.kanji, ...IDS.slice(10, 10 + n)], words: WORDS })
-
-  for (const size of [10, 20, 30]) {
-    for (const fresh of [1, 2, 3]) {
-      for (const due of [0, 3]) {
-        it(`keeps the questions of an item apart at size ${size}, ${fresh} new kanji, ${due} reviews`, () => {
-          for (let seed = 1; seed < 6; seed++) {
-            const p = planKanji(reviews(due), [], course(due), size, NOW, fresh)
-            const cards = orderKanjiSession(p, seeded(seed))
-            expect(backToBack(cards), JSON.stringify(cards)).toEqual([])
-            for (const [i, c] of cards.entries()) {
-              // every question comes after its item's intro, a first word after a question of its kanji
-              if (c.type !== 'intro' && p.fresh.concat(Object.values(p.firstWords)).includes(c.id)) {
-                expect(cards.slice(0, i).some(x => x.id === c.id && x.type === 'intro')).toBe(true)
-              }
-              if (c.needs) expect(cards.slice(0, i).some(x => x.id === c.needs && x.type !== 'intro')).toBe(true)
-            }
-            const word = cards.filter(c => c.id.startsWith('w:') && c.id !== 'w:e')
-            for (const id of new Set(word.map(c => c.id))) {
-              expect(cards.filter(c => c.id === id).map(c => c.type)).toEqual(['intro', 'read-choice', 'word-meaning'])
-            }
-          }
-        })
-      }
-    }
-  }
-})
-
-describe('spreadCards', () => {
-  it('puts another card between two questions of the same item', () => {
-    const cards: PlannedCard[] = [{ id: 'a' }, { id: 'a' }, { id: 'b' }]
-    expect(spreadCards(cards).map(c => c.id)).toEqual(['a', 'b', 'a'])
-  })
-
-  it('leaves the cards before `from` alone and keeps each item in order', () => {
-    const cards: PlannedCard[] = [
-      { id: 'a', type: 'intro' }, { id: 'b' }, { id: 'b', type: 'read-choice' }, { id: 'b', type: 'word-meaning' }, { id: 'c' }, { id: 'd' },
-    ]
-    const out = spreadCards(cards, 2)
-    expect(out.slice(0, 2)).toEqual(cards.slice(0, 2))
-    expect(out.filter(c => c.id === 'b').map(c => c.type)).toEqual([undefined, 'read-choice', 'word-meaning'])
-    expect(backToBack(out)).toEqual([])
-  })
-
-  it('keeps clumps it cannot take apart', () => {
-    expect(spreadCards([{ id: 'a' }, { id: 'a' }]).map(c => c.id)).toEqual(['a', 'a'])
-  })
-})
-
-describe('readyCard (KR14)', () => {
-  const session: PlannedCard[] = [
-    { id: 'k:A', type: 'intro' }, { id: 'k:A' }, { id: 'w:a', type: 'intro', needs: 'k:A' },
-    { id: 'k:B' }, { id: 'w:a', type: 'read-choice' }, { id: 'k:A', type: 'meaning' }, { id: 'k:C' }, { id: 'w:a', type: 'word-meaning' },
-  ]
-
-  it('shows the word intro once its kanji was answered right', () => {
-    expect(readyCard(session, 2, new Set(['k:A']))).toBe(session)
-  })
-
-  it('moves the word behind the next question of its kanji when that is still to come', () => {
-    const out = readyCard(session, 2, new Set())
-    const at = out.findIndex(c => c.id === 'w:a')
-    expect(out.slice(0, at).filter(c => c.id === 'k:A' && c.type !== 'intro')).toHaveLength(2)
-    expect(out.filter(c => c.id === 'w:a').map(c => c.type)).toEqual(['intro', 'read-choice', 'word-meaning'])
-    expect(out).toHaveLength(session.length)
-    expect(backToBack(out.slice(2))).toEqual([])
-  })
-
-  it('drops the word when no question of its kanji is left, and spreads what stays', () => {
-    // the kanji's re-asks would come twice in a row once the word is out
-    const cards: PlannedCard[] = [
-      { id: 'k:A', type: 'intro' }, { id: 'k:A' }, { id: 'k:B' }, { id: 'w:a', type: 'intro', needs: 'k:A' },
-      { id: 'w:a', type: 'read-choice' }, { id: 'k:B' }, { id: 'w:a', type: 'word-meaning' }, { id: 'k:B' }, { id: 'k:C' }, { id: 'k:D' },
-    ]
-    const out = readyCard(cards, 3, new Set(['k:B']))
-    expect(out.map(c => c.id)).not.toContain('w:a')
-    expect(out.slice(0, 3)).toEqual(cards.slice(0, 3))
-    expect(backToBack(out)).toEqual([])
-  })
-})
-
 describe('pickedWordIds', () => {
   it('lists the words met so far whose home kanji is picked', () => {
     const s = statsOf(seen('w:a', 1, NOW), seen('w:b', 1, NOW), seen('w:ad', 1, NOW))
     expect(pickedWordIds(['k:A', 'k:D'], WORDS, s)).toEqual(['w:a', 'w:ad'])
     expect(pickedWordIds(['k:C'], WORDS, s)).toEqual([])
+  })
+})
+
+describe('groupLock (KR76)', () => {
+  it('names the kanji of its words not met yet and whether the counter needs a review', () => {
+    expect(groupLock(GROUP, {})).toEqual({ unseen: ['k:A', 'k:B', 'k:D'], review: true })
+    expect(groupLock(GROUP, statsOf(seen('k:A', 1, NOW), seen('k:B', 1, NOW)))).toEqual({ unseen: ['k:D'], review: true })
+    expect(groupLock(GROUP, statsOf(seen('k:A', 1, NOW), seen('k:B', 2, NOW)))).toEqual({ unseen: ['k:D'], review: false })
+    expect(groupLock(GROUP, readyWith())).toBeNull()
+  })
+
+  it('is not held back by the kanji of its question word', () => {
+    // the question word needs E, which nobody has met
+    expect(readyWith()['k:E']).toBeUndefined()
+    expect(groupLock(GROUP, readyWith())).toBeNull()
+  })
+})
+
+describe('groupStarted', () => {
+  it('counts a group as started once one of its words was answered, nothing else is stored', () => {
+    expect(groupStarted(GROUP, readyWith())).toBe(false)
+    expect(groupStarted(GROUP, readyWith(seen('w:g2', 0, NOW)))).toBe(true)
+  })
+})
+
+describe('planKanji with a group', () => {
+  it('opens a readyWith() group with its card and its words in table order, the question word once it can be read', () => {
+    const p = planKanji(readyWith(), [], G, 30, NOW, 3)
+    expect(p.group).toEqual({ id: 'gb', words: ['w:g1', 'w:g2'] })
+    expect(p.waitingWords).toEqual([])
+    expect(p.newBlocked).toBeNull()
+  })
+
+  it('counts its words against the word limit, the card against neither limit (KR30)', () => {
+    const two = planKanji(readyWith(), [], G, 30, NOW, 2)
+    expect(two.group?.words).toEqual(['w:g1', 'w:g2'])
+    expect(two.fresh).toEqual(['k:C', 'k:E'])
+    const one = planKanji(readyWith(), [], G, 30, NOW, 1)
+    expect(one.group?.words).toEqual(['w:g1'])
+    expect(one.fresh).toEqual(['k:C'])
+    // card, three cards for the word, six for the new kanji with its first word
+    expect(planCards({ ...one, fill: [] })).toBe(1 + 3 + 6)
+  })
+
+  it('costs one card of room and needs room for one word after it', () => {
+    expect(planKanji(readyWith(), [], G, 3, NOW, 3).group).toBeNull()
+    const four = planKanji(readyWith(), [], G, 4, NOW, 3)
+    expect(four.group).toEqual({ id: 'gb', words: ['w:g1'] })
+    expect(planCards(four)).toBe(4)
+  })
+
+  it('waits for every kanji of its words and for a review of the counter', () => {
+    const noD = statsOf(...READY.filter(e => e.id !== 'k:D' && e.id !== 'w:ad'))
+    expect(planKanji(noD, [], G, 30, NOW, 3).group).toBeNull()
+    expect(planKanji(readyWith(seen('k:B', 1, NOW + DAY)), [], G, 30, NOW, 3).group).toBeNull()
+  })
+
+  it('goes on with a started group after first words left behind and before further words, without a card', () => {
+    const s = readyWith(seen('k:A', 2, NOW + DAY), seen('k:E', 1, NOW + DAY), seen('w:g1', 1, NOW + DAY))
+    const p = planKanji(s, [], G, 30, NOW, 4)
+    expect(p.waitingWords).toEqual(['w:e', 'w:g2', 'w:gq', 'w:a2'])
+    expect(p.group).toBeNull()
+  })
+
+  it('brings plain further words before a new group opens', () => {
+    const s = readyWith(seen('k:A', 2, NOW + DAY))
+    const three = planKanji(s, [], G, 30, NOW, 3)
+    expect(three.waitingWords).toEqual(['w:a2', 'w:a-special'])
+    expect(three.group).toEqual({ id: 'gb', words: ['w:g1'] })
+    const two = planKanji(s, [], G, 30, NOW, 2)
+    expect(two.waitingWords).toEqual(['w:a2', 'w:a-special'])
+    expect(two.group).toBeNull()
+  })
+
+  it('opens no group while twelve items are settling (KR31)', () => {
+    const extra = IDS.slice(5, 12)
+    const p = planKanji(readyWith(...extra.map(id => seen(id, 1, NOW + DAY))), [], { ...G, kanji: [...G.kanji, ...extra] }, 30, NOW, 3)
+    expect(p.group).toBeNull()
+    expect(p.newBlocked).toBe('cap')
+  })
+
+  it('belongs to the set of its counter', () => {
+    expect(planKanji(readyWith(), [], G, 30, NOW, 3, ['k:C']).group).toBeNull()
+    expect(planKanji(readyWith(), [], G, 30, NOW, 3, ['k:B']).group?.id).toBe('gb')
+    // the question word still waits for E, which no picked set brings
+    const done = readyWith(seen('w:g1', 1, NOW + DAY), seen('w:g2', 1, NOW + DAY))
+    expect(planKanji(done, [], G, 30, NOW, 3, ['k:B']).newBlocked).toBe('sets')
+  })
+
+  it('lists the group words met so far for the custom quiz of a word mode', () => {
+    expect(pickedWordIds(['k:B'], G.words, readyWith(seen('w:g2', 1, NOW)))).toEqual(['w:b', 'w:g2'])
   })
 })

@@ -16,6 +16,13 @@ describe('applyKanjiAnswer', () => {
     expect(e.due).toBe(NOW + DAY)
   })
 
+  it('moves a stored box 5 item on to 60 and then 120 days, no migration needed', () => {
+    const stored = { ...newKanjiEntry('k:A'), correct: 5, box: 5, due: NOW }
+    const six = applyKanjiAnswer(stored, answer(), NOW)
+    expect(six).toMatchObject({ box: 6, due: NOW + 60 * DAY })
+    expect(applyKanjiAnswer(six, answer(), six.due)).toMatchObject({ box: 7, due: six.due + 120 * DAY })
+  })
+
   it('counts per question type', () => {
     let e = applyKanjiAnswer(undefined, answer(), NOW)
     e = applyKanjiAnswer(e, answer({ type: 'recognize', correct: false, given: 'k:B' }), NOW + 1)

@@ -130,9 +130,9 @@ export function ownWords(kanji: string): WordEntry[] {
 /** Every course word (no group members), in course order: by home kanji, then teaching order. */
 export const courseWords = (): WordEntry[] => COURSE_WORDS
 
-/** Other course words written the same way (KR78), a card that shows the form has to tell them apart. */
+/** Other practiced words, group words included, written the same way (KR78): a card that shows the form has to tell them apart. */
 export function sameForm(word: WordEntry): WordEntry[] {
-  return COURSE_WORDS.filter(w => w.form === word.form && w.id !== word.id)
+  return PRACTICED.filter(w => w.form === word.form && w.id !== word.id)
 }
 
 /** Kanji of the course that have this reading in one of their words, in course order. */
@@ -149,9 +149,7 @@ export function wordsWith(kanji: string): WordEntry[] {
 export function kanjiReadings(kanji: string): KanjiReading[] {
   const out: KanjiReading[] = []
   // course words first, then the group words that get practiced (三 read みっ is only in 三つ and 三日)
-  const practiced = GROUPS.flatMap(g => [...g.members.filter(m => m.practiced).map(m => m.word), ...(g.question ? [g.question] : [])])
-    .map(id => WORDS.get(id)!)
-    .filter(w => w.kanji.includes(kanji))
+  const practiced = GROUPS.flatMap(groupPractice).filter(w => w.kanji.includes(kanji))
   for (const w of [...wordsWith(kanji), ...practiced]) {
     for (const p of w.split) {
       if (p.text !== kanji || out.some(r => r.reading === p.reading)) continue
@@ -180,6 +178,25 @@ export const wordGroups = (): WordGroupEntry[] => GROUPS
 
 /** The group whose counter, and so home kanji, this kanji is. */
 export const groupOf = (kanji: string): WordGroupEntry | null => GROUPS.find(g => g.counter === kanji) ?? null
+
+export const groupById = (id: string): WordGroupEntry | null => GROUPS.find(g => g.id === id) ?? null
+
+/** The words of a group that are practiced (KR75), in table order with the question word last. */
+export function groupPractice(g: WordGroupEntry): WordEntry[] {
+  return [...g.members.filter(m => m.practiced).map(m => m.word), ...(g.question ? [g.question] : [])].map(id => WORDS.get(id)!)
+}
+
+/** Every word a kanji is home of that gets practiced: its own words, then the practiced words of its group. */
+export function homeWords(kanji: string): WordEntry[] {
+  const group = groupOf(kanji)
+  return [...ownWords(kanji), ...(group ? groupPractice(group) : [])]
+}
+
+// every word that gets practiced, in course order
+const PRACTICED = ORDER.flatMap(homeWords)
+
+/** Course words and practiced group words, by home kanji: the pool for wrong options and known readings. */
+export const practicedWords = (): WordEntry[] => PRACTICED
 
 /** Strokes in the shape kanaStrokes returns, for StrokeDemo and StrokeCanvas. */
 export function kanjiStrokes(kanji: string): KanaStrokes | null {

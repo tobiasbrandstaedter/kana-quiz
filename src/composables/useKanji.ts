@@ -2,12 +2,13 @@ import { ref, computed, effectScope } from 'vue'
 import type {
   ItemInfo, KanjiAnswerInput, KanjiAnswerRecord, KanjiCard, KanjiMode, KanjiSort, KanjiSortCol, KanjiStatEntry, KanjiStatsMap, QuestionType,
 } from '../types'
-import { allKanji, kanjiSets } from '../data/kanjiData'
+import { allKanji, groupById, kanjiSets } from '../data/kanjiData'
 import { applyKanjiAnswer, normalizeKanjiStats } from '../learning/kanjiStats'
 import {
-  planKanji, planCards, orderKanjiSession, readyCard, pickedKanjiIds, pickedWordIds, errorPracticeIds, singleKanjiOrder, wordLock,
+  planKanji, planCards, pickedKanjiIds, pickedWordIds, errorPracticeIds, singleKanjiOrder, wordLock, groupLock,
 } from '../learning/kanjiPlan'
-import type { PlannedCard } from '../learning/kanjiPlan'
+import { orderKanjiSession, readyCard } from '../learning/kanjiSession'
+import type { PlannedCard } from '../learning/kanjiSession'
 import { noteResult, summarizeRound, resultScore, resultLabel, splitMoves } from '../learning/kanjiQuiz'
 import type { RoundResults } from '../learning/kanjiQuiz'
 import { itemInfo, itemOrder, makeCard, storedAnswer, wordReadingMistake, wordTypedVerdict, PLAN_COURSE } from '../learning/kanjiCards'
@@ -57,6 +58,8 @@ function createKanji() {
   const statOf = (id: string): KanjiStatEntry | undefined => stats.value[id]
   /** What keeps a word from coming in yet, null once nothing does (KR29). */
   const lockOf = (wordId: string) => wordLock(planWords.get(wordId)!, stats.value)
+  /** What keeps a group from opening, null once it is ready (KR76). */
+  const groupLockOf = (groupId: string) => groupLock(PLAN_COURSE.groups.find(g => g.id === groupId)!, stats.value)
 
   // every write goes through here, so the shell's counts read storage again
   function saveStats(data: KanjiStatsMap): void {
@@ -91,7 +94,9 @@ function createKanji() {
       itemsMastered: mastered(items),
       accuracy: `${accuracy({ correct, incorrect })}%`,
       weak: p.weak.length, fresh: p.fresh.length, fill: p.fill.length,
-      newWords: p.newWords.length + Object.keys(p.firstWords).length,
+      // group words are new words too
+      newWords: p.waitingWords.length + Object.keys(p.firstWords).length + (p.group?.words.length ?? 0),
+      newGroup: p.group ? groupById(p.group.id)!.title : null,
       outsideSets: p.outsideSets.map(kanjiOfId).filter((k): k is string => !!k),
       cards: planCards(p),
       nextNew: p.fresh.map(id => byId.get(id)!.kanji),
@@ -227,7 +232,7 @@ function createKanji() {
   function begin(items: PlannedCard[]): void {
     const ids = [...seenStats.value.map(stat => stat.id), ...seenWords.value.map(stat => stat.id), ...items.map(i => i.id)]
     knownKanji = new Set(ids.map(kanjiOfId).filter((k): k is string => !!k))
-    knownWords = new Set(ids.filter(id => !kanjiOfId(id)))
+    knownWords = new Set(ids.filter(id => planWords.has(id)))
     reasked = {}
     rightIds = new Set()
     moves.value = {}
@@ -444,7 +449,7 @@ function createKanji() {
   return {
     sets, mode, setMode, wordMode, smartSize, smartNew, setSmartSize, setSmartNew,
     pickedSets, toggleSet, selectAllSets, selectNoneSets,
-    statOf, lockOf, hasError, summary, progressBySet,
+    statOf, lockOf, groupLockOf, hasError, summary, progressBySet,
     openErrors, resolveErrors, resolveAllErrors, rows, tableShow, tableSort, setTableSort, errorsScrollPending,
     cards, current, card, answered, pickedOption, gaveUp, mistake, correct, correctCount, wrongCount, startedAt, progress,
     typedAnswer, slipped, verdict,

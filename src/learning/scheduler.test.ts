@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import type { AnswerRecord, StatEntry, StatsMap } from '../types'
-import { review, isDue, dueAt, recentErrors, pickSmart, orderSession, reaskSlot, planReask, columnProgress, dueOutlook, mixedDirection, MAX_BOX } from './scheduler'
+import { review, isDue, dueAt, recentErrors, pickSmart, orderSession, reaskSlot, planReask, columnProgress, dueOutlook, mixedDirection, MAX_BOX, KANJI_INTERVALS } from './scheduler'
 import { allPairs, pairFor, HIRAGANA } from '../data/kana'
 import { newEntry } from './statsMigration'
 
@@ -42,6 +42,12 @@ describe('review', () => {
 
   it('caps at the top box', () => {
     expect(review({ box: MAX_BOX, due: 0 }, true, NOW).box).toBe(MAX_BOX)
+  })
+
+  it('takes a longer interval table for kanji, the kana one stays', () => {
+    expect(review({ box: MAX_BOX, due: 0 }, true, NOW, KANJI_INTERVALS)).toEqual({ box: MAX_BOX + 1, due: NOW + 60 * DAY })
+    expect(review({ box: MAX_BOX + 1, due: 0 }, true, NOW, KANJI_INTERVALS)).toEqual({ box: MAX_BOX + 2, due: NOW + 120 * DAY })
+    expect(review({ box: MAX_BOX + 2, due: 0 }, true, NOW, KANJI_INTERVALS).box).toBe(MAX_BOX + 2)
   })
 })
 

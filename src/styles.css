@@ -162,7 +162,7 @@ body {
 .q-main, .option-btn, .error-kana, .missed-item .k, .col-btn .kana-sample, .set-kanji, .stats-kana-cell,
 .cc-kana, .stroke-kana, .stroke-pick, .row-chip, .kc-kanji, .explain-item .k, .hero-kana, .fb-kana,
 .intro-reading, .q-reading, .word-line-form, .word-line-reading, .kd-word-form, .kd-word-reading, .missed-reading,
-.error-reading, .stats-reading, .word-kanji-row .kana, .kana-preview, .typed-answer {
+.error-reading, .stats-reading, .word-kanji-row .kana, .kana-preview, .typed-answer, .group-form, .group-reading {
   font-family: var(--kana-font);
   /* a font without a bold cut shows as it is, smeared fake bold is no help when learning shapes */
   font-synthesis: none;
@@ -388,6 +388,7 @@ body {
 .hero-scope .btn { flex-shrink: 0; }
 
 .hero-new { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.hero-kana.hero-group { padding: 0 12px; font-family: var(--ui-font); font-size: 15px; font-weight: 900; }
 .hero-new-label { font-size: 12px; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; color: var(--hero-dim); margin-right: 4px; }
 .hero-kana {
   min-width: 38px;
@@ -822,6 +823,7 @@ body {
 /* one typo is let through: nudge the field and say so, nothing is counted yet */
 .type-field.input-retry { border-color: var(--action); animation: draw-shake 0.3s ease-in-out; }
 .type-hint { margin-top: 10px; font-size: 14px; font-weight: 800; color: var(--warn-text); text-align: center; }
+.type-hint-btn { display: flex; margin: 8px auto 0; }
 @media (prefers-reduced-motion: reduce) { .type-field.input-retry { animation: none; } }
 
 .options-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin-bottom: 22px; }
@@ -894,6 +896,9 @@ body {
 .option-btn.reading-option .opt-n { top: calc(50% - 10px); }
 .form-grid .option-btn { font-size: min(56px, calc(140px / var(--len, 1))); }
 .intro-note { margin: 0 0 14px; font-size: 15px; font-weight: 700; line-height: 1.45; color: var(--ink-2); }
+/* the intro of a group word: which table it is from, and the button that opens it */
+.intro-group-note { display: flex; flex-wrap: wrap; align-items: center; gap: 0 12px; margin-bottom: 14px; }
+.intro-group-note .intro-note { flex: 1 1 200px; margin: 0; }
 .word-kanji { display: flex; flex-direction: column; margin-bottom: 14px; border: var(--bw) solid var(--edge); border-radius: 14px; background: var(--surface); overflow: hidden; }
 .word-kanji-row { display: flex; align-items: center; gap: 12px; padding: 8px 14px; border-bottom: var(--bw) solid var(--line-soft); font-size: 16px; font-weight: 800; }
 .word-kanji-row:last-child { border-bottom: 0; }
@@ -906,9 +911,29 @@ body {
 .word-line .explain-hint { flex-basis: 100%; }
 /* the button that says a word sits in a line of text, centered on it rather than on the baseline */
 .intro-reading-row { display: flex; align-items: center; justify-content: center; gap: 12px; }
-.word-line .speak-btn, .kd-word-main .speak-btn { align-self: center; }
+.word-line .speak-btn, .word-line .btn, .kd-word-main .speak-btn { align-self: center; }
 .kd-word-main .speak-btn { margin-left: auto; }
 .kd-word-main .speak-btn + .kd-word-stage { margin-left: 0; }
+
+/* a word group (KD17): its table on the group card, in a sheet over a member's card and in the
+   kanji sheet. Two columns top to bottom, so 14 rows fit on a phone without scrolling the card;
+   the irregular ones stand out. A list, flat, only the sound buttons press */
+.table-title { margin-bottom: 10px; font-size: 26px; font-weight: 900; line-height: 1.2; color: var(--primary-text); }
+.group-table { text-align: left; }
+.group-what { margin: 0 0 10px; font-size: 15px; font-weight: 700; line-height: 1.45; color: var(--ink-2); }
+.group-what .kana { font-size: 20px; color: var(--ink); }
+.group-swatch { display: inline-block; width: 14px; height: 14px; margin-right: 6px; vertical-align: -2px; border: 1.5px solid var(--edge); border-radius: 4px; background: var(--butter-soft); }
+.group-rows { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-rows: repeat(var(--rows), auto); grid-auto-flow: column; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.group-row { display: flex; align-items: center; gap: 6px; min-width: 0; padding: 3px 3px 3px 10px; border: 1.5px solid var(--line-soft); border-radius: 10px; background: var(--surface); }
+.group-row.irregular { border-color: var(--edge); background: var(--butter-soft); }
+.group-row.irregular .group-reading { color: var(--warn-text); }
+.group-row.current { border-color: var(--primary); box-shadow: inset 0 0 0 1px var(--primary); }
+.group-word { display: flex; flex-direction: column; flex: 1; min-width: 0; }
+.group-form { font-size: 20px; font-weight: 700; line-height: 1.2; color: var(--ink); }
+/* seven kana stay on one line in half a phone: --len is the number of kana */
+.group-reading { font-size: min(15px, calc(90px / var(--len, 1))); font-weight: 700; line-height: 1.3; color: var(--primary-text); white-space: nowrap; }
+.group-question { margin-top: 6px; }
+.group-ask { font-size: 12px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-2); }
 
 /* typed reading: romaji in the field, the kana it gives right below, letters not yet kana in
    the UI font. Seven kana fit at 375px */
@@ -1535,6 +1560,10 @@ label.btn:focus-within { outline: 3px solid var(--focus); outline-offset: 2px; }
 .kd-word-note { font-size: 14px; font-weight: 700; color: var(--ink-2); }
 .kd-word-note .kana { font-size: 18px; color: var(--primary-text); }
 .kd-onkun { margin: 0 0 8px; color: var(--ink-2); }
+/* the group a kanji is the counter of, its table opens below */
+.kd-group { display: flex; flex-direction: column; gap: 8px; padding: 10px 14px; border: var(--bw) solid var(--edge); border-radius: 14px; background: var(--surface); }
+.kd-group-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.kd-group-title { font-size: 17px; font-weight: 900; }
 .kd-reading { display: inline-flex; align-items: baseline; gap: 6px; }
 .kd-reading-kind { font-size: 12px; font-weight: 900; letter-spacing: 0.06em; text-transform: uppercase; color: var(--primary-text); }
 .kd-reading-word { font-size: 13px; font-weight: 700; color: var(--ink-2); }
@@ -1759,7 +1788,7 @@ label.btn:focus-within { outline: 3px solid var(--focus); outline-offset: 2px; }
 :root[data-theme="sumi"] :is(.btn, .tile, .option-btn, .col-btn, .question-card, .result-card, .outcome-section, .missed-section,
 .missed-item, .pattern-card, .stat-card, .chart-more, .error-table, .stats-table, .stroke-svg, .stroke-pick, .danger-zone,
 .explain, .explain-item, .type-field, .listen-btn, .kd-dirs, .kd-words, .word-kanji, .no-errors-state, .no-stats-state, .kanji-load, .missed-drawing, .hero-kana,
-.seg-btn, .stroke-view) { border-radius: var(--r); }
+.seg-btn, .stroke-view, .group-row, .kd-group) { border-radius: var(--r); }
 :root[data-theme="sumi"] .sheet { border-radius: 8px 8px 0 0; }
 
 :root[data-theme="sumi"] :is(.brand, .hero-title, .section-title, .result-score, .result-title, .sheet-title, .stat-num,
@@ -1855,8 +1884,13 @@ label.btn:focus-within { outline: 3px solid var(--focus); outline-offset: 2px; }
 :root[data-theme="sumi"] .intro-romaji { font-family: var(--mincho); color: var(--ink); }
 :root[data-theme="sumi"] :is(.kanji-keyword, .intro-keyword, .word-gloss) { font-family: var(--mincho); font-weight: 800; color: var(--ink); }
 /* readings stay ink, vermilion is for what needs a look */
-:root[data-theme="sumi"] :is(.word-line-reading, .kd-word-reading, .kd-reading-kind, .kana-preview) { color: var(--ink); }
+:root[data-theme="sumi"] :is(.word-line-reading, .kd-word-reading, .kd-reading-kind, .kana-preview, .group-reading) { color: var(--ink); }
 :root[data-theme="sumi"] .kd-word-note .kana { color: var(--shu); }
+/* an irregular member of a group: a vermilion rule, the one accent */
+:root[data-theme="sumi"] :is(.group-row.irregular, .group-swatch) { border-color: var(--shu); background: transparent; }
+:root[data-theme="sumi"] .group-row.irregular .group-reading { color: var(--shu); }
+:root[data-theme="sumi"] .group-row.current { border-color: var(--ink); box-shadow: inset 0 0 0 1px var(--ink); }
+:root[data-theme="sumi"] .table-title { font-family: var(--mincho); font-weight: 800; color: var(--ink); }
 :root[data-theme="sumi"] :is(.audio-btn, .listen-btn) { background: transparent; }
 :root[data-theme="sumi"] .audio-btn { border-radius: 50%; }
 :root[data-theme="sumi"] :is(.audio-btn, .listen-btn).playing { background: var(--ink); color: var(--on-primary); }
@@ -2072,7 +2106,12 @@ label.btn:focus-within { outline: 3px solid var(--focus); outline-offset: 2px; }
 :root[data-theme="yoru"] .kanji-keyword { font-weight: 700; color: var(--cyan); text-shadow: var(--tglow-c); }
 :root[data-theme="yoru"] .intro-keyword { color: var(--cyan); }
 :root[data-theme="yoru"] .word-gloss { color: var(--cyan); }
-:root[data-theme="yoru"] :is(.word-line-reading, .kd-word-reading, .kd-reading-kind, .kana-preview) { color: var(--cyan); }
+:root[data-theme="yoru"] :is(.word-line-reading, .kd-word-reading, .kd-reading-kind, .kana-preview, .group-reading) { color: var(--cyan); }
+/* irregular members of a group in amber, the color of what is still being learned */
+:root[data-theme="yoru"] :is(.group-row.irregular, .group-swatch) { border-color: var(--amber); background: var(--stage-learning); }
+:root[data-theme="yoru"] .group-row.irregular .group-reading { color: var(--amber); }
+:root[data-theme="yoru"] .group-row.current { border-color: var(--cyan); box-shadow: var(--glow-c); }
+:root[data-theme="yoru"] .table-title { color: var(--cyan); }
 :root[data-theme="yoru"] :is(.audio-btn, .listen-btn) { background: var(--surface-2); }
 :root[data-theme="yoru"] :is(.audio-btn, .listen-btn).playing { background: var(--cyan); color: var(--bg); box-shadow: var(--glow-c); }
 :root[data-theme="yoru"] .option-btn.correct { border-color: var(--good); background: var(--good-soft); color: var(--good); box-shadow: var(--glow-g); }

@@ -1,8 +1,9 @@
 import { describe, it, expect } from 'vitest'
 import { KANJI_SOURCE } from './kanjiSource'
 import {
-  allKanji, courseEntries, courseWords, groupOf, homeKanji, KANJI_DATA_DATE, KANJI_SOURCES, kanjiEntry, kanjiLookalikeHint, kanjiLookalikes,
-  kanjiReadings, kanjiSets, kanjiStrokes, kanjiWithReading, ownWords, sameForm, tooClose, wordById, wordGroups, wordId, wordsWith,
+  allKanji, courseEntries, courseWords, groupById, groupOf, groupPractice, homeKanji, homeWords, KANJI_DATA_DATE, KANJI_SOURCES, kanjiEntry,
+  kanjiLookalikeHint, kanjiLookalikes, kanjiReadings, kanjiSets, kanjiStrokes, kanjiWithReading, ownWords, practicedWords, sameForm, tooClose,
+  wordById, wordGroups, wordId, wordsWith,
 } from './kanjiData'
 import { CLOSE_MEANINGS, KANJI_LOOKALIKES, WORD_GROUPS } from './kanjiCourse'
 
@@ -60,12 +61,14 @@ describe('words', () => {
     for (const w of courseWords()) expect(w.group).toBeNull()
   })
 
-  it('know the other course words written the same way', () => {
-    for (const w of courseWords()) {
+  it('know the other practiced words written the same way, group words included (KR78)', () => {
+    for (const w of practicedWords()) {
       const twins = sameForm(w)
-      expect(twins.map(t => t.id)).toEqual(courseWords().filter(o => o.form === w.form && o.id !== w.id).map(o => o.id))
+      expect(twins.map(t => t.id)).toEqual(practicedWords().filter(o => o.form === w.form && o.id !== w.id).map(o => o.id))
       expect(twins).not.toContain(w)
     }
+    // a group word can share its form with a course word
+    expect(practicedWords().some(w => w.group && sameForm(w).some(t => t.group === null))).toBe(true)
   })
 
   it('belong to the kanji of theirs that comes last', () => {
@@ -210,9 +213,32 @@ describe.skipIf(WORD_GROUPS.length === 0)('word groups', () => {
 })
 
 describe('group lookup', () => {
-  it('finds a group by its counter kanji', () => {
-    for (const g of wordGroups()) expect(groupOf(g.counter)).toBe(g)
+  it('finds a group by its counter kanji and by its id', () => {
+    for (const g of wordGroups()) {
+      expect(groupOf(g.counter)).toBe(g)
+      expect(groupById(g.id)).toBe(g)
+    }
     expect(groupOf('あ')).toBeNull()
+    expect(groupById('nothing')).toBeNull()
+  })
+
+  it('lists the practiced words of a group in table order, the question word last', () => {
+    for (const g of wordGroups()) {
+      const ids = groupPractice(g).map(w => w.id)
+      expect(ids.slice(0, ids.length - (g.question ? 1 : 0))).toEqual(g.members.filter(m => m.practiced).map(m => m.word))
+      if (g.question) expect(ids[ids.length - 1]).toBe(g.question)
+      for (const w of groupPractice(g)) expect(w.group, w.id).toBe(g.id)
+    }
+  })
+
+  it('gives a kanji its own words, then the practiced words of its group', () => {
+    for (const k of allKanji()) {
+      const group = groupOf(k.kanji)
+      expect(homeWords(k.kanji).map(w => w.id)).toEqual([...k.words, ...(group ? groupPractice(group).map(w => w.id) : [])])
+      for (const w of homeWords(k.kanji)) expect(w.home).toBe(k.kanji)
+    }
+    expect(practicedWords()).toEqual(allKanji().flatMap(k => homeWords(k.kanji)))
+    expect(new Set(practicedWords().map(w => w.id)).size).toBe(practicedWords().length)
   })
 })
 

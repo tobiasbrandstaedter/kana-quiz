@@ -1,37 +1,56 @@
 <script setup lang="ts">
-import { inject, ref, computed, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
+import { inject, ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import { QUIZ_KEY } from '../composables/useQuiz'
 import { useKanji } from '../composables/useKanji'
-import { courseEntries, kanjiEntry, kanjiLookalikeHint, kanjiLookalikes, kanjiStrokes, sameForm, wordById } from '../data/kanjiData'
+import { courseEntries, groupById, kanjiEntry, kanjiLookalikeHint, kanjiLookalikes, kanjiStrokes, sameForm, wordById } from '../data/kanjiData'
 import { isSeen } from '../learning/scheduler'
 import { optionText, spellDiff } from '../learning/kanjiCards'
-import { cleanTyped, hasKanji, previewParts } from '../learning/kanaInput'
 import { setCourse } from '../kanjiShell'
-import { kanjiId } from '../kanjiKeys'
+import { cardGroup, kanjiId } from '../kanjiKeys'
 import StrokeDemo from './StrokeDemo.vue'
 import StrokeCanvas from './StrokeCanvas.vue'
 import Icon from './Icon.vue'
 import SpeakButton from './SpeakButton.vue'
+import GroupTable from './GroupTable.vue'
+import BottomSheet from './BottomSheet.vue'
+import ReadingInput from './ReadingInput.vue'
 
 const { notify, screen } = inject(QUIZ_KEY)!
 const {
   statOf, cards, current, card, answered, pickedOption, gaveUp, mistake, correct, correctCount, wrongCount, startedAt, progress,
-  typedAnswer, slipped, verdict,
-  choose, giveUp, submitTyped, next, goHome, resume,
+  verdict,
+  choose, giveUp, next, goHome, resume,
 } = useKanji()
 
-// a word card carries its word, a kanji card its kanji; `entry` is the kanji, for a word its home kanji
+// a word card carries its word, a kanji card its kanji, a table card the group that opens
+// with it; `entry` is the kanji, for a word its home kanji, for a table card the counter
 const word = computed(() => card.value ? wordById(card.value.id) : null)
+const newGroup = computed(() => {
+  const id = card.value ? cardGroup(card.value.id) : null
+  return id ? groupById(id) : null
+})
 const entry = computed(() => card.value ? kanjiEntry(card.value.home) : null)
-const strokes = computed(() => card.value && !word.value ? kanjiStrokes(card.value.home) ?? undefined : undefined)
 const isIntro = computed(() => card.value?.type === 'intro')
-const kanjiIntro = computed(() => isIntro.value && !word.value)
+const kanjiIntro = computed(() => isIntro.value && !word.value && !newGroup.value)
+const strokes = computed(() => kanjiIntro.value ? kanjiStrokes(card.value!.home) ?? undefined : undefined)
+
+// a word of a group: the group, whether it is one of the irregular ones or the question word (KR77)
+const wordGroup = computed(() => word.value?.group ? groupById(word.value.group) : null)
+const irregular = computed(() => !!wordGroup.value?.members.find(m => m.word === word.value!.id)?.irregular)
+const questionWord = computed(() => !!word.value && wordGroup.value?.question === word.value.id)
+
+// the table of a word's group in a sheet over the card. The quiz keys stay off while it is
+// open, closing it gives the focus back to the button that opened it
+const wordTableOpen = ref(false)
+watch(card, () => { wordTableOpen.value = false })
 const isTyped = computed(() => card.value?.type === 'read-type')
 
 // the word is the kanji standing alone: its intro only says so, the kanji intro came just before
 const aloneAsWord = computed(() => !!word.value && word.value.form === word.value.home)
-// another course word is written the same way: the card shows what tells them apart (KR78)
+// Another word is written the same way: a reading card names which one it asks (KR78).
+// Usually by the meaning, a group word by its table: 十 read two ways means ten both times.
 const hasTwin = computed(() => word.value ? sameForm(word.value).length > 0 : false)
+const twinHint = computed(() => wordGroup.value?.title ?? word.value?.gloss ?? '')
 
 // first contact: watch the strokes, then trace once over the guide. Not scored.
 const introStep = ref<'watch' | 'trace' | 'traced'>('watch')
@@ -45,6 +64,7 @@ const label = computed(() => {
   const c = card.value
   if (!c) return ''
   if (c.type === 'intro') {
+    if (newGroup.value) return 'New table'
     if (word.value) return aloneAsWord.value ? 'As a word' : 'New word'
     return introStep.value === 'watch' ? 'New kanji' : 'Now trace it'
   }
@@ -111,42 +131,8 @@ const feedbackText = computed(() => {
 // right with a reading that isn't the one shown first: name that one too
 const otherReading = computed(() => verdict.value?.result === 'right' && verdict.value.kana !== card.value?.answer)
 
-// what the card says while it asks again, one hint at a time: the last verdict decides
-const retryHint = computed(() => {
-  const v = verdict.value
-  if (answered.value || !v) return null
-  return v.result === 'slip' || v.result === 'homograph' || v.result === 'kanji' ? v : null
-})
-
-// the hiragana the typing turns into, before it is sent (KR20). The field keeps what was
-// typed, rewriting it under the iOS keyboard breaks typing. Letters that make no kana yet
-// stay letters, shown apart.
-const preview = computed(() => previewParts(typedAnswer.value))
-const canSend = computed(() => cleanTyped(typedAnswer.value) !== '' || hasKanji(typedAnswer.value))
-
-// :value and @input instead of v-model: v-model ignores input while a Japanese keyboard
-// composes, the preview and Check would stay dead until the composition ends
-function onTypedInput(e: Event): void {
-  typedAnswer.value = (e.target as HTMLInputElement).value
-}
-
-const typeField = ref<HTMLInputElement | null>(null)
-const focusField = () => nextTick(() => typeField.value?.focus())
-watch(card, c => { if (c?.type === 'read-type') focusField() }, { immediate: true })
-
-// a slip, a homograph or kanji ask again, the cursor goes back into the field (Check took it away)
-function check(): void {
-  submitTyped()
-  if (!answered.value) focusField()
-}
-
-function onTypedEnter(e: KeyboardEvent): void {
-  // the Enter that confirms a composition: Safari sends it with isComposing false but keyCode 229.
-  // A held key must not run through the cards.
-  if (e.isComposing || e.keyCode === 229 || e.repeat) return
-  if (answered.value) next()
-  else check()
-}
+// the typed reading field of a read-type card, its Check runs from the action bar
+const readingInput = ref<InstanceType<typeof ReadingInput> | null>(null)
 
 // the hook on first contact with a kanji and after a missed kanji
 const hook = computed(() => {
@@ -178,14 +164,14 @@ const primary = computed((): Action | null => {
   }
   if (isIntro.value) return { label: 'Got it', run: next }
   if (answered.value) return { label: isLast.value ? 'Results' : 'Next', run: next }
-  if (isTyped.value) return { label: 'Check', run: check, enabled: canSend.value }
+  if (isTyped.value) return { label: 'Check', run: () => readingInput.value?.check(), enabled: !!readingInput.value?.canSend }
   return null
 })
 
 const secondary = computed((): Action | null => {
   if (!card.value || answered.value) return null
   if (isIntro.value) {
-    if (word.value || introStep.value === 'traced' || !strokes.value) return null
+    if (!kanjiIntro.value || introStep.value === 'traced' || !strokes.value) return null
     return { label: introStep.value === 'watch' ? 'Skip intro' : 'Skip tracing', run: next }
   }
   return { label: "Don't know", run: giveUp }
@@ -211,8 +197,13 @@ function endSession(): void {
 
 // Enter runs the main button, 1 to 4 pick an option
 function onKey(e: KeyboardEvent): void {
-  // the field has its own Enter, and an Enter inside a composition confirms it
-  if (e.isComposing || e.target === typeField.value) return
+  // an Enter inside a composition confirms it. The table sheet takes the keys while it is
+  // open, the card behind it must not answer or move on
+  if (e.isComposing || wordTableOpen.value) return
+  // a focused field, link or button other than the main one does its own thing with the
+  // key: the reading field checks, Show the table opens the table
+  const target = e.target instanceof Element ? e.target.closest('button, a, input, textarea, select') : null
+  if (target && !target.classList.contains('action-primary')) return
   // Cmd+1 switches browser tabs, and a held key must not run through the cards
   if (e.metaKey || e.ctrlKey || e.altKey || e.repeat) return
   const c = card.value
@@ -286,8 +277,14 @@ const formLength = computed(() => Math.max(1, ...(card.value?.options ?? []).map
           <span v-if="card.reask" class="reask-tag">again</span>{{ label }}
         </div>
 
+        <!-- the table of a group that opens: shown once, not scored (KR76) -->
+        <template v-if="newGroup">
+          <div class="table-title">{{ newGroup.title }}</div>
+          <GroupTable :group="newGroup" />
+        </template>
+
         <!-- a word: intro, or the word shown for its meaning or reading, or reading and meaning to spell -->
-        <template v-if="word && card.type === 'spell'">
+        <template v-else-if="word && card.type === 'spell'">
           <div class="q-reading" :style="{ '--len': word.reading.length }" lang="ja">{{ word.reading }}</div>
           <div class="word-gloss">{{ word.gloss }}</div>
         </template>
@@ -301,7 +298,7 @@ const formLength = computed(() => Math.max(1, ...(card.value?.options ?? []).map
             <div class="intro-keyword">{{ word.gloss }}</div>
           </template>
           <!-- two words written alike: the one meant is told by what the question doesn't ask -->
-          <div v-else-if="hasTwin && (card.type === 'read-choice' || isTyped)" class="word-gloss">{{ word.gloss }}</div>
+          <div v-else-if="hasTwin && (card.type === 'read-choice' || isTyped)" class="word-gloss">{{ twinHint }}</div>
           <div v-else-if="hasTwin" class="word-gloss" lang="ja">{{ word.reading }}</div>
         </template>
 
@@ -330,41 +327,21 @@ const formLength = computed(() => Math.max(1, ...(card.value?.options ?? []).map
             </div>
           </div>
           <p v-if="word.special" class="intro-note">A special reading: it belongs to the word as a whole, not to each kanji.</p>
+          <div v-if="wordGroup" class="intro-group-note">
+            <p class="intro-note">
+              From the table {{ wordGroup.title }}.
+              <template v-if="irregular">One of the irregular ones, marked in the table: learn it as it is.</template>
+              <template v-else-if="questionWord">It asks which one.</template>
+              <template v-else-if="wordGroup.practice === 'irregular'">It follows the pattern.</template>
+            </p>
+            <button class="btn btn-sm" @click="wordTableOpen = true">Show the table</button>
+          </div>
         </template>
 
-        <!-- typed reading: the field keeps the romaji, the preview shows the kana it gives -->
-        <div v-if="isTyped" class="reading-input">
-          <input
-            ref="typeField"
-            :value="typedAnswer"
-            class="type-field reading-field"
-            :class="{
-              'input-correct': answered && correct,
-              'input-wrong': answered && !correct,
-              'input-retry': slipped && !answered,
-            }"
-            type="text"
-            aria-label="Type the reading, in romaji or kana"
-            autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
-            enterkeyhint="go"
-            placeholder="type romaji..."
-            maxlength="40"
-            :readonly="answered"
-            @input="onTypedInput"
-            @keydown.enter="onTypedEnter"
-          />
-          <div v-if="!answered" class="kana-preview" aria-hidden="true">
-            <span v-for="(part, i) in preview" :key="i" :class="{ pending: part.pending }" :lang="part.pending ? undefined : 'ja'">{{ part.text }}</span>
-          </div>
-          <div v-if="retryHint" class="type-hint" role="status">
-            <template v-if="retryHint.result === 'slip'">Looks like a typo. Fix it and check again.</template>
-            <template v-else-if="retryHint.result === 'kanji'">Type the reading in hiragana or romaji, not in kanji.</template>
-            <template v-else>
-              <span class="kana" lang="ja">{{ retryHint.kana }}</span> is also a way to read this spelling, but for another word.
-              This card wants the word for "{{ word?.gloss }}", try again.
-            </template>
-          </div>
-        </div>
+        <ReadingInput
+          v-if="isTyped && word" ref="readingInput" :key="`type${cardKey}`"
+          :gloss="word.gloss" :group="wordGroup" @table="wordTableOpen = true"
+        />
 
         <div
           v-if="card.options.length"
@@ -404,6 +381,7 @@ const formLength = computed(() => Math.max(1, ...(card.value?.options ?? []).map
           <span class="word-line-reading" lang="ja">{{ word.reading }}</span>
           <span class="word-line-gloss">{{ word.gloss }}</span>
           <SpeakButton :reading="word.reading" />
+          <button v-if="wordGroup" class="btn btn-sm" @click="wordTableOpen = true">Show the table</button>
           <!-- a wrong reading names its kind (KR33) -->
           <div v-if="mistake" class="explain-hint">
             <template v-if="mistake.kind === 'long-vowel'">Close, but a vowel is held too long or too short.</template>
@@ -459,5 +437,9 @@ const formLength = computed(() => Math.max(1, ...(card.value?.options ?? []).map
         @click="primary.run()"
       >{{ primary.label }}<Icon v-if="primary.label !== 'Check'" name="arrow" :size="20" /></button>
     </div>
+
+    <BottomSheet v-if="wordTableOpen && wordGroup" :title="wordGroup.title" @close="wordTableOpen = false">
+      <GroupTable :group="wordGroup" :current="word?.id" />
+    </BottomSheet>
   </div>
 </template>

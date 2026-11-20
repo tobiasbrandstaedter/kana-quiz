@@ -106,7 +106,18 @@ Why: meaning, shape, a reading and a new word at once is four new things. Spread
 
 The default is three new kanji per smart session, each bringing its first word. The picker offers 0, 3 and 5 as for kana. A new kanji with its first word takes six cards, so reviews and the session length decide how many really fit (KR14). New material stops while twelve kanji and words are still in the first two boxes (KR31), which in practice allows two sessions with new material per day.
 
-Why: with one session a day the kanji take about two months and the words follow a few weeks behind. Five a day feels fast in week one and collapses in week three, when the reviews pile up. The stop at twelve is what keeps a keen learner from doing that to themselves.
+Why: five a day feels fast in week one and collapses in week three, when the reviews pile up. The stop at twelve is what keeps a keen learner from doing that to themselves.
+
+How long the whole course takes was first guessed (two months) and then simulated, and the guess was wrong. 104 kanji and about 250 words are 350 items, each with an intro, two tests and six or seven reviews. Days until the last kanji is introduced, one session a day, three new kanji per session:
+
+| Session size | No misses | 15 % of answers missed |
+|---|---|---|
+| 10 | 350 | not within 600 days |
+| 20 | 141 | 306 |
+| 30 | 82 | 170 |
+| 20, twice a day | 61 | |
+
+So the default of 20 cards a day is five to ten months, and whoever wants it faster does a second session or picks 30. At size 10 with misses the reviews fill nearly every session, the hero then says so (KR31). This is what the amount of material costs, not something a scheduling trick removes.
 
 ### KD10: kanji is a fourth script, never mixed with kana
 
@@ -208,7 +219,8 @@ Rules for picking words:
 - KR73: the groups are: days of the week (日曜日 to 土曜日, 何曜日), counting things (一つ to 十), people (一人, 二人, 三人 ...), hundreds, thousands, hours, minutes, months, days of the month (一日 to 十日, one regular day like 十二日, 十四日, 二十日, 二十四日). A group has a counter kanji, which is its home kanji. A table may start with the counter itself (百, 千), which is a course word and is practiced as one.
 - KR74: a group table lists only members that are JMdict entries, with the JMdict reading. In the groups practiced by exception a member is marked irregular when it is not read as the number, the way the learner learned it first, followed by a reading of the counter (四時 is よじ, not よん and じ). That mark is computed, not set by hand. Groups practiced in full have no marks: the days of the week have no number in them, and a mark there would call six plain readings exceptions.
 - KR75: practiced as words are, in the groups practiced by exception: every irregular member, one regular member per group so the pattern itself is practiced, and the question word (何時, 何人) where there is one. Days of the week, counting things and days of the month are practiced in full, they are N5 words each.
-- KR76: a group is ready when its home kanji is in box 2 or higher and all kanji in it have been seen. It starts with a group card: the table, irregular members marked, not scored. After that its practiced members come in as further words (KR29, KR30), in table order.
+- KR76: a group is ready when its home kanji is in box 2 or higher and all kanji in its practiced members have been seen. The question word does not hold the group back, it waits for its own kanji like any word (nearly all question words contain 何, which comes late, and dates are wanted early). A group starts with a group card: the table, irregular members marked, not scored. After that its practiced members come in as further words (KR29, KR30), in table order. At most one group opens per session, and a started group is finished before the next one opens.
+- KR80: for a member of a group only the reading the table shows is right. Another reading the dictionary gives for the same entry (七月 read the regular way), or the reading of another picked word with the same written form (十), is not wrong either: the card asks again without counting and points to the table. Otherwise a learner could carry an irregular member to mastered without ever producing the reading the table teaches.
 - KR77: the group card can be opened again at any time from the sheet of its home kanji and from the feedback of any of its members.
 
 ## 5. Order
@@ -269,11 +281,11 @@ Smart practice and the Mixed mode pick the type from how well the item is known,
 
 ### Schedule
 
-- KR27: kanji and words use the Leitner boxes and intervals the kana use, with the same rules: only a due item moves up, a miss goes back to box 0, a right answer on the re-ask in the same session can't move up, typos leave the box alone.
+- KR27: kanji and words use the Leitner rules the kana use: only a due item moves up, a miss goes back to box 0, a right answer on the re-ask in the same session can't move up, typos leave the box alone. They get two boxes more than kana, with 60 and 120 days. With the kana ceiling of 30 days the 350 kanji items would need about twelve reviews a day for ever, and a simulation showed a learner with short sessions never reaching the end of the course. Mastered stays box 3.
 - KR28: a smart session is filled in this order: due kanji and words, weak ones, new material, then whatever is due next. New material is new kanji (each with its first word), further words whose kanji are ready, and groups that are ready.
 - KR29: a further word is ready when all its kanji have been seen and its home kanji is in box 2 or higher. Among the ready words of a kanji the special ones come last.
 - KR30: per session at most as many new kanji as the picker says, and at most the same number of further words. Further words come before new kanji when both are ready and room is short. A group card does not count against either limit, the members that follow it do.
-- KR31: no new kanji, words or groups while twelve or more kanji and words are in box 0 or 1. The hero says why, as it does for kana today.
+- KR31: no new kanji, words or groups while twelve or more kanji and words are in box 0 or 1. The hero says why, as it does for kana today. It also says so when the reviews fill the session and nothing new fits although something is ready: a second session or a longer one makes room.
 - KR32: a missed item comes back three to six cards later in the type that was missed, at most twice per session, as today.
 
 ### Feedback

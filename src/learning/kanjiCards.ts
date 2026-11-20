@@ -1,12 +1,14 @@
 // Cards over the course content: the course as the plan sees it, what an item id stands for,
 // the card for a planned item with its options, and what an option means per question type.
 // Reads kanjiData, holds no state.
-import type { ItemInfo, KanjiCard, KanjiMode, KanjiStatsMap } from '../types'
+import type { ItemInfo, KanjiCard, KanjiMode, KanjiStatsMap, WordEntry } from '../types'
 import {
-  allKanji, courseWords, kanjiEntry, kanjiLookalikes, kanjiReadings, kanjiWithReading, ownWords, tooClose, wordById,
+  allKanji, groupById, groupPractice, homeWords, kanjiEntry, kanjiLookalikes, kanjiReadings, kanjiWithReading, practicedWords,
+  sameForm, tooClose, wordById, wordGroups,
 } from '../data/kanjiData'
-import { kanjiId, kanjiOfId } from '../kanjiKeys'
-import type { PlanCourse, PlannedCard } from './kanjiPlan'
+import { cardGroup, kanjiId, kanjiOfId } from '../kanjiKeys'
+import type { PlanCourse, PlanWord } from './kanjiPlan'
+import type { PlannedCard } from './kanjiSession'
 import { confusedKanji } from './kanjiStats'
 import { kanjiQuestionType, makeKanjiCard, pickKanjiOptions } from './kanjiQuiz'
 import { isWordType, pickMeaningOptions, pickReadingOptions, pickSpellOptions, wordQuestionType } from './wordQuiz'
@@ -15,16 +17,25 @@ import type { ReadingMistake, TypedVerdict } from './readings'
 import { shuffle } from './distractors'
 
 const KANJI = allKanji()
-const WORDS = courseWords()
-// every reading of a course word, a typed one in here is a mix-up and not a slip
-const COURSE_READINGS = new Set(WORDS.flatMap(w => w.readings))
+// practiced words: the course words and the practiced words of the groups. Wrong options
+// come from all of them
+const PRACTICED = practicedWords()
+// every reading of a practiced word, a typed one in here is a mix-up and not a slip
+const PRACTICED_READINGS = new Set(PRACTICED.flatMap(w => w.readings))
 
-/** Every kanji and course word as the plan works with them. */
+const planWord = (w: WordEntry): PlanWord => ({
+  id: w.id, kanji: w.kanji.map(kanjiId), home: kanjiId(w.home), first: kanjiEntry(w.home)!.words[0] === w.id, special: w.special,
+  ...(w.group ? { group: w.group } : {}),
+})
+const PLAN_WORDS = new Map(PRACTICED.map(w => [w.id, planWord(w)]))
+
+/** Every kanji, practiced word and group as the plan works with them. */
 export const PLAN_COURSE: PlanCourse = {
   kanji: KANJI.map(k => k.id),
-  words: KANJI.flatMap(k => ownWords(k.kanji).map((w, i) => ({
-    id: w.id, kanji: w.kanji.map(kanjiId), home: k.id, first: i === 0, special: w.special,
-  }))),
+  words: [...PLAN_WORDS.values()],
+  groups: wordGroups().map(g => ({
+    id: g.id, home: kanjiId(g.counter), words: groupPractice(g).map(w => PLAN_WORDS.get(w.id)!), question: g.question,
+  })),
 }
 
 /** What an item id stands for, null for an id the course doesn't have (any more). */
@@ -38,12 +49,12 @@ export function itemInfo(id: string): ItemInfo | null {
   return w && { id, kind: 'word', text: w.form, meaning: w.gloss, reading: w.reading, home: w.home }
 }
 
-/** Where an item sits in the course: a kanji at its position, its words right after it in teaching order. */
+/** Where an item sits in the course: a kanji at its position, its words right after it in teaching order, then its group words. */
 export function itemOrder(id: string): number {
   const info = itemInfo(id)
   if (!info) return Infinity
   const home = kanjiEntry(info.home)!
-  return info.kind === 'kanji' ? home.order : home.order + (home.words.indexOf(id) + 1) / 100
+  return info.kind === 'kanji' ? home.order : home.order + (homeWords(home.kanji).findIndex(w => w.id === id) + 1) / 100
 }
 
 export interface CardContext {
@@ -59,6 +70,10 @@ const preferredFor = (stats: KanjiStatsMap) => (kanji: string) =>
 
 /** The card for a planned item. A question without a type gets the one its box and the mode call for. */
 export function makeCard(item: PlannedCard, ctx: CardContext, rng: () => number = Math.random): KanjiCard {
+  // the table of a group that opens: shown, never asked
+  const group = cardGroup(item.id)
+  if (group) return { id: item.id, home: groupById(group)!.counter, type: 'intro', options: [], answer: '' }
+
   const kanji = kanjiOfId(item.id)
   if (kanji) {
     const entry = kanjiEntry(kanji)!
@@ -69,7 +84,7 @@ export function makeCard(item: PlannedCard, ctx: CardContext, rng: () => number 
   }
 
   const word = wordById(item.id)!
-  const base = { id: word.id, home: word.home, ...(item.needs ? { needs: item.needs } : {}) }
+  const base = { id: word.id, home: word.home, ...(item.needs ? { needs: item.needs } : {}), ...(item.after ? { after: item.after } : {}) }
   if (item.type === 'intro') return { ...base, type: 'intro', options: [], answer: word.form }
   const type = item.type && isWordType(item.type) ? item.type : wordQuestionType(ctx.stats[item.id], ctx.mode, rng)
 
@@ -77,16 +92,16 @@ export function makeCard(item: PlannedCard, ctx: CardContext, rng: () => number 
   let wrong: string[]
   if (type === 'word-meaning') {
     answer = word.id
-    wrong = pickMeaningOptions(word, WORDS, ctx.knownWords, tooClose, rng)
+    wrong = pickMeaningOptions(word, PRACTICED, ctx.knownWords, tooClose, rng)
   } else if (type === 'read-choice') {
     answer = word.reading
-    wrong = pickReadingOptions(word, WORDS, ctx.knownWords, kanjiReadings, rng)
+    wrong = pickReadingOptions(word, PRACTICED, ctx.knownWords, kanjiReadings, rng)
   } else if (type === 'read-type') {
     return { ...base, type, options: [], answer: word.reading }
   } else {
     answer = word.form
-    const isWord = (form: string, reading: string) => WORDS.some(w => w.form === form && w.readings.includes(reading))
-    wrong = pickSpellOptions(word, KANJI, preferredFor(ctx.stats), ctx.knownKanji, kanjiWithReading, isWord, rng)
+    const isPracticed = (form: string, reading: string) => PRACTICED.some(w => w.form === form && w.readings.includes(reading))
+    wrong = pickSpellOptions(word, KANJI, preferredFor(ctx.stats), ctx.knownKanji, kanjiWithReading, isPracticed, rng)
   }
   return { ...base, type, options: shuffle([answer, ...wrong], rng), answer }
 }
@@ -125,12 +140,26 @@ export function wordReadingMistake(id: string, given: string): ReadingMistake | 
 }
 
 /**
- * The verdict on a typed reading of a word (see typedVerdict). A known reading is one of a
- * course word or one of the word's kanji as the course words show it.
+ * What a typed reading of a word may be: `right` counts, `again` asks again and counts nothing.
+ * A group word takes only the reading its table shows, the other readings of its entry would
+ * let an irregular word through the regular way. Any word asks again for the reading of a
+ * twin written the same way (KR78). A course word keeps the other readings of its entry, and
+ * a reading other entries give the form asks again as before.
+ */
+export function typedReadings(w: WordEntry): { right: string[]; again: string[] } {
+  const twins = sameForm(w).map(t => t.reading).filter(r => r !== w.reading)
+  const right = w.group ? [w.reading] : w.readings.filter(r => !twins.includes(r))
+  return { right, again: [...new Set([...w.homographs, ...twins, ...w.readings.filter(r => !right.includes(r))])] }
+}
+
+/**
+ * The verdict on a typed reading of a word (see typedVerdict), over `typedReadings`. A known
+ * reading is one of a practiced word or one of the word's kanji as the practiced words show it.
  */
 export function wordTypedVerdict(id: string, typed: string, slipped: boolean): TypedVerdict {
   const w = wordById(id)!
+  const { right, again } = typedReadings(w)
   const isKnownReading = (kana: string) =>
-    COURSE_READINGS.has(kana) || w.kanji.some(k => kanjiReadings(k).some(r => r.reading === kana))
-  return typedVerdict(typed, w, kanjiReadings, isKnownReading, slipped)
+    PRACTICED_READINGS.has(kana) || w.kanji.some(k => kanjiReadings(k).some(r => r.reading === kana))
+  return typedVerdict(typed, { ...w, readings: right, homographs: again }, kanjiReadings, isKnownReading, slipped)
 }

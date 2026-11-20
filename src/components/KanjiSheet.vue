@@ -2,7 +2,9 @@
 import { computed, ref, watch, nextTick } from 'vue'
 import type { KanjiQuestionType } from '../types'
 import { useKanji } from '../composables/useKanji'
-import { courseEntries, kanjiEntry, kanjiLookalikeHint, kanjiLookalikes, kanjiReadings, kanjiStrokes, ownWords, wordById } from '../data/kanjiData'
+import {
+  courseEntries, groupOf, groupPractice, homeWords, kanjiEntry, kanjiLookalikeHint, kanjiLookalikes, kanjiReadings, kanjiStrokes, wordById,
+} from '../data/kanjiData'
 import { confusedKanji } from '../learning/kanjiStats'
 import { dueAt, isDue, isSeen } from '../learning/scheduler'
 import { kanjiDetail, openKanji, closeKanji, loadKanjiPrefs, saveKanjiPrefs } from '../kanjiShell'
@@ -13,8 +15,9 @@ import BottomSheet from './BottomSheet.vue'
 import StrokeDemo from './StrokeDemo.vue'
 import Icon from './Icon.vue'
 import SpeakButton from './SpeakButton.vue'
+import GroupTable from './GroupTable.vue'
 
-const { statOf, lockOf, startKanji } = useKanji()
+const { statOf, lockOf, groupLockOf, startKanji } = useKanji()
 
 const entry = computed(() => kanjiDetail.value ? kanjiEntry(kanjiDetail.value) : null)
 const strokes = computed(() => entry.value ? kanjiStrokes(entry.value.kanji) ?? undefined : undefined)
@@ -53,20 +56,42 @@ const reviewText = computed(() => {
 
 const answers = computed(() => (stat.value?.correct ?? 0) + (stat.value?.incorrect ?? 0))
 
-// its words with how far each is (KR54): a word not met yet says what still keeps it back
-const words = computed(() => entry.value ? ownWords(entry.value.kanji).map(w => {
+// the kanji a word or group still waits for, this one left out: its sheet is open
+const missingOf = (lock: { unseen: string[] } | null) =>
+  lock?.unseen.map(kanjiOfId).filter((k): k is string => !!k && k !== entry.value!.kanji) ?? []
+
+// its words with how far each is (KR54): a word not met yet says what still keeps it back.
+// Words of its group only once they came in, the table shows them all
+const words = computed(() => entry.value ? homeWords(entry.value.kanji).filter(w => !w.group || isSeen(statOf(w.id))).map(w => {
   const wordStat = statOf(w.id)
   const met = isSeen(wordStat)
-  const lock = met ? null : lockOf(w.id)
-  const missing = lock?.unseen.map(kanjiOfId).filter((k): k is string => !!k && k !== entry.value!.kanji) ?? []
-  let note = ''
-  if (met) note = ''
-  else if (missing.length) note = 'unlocks once you have met'
+  const stage = stageOf(wordStat?.box ?? 0, met)
+  if (met) return { word: w, stage, note: '', missing: [] }
+  const lock = lockOf(w.id)
+  const missing = missingOf(lock)
+  let note = 'ready, comes in a coming session'
+  if (missing.length) note = 'unlocks once you have met'
   else if (lock?.review) note = 'unlocks once this kanji is reviewed on a later day'
   else if (lock) note = 'comes with the kanji'
-  else note = 'ready, comes in a coming session'
-  return { word: w, stage: stageOf(wordStat?.box ?? 0, met), note, missing }
+  return { word: w, stage, note, missing }
 }) : [])
+
+// the group this kanji is the counter of (KR54, KR77): how far it is, its table on a tap
+const group = computed(() => entry.value ? groupOf(entry.value.kanji) : null)
+const tableShown = ref(false)
+watch(kanjiDetail, () => { tableShown.value = false })
+const groupState = computed(() => {
+  const g = group.value
+  if (!g) return null
+  const practice = groupPractice(g)
+  const met = practice.filter(w => isSeen(statOf(w.id))).length
+  if (met) return { text: `${met} of its ${practice.length} words to practice met so far`, missing: [] }
+  const lock = groupLockOf(g.id)
+  const missing = missingOf(lock)
+  if (missing.length) return { text: 'Opens once you have met', missing }
+  if (lock?.review) return { text: 'Opens once this kanji is reviewed on a later day', missing: [] }
+  return { text: 'Ready, opens in a coming session', missing: [] }
+})
 
 // other course kanji in a word, each opens its own sheet
 const otherKanji = (kanji: string[]) => courseEntries(kanji.filter(k => k !== entry.value?.kanji))
@@ -152,6 +177,22 @@ function practice(): void {
               </button>
             </div>
           </div>
+        </div>
+      </div>
+
+      <div v-if="group && groupState" class="kd-block">
+        <div class="kd-block-title">Table</div>
+        <div class="kd-group">
+          <div class="kd-group-head">
+            <span class="kd-group-title">{{ group.title }}</span>
+            <button class="btn btn-sm" :aria-expanded="tableShown" @click="tableShown = !tableShown">
+              {{ tableShown ? 'Hide the table' : 'Show the table' }}
+            </button>
+          </div>
+          <div class="kd-word-note">
+            {{ groupState.text }}<template v-if="groupState.missing.length"> <span class="kana" lang="ja">{{ groupState.missing.join('・') }}</span></template>
+          </div>
+          <GroupTable v-if="tableShown" :group="group" />
         </div>
       </div>
 

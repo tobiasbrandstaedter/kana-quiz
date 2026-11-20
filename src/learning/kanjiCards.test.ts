@@ -1,23 +1,31 @@
 import { describe, it, expect } from 'vitest'
 import { seeded } from './seeded'
-import { itemInfo, itemOrder, makeCard, optionText, spellDiff, storedAnswer, wordReadingMistake, wordTypedVerdict, PLAN_COURSE } from './kanjiCards'
+import {
+  itemInfo, itemOrder, makeCard, optionText, spellDiff, storedAnswer, typedReadings, wordReadingMistake, wordTypedVerdict, PLAN_COURSE,
+} from './kanjiCards'
 import { toKana } from './kanaInput'
 import { looksLikeReading } from './readings'
 import { acceptedRomaji } from './romaji'
 import { allPairs } from '../data/kana'
 import type { CardContext } from './kanjiCards'
-import { orderKanjiSession, planKanji } from './kanjiPlan'
-import { newKanjiEntry } from './kanjiStats'
-import { allKanji, courseWords, kanjiEntry, kanjiReadings, kanjiLookalikes, ownWords, tooClose, wordById } from '../data/kanjiData'
-import { kanjiOfId } from '../kanjiKeys'
+import { planKanji } from './kanjiPlan'
+import { orderKanjiSession } from './kanjiSession'
+import { applyKanjiAnswer, newKanjiEntry } from './kanjiStats'
+import {
+  allKanji, courseWords, groupPractice, homeWords, kanjiEntry, kanjiReadings, kanjiLookalikes, ownWords, practicedWords, sameForm,
+  tooClose, wordById, wordGroups,
+} from '../data/kanjiData'
+import { groupCardId, kanjiOfId } from '../kanjiKeys'
 import type { KanjiCard, KanjiStatsMap, WordQuestionType } from '../types'
 
 // Everything here runs over the course data, no reading or meaning is typed in.
 const NOW = 1_800_000_000_000
 const KANJI = allKanji()
-const WORDS = courseWords()
+// course words and practiced group words, every card test runs over both
+const WORDS = practicedWords()
+const COURSE_WORDS = courseWords()
 // homographs in the data with kana a romaji keyboard can't give (ー, ぃ, ぢゅ), the test counts them so a data update that changes this shows up
-const KANA_ONLY_HOMOGRAPHS = 13
+const KANA_ONLY_HOMOGRAPHS = 14
 
 // a learner who has met every kanji and word
 const everything: CardContext = {
@@ -30,12 +38,26 @@ const nothing: CardContext = { stats: {}, mode: 'mixed', knownKanji: new Set(), 
 describe('PLAN_COURSE', () => {
   it('has every kanji and course word, each word on its home kanji, the first word marked', () => {
     expect(PLAN_COURSE.kanji).toEqual(KANJI.map(k => k.id))
-    expect(PLAN_COURSE.words.map(w => w.id)).toEqual(WORDS.map(w => w.id))
+    expect(PLAN_COURSE.words.filter(w => !w.group).map(w => w.id)).toEqual(COURSE_WORDS.map(w => w.id))
     for (const k of KANJI) {
-      const own = PLAN_COURSE.words.filter(w => w.home === k.id)
+      const own = PLAN_COURSE.words.filter(w => w.home === k.id && !w.group)
       expect(own.map(w => w.id)).toEqual(ownWords(k.kanji).map(w => w.id))
       expect(own.map(w => w.first)).toEqual(own.map((_, i) => i === 0))
     }
+  })
+
+  it('has every group with its practiced words on the counter, those words among its words too', () => {
+    expect(PLAN_COURSE.groups.map(g => g.id)).toEqual(wordGroups().map(g => g.id))
+    for (const g of wordGroups()) {
+      const plan = PLAN_COURSE.groups.find(x => x.id === g.id)!
+      expect(plan.home).toBe(`k:${g.counter}`)
+      expect(plan.words.map(w => w.id)).toEqual(groupPractice(g).map(w => w.id))
+      for (const w of plan.words) {
+        expect(w).toMatchObject({ home: plan.home, first: false, group: g.id })
+        expect(PLAN_COURSE.words).toContain(w)
+      }
+    }
+    expect(PLAN_COURSE.words.map(w => w.id)).toEqual(practicedWords().map(w => w.id))
   })
 })
 
@@ -49,8 +71,8 @@ describe('itemInfo and itemOrder', () => {
     expect(itemInfo('k:あ')).toBeNull()
   })
 
-  it('put a kanji at its course position and its words right after it, in teaching order', () => {
-    const ids = KANJI.flatMap(k => [k.id, ...k.words])
+  it('put a kanji at its course position and its words right after it, in teaching order, then its group words', () => {
+    const ids = KANJI.flatMap(k => [k.id, ...homeWords(k.kanji).map(w => w.id)])
     const orders = ids.map(itemOrder)
     expect([...orders].sort((a, b) => a - b)).toEqual(orders)
     expect(new Set(orders).size).toBe(orders.length)
@@ -162,18 +184,21 @@ describe('makeCard for words', () => {
 })
 
 // Hepburn romaji for hiragana, built from the kana table: what a learner types for a
-// reading. Null for kana the table lacks (ー, ぃ, ぢゅ), a Japanese keyboard sends those as kana
+// reading. Null for kana the table lacks (ー, ぃ, ぢゅ), a Japanese keyboard sends those as kana.
+// `n` says how ん is typed: 'auto' as n' before a vowel or y and n elsewhere, or always as
+// n, nn or n' (most people leave the apostrophe out, some double every n)
+type NStyle = 'auto' | 'n' | 'nn' | "n'"
 const HIRAGANA = allPairs().filter(p => p.script === 'hiragana')
-function romajiOf(kana: string): string | null {
+function romajiOf(kana: string, n: NStyle = 'auto'): string | null {
   let out = ''
   for (let i = 0; i < kana.length;) {
     if (kana[i] === 'っ') {
-      const rest = romajiOf(kana.slice(i + 1))
+      const rest = romajiOf(kana.slice(i + 1), n)
       return rest && out + rest[0] + rest
     }
     if (kana[i] === 'ん') {
       const next = romajiOf(kana.slice(i + 1, i + 2)) ?? ''
-      out += /^[aeiouy]/.test(next) ? "n'" : 'n'
+      out += n === 'auto' ? (/^[aeiouy]/.test(next) ? "n'" : 'n') : n
       i++
       continue
     }
@@ -185,30 +210,66 @@ function romajiOf(kana: string): string | null {
   return out
 }
 
-describe('wordTypedVerdict over the course words', () => {
-  it('takes every accepted reading typed in romaji and in kana', () => {
-    for (const w of WORDS) {
-      for (const r of w.readings) {
-        const typed = romajiOf(r)!
-        expect(wordTypedVerdict(w.id, typed, false), `${w.id} ${typed}`).toEqual({ result: 'right', kana: r })
-        expect(wordTypedVerdict(w.id, r, false)).toEqual({ result: 'right', kana: r })
-        expect(looksLikeReading(r), r).toBe(true)
+describe('typedReadings', () => {
+  it('takes only the reading of the table for a group word, the rest of its entry asks again', () => {
+    const withOthers = WORDS.filter(w => w.group && w.readings.length > 1)
+    expect(withOthers.length).toBeGreaterThan(0)
+    for (const w of WORDS.filter(w => w.group)) {
+      const { right, again } = typedReadings(w)
+      expect(right, w.id).toEqual([w.reading])
+      for (const r of w.readings.filter(r => r !== w.reading)) expect(again, w.id).toContain(r)
+    }
+  })
+
+  it('asks again for the reading of a twin written the same way, also on a course word (KR78)', () => {
+    const twinned = WORDS.filter(w => sameForm(w).length)
+    expect(twinned.some(w => !w.group)).toBe(true)
+    for (const w of twinned) {
+      const { right, again } = typedReadings(w)
+      expect(right, w.id).toContain(w.reading)
+      for (const t of sameForm(w)) {
+        if (t.reading === w.reading) continue
+        expect(right, w.id).not.toContain(t.reading)
+        expect(again, w.id).toContain(t.reading)
       }
     }
   })
 
-  it('asks again for a homograph', () => {
+  it('keeps every reading of a course word without a twin', () => {
+    for (const w of WORDS.filter(w => !w.group && !sameForm(w).length)) expect(typedReadings(w).right).toEqual(w.readings)
+  })
+})
+
+describe('wordTypedVerdict over the practiced words', () => {
+  it('takes every reading it accepts in kana and in romaji, ん typed as n, nn or n\'', () => {
+    let nBeforeVowel = 0
+    for (const w of WORDS) {
+      for (const r of typedReadings(w).right) {
+        expect(wordTypedVerdict(w.id, r, false)).toEqual({ result: 'right', kana: r })
+        expect(looksLikeReading(r), r).toBe(true)
+        for (const n of ['auto', 'n', 'nn', "n'"] as const) {
+          const typed = romajiOf(r, n)!
+          expect(wordTypedVerdict(w.id, typed, false), `${w.id} ${typed}`).toEqual({ result: 'right', kana: r })
+        }
+        if (romajiOf(r) !== romajiOf(r, 'n')) nBeforeVowel++
+      }
+    }
+    // the data has ん before a vowel or y, so the plain n and the nn there are really checked
+    expect(nBeforeVowel).toBeGreaterThan(0)
+  })
+
+  it('asks again for a reading it does not take, without counting', () => {
     let typedInRomaji = 0
     let kanaOnly = 0
     for (const w of WORDS) {
-      for (const h of w.homographs) {
-        expect(wordTypedVerdict(w.id, h, false)).toEqual({ result: 'homograph', kana: h })
+      for (const h of typedReadings(w).again) {
+        expect(wordTypedVerdict(w.id, h, false), `${w.id} ${h}`).toEqual({ result: 'homograph', kana: h })
         const typed = romajiOf(h)
         if (!typed) {
           kanaOnly++
           continue
         }
-        expect(wordTypedVerdict(w.id, typed, false)).toEqual({ result: 'homograph', kana: h })
+        expect(wordTypedVerdict(w.id, typed, false), `${w.id} ${typed}`).toEqual({ result: 'homograph', kana: h })
         typedInRomaji++
       }
     }
@@ -225,9 +286,10 @@ describe('wordTypedVerdict over the course words', () => {
     }
   })
 
-  it('stores the reading of another course word as given', () => {
+  it('stores the reading of another practiced word as given', () => {
     for (const w of WORDS) {
-      const other = WORDS.find(o => !w.readings.includes(o.reading) && !w.homographs.includes(o.reading))!
+      const { right, again } = typedReadings(w)
+      const other = WORDS.find(o => !right.includes(o.reading) && !again.includes(o.reading))!
       const v = wordTypedVerdict(w.id, romajiOf(other.reading)!, false)
       expect(v, w.id).toMatchObject({ result: 'wrong', given: other.reading, typo: false })
     }
@@ -314,4 +376,56 @@ describe('the first session of a new learner (KR14)', () => {
       expect(cards.filter(c => kanjiOfId(c.id)).length).toBe(plan.fresh.length * 3)
     })
   }
+})
+
+describe('word groups in cards and sessions', () => {
+  it('makes the group card an intro on the counter, with nothing to answer', () => {
+    for (const g of wordGroups()) {
+      const id = groupCardId(g.id)
+      expect(makeCard({ id, type: 'intro' }, nothing)).toEqual({ id, home: g.counter, type: 'intro', options: [], answer: '' })
+      expect(itemInfo(id)).toBeNull()
+    }
+  })
+
+  it('keeps the place behind the group card on the intro of a group word', () => {
+    const g = wordGroups()[0]
+    const w = groupPractice(g)[0]
+    expect(makeCard({ id: w.id, type: 'intro', after: groupCardId(g.id) }, nothing).after).toBe(groupCardId(g.id))
+  })
+
+  // a learner who does one smart session of 20 a day and answers every card right: the last
+  // kanji and its words come around day 145, the run goes on a while longer to be sure
+  const SIMULATED_DAYS = 200
+  function everyDay(days: number) {
+    const stats: KanjiStatsMap = {}
+    const opened: Array<{ group: string; day: number }> = []
+    for (let day = 1; day <= days; day++) {
+      let now = NOW + (day - 1) * 24 * 60 * 60 * 1000
+      const plan = planKanji(stats, [], PLAN_COURSE, 20, now, 3)
+      if (plan.group) opened.push({ group: plan.group.id, day })
+      const cards = orderKanjiSession(plan, seeded(day))
+      for (const [i, c] of cards.entries()) {
+        if (c.type === 'intro') {
+          if (c.id === groupCardId(plan.group?.id ?? '')) {
+            // the table comes before every card of its words
+            for (const id of plan.group!.words) expect(cards.findIndex(x => x.id === id)).toBeGreaterThan(i)
+          }
+          continue
+        }
+        const type = c.type ?? (kanjiOfId(c.id) ? 'meaning' : 'read-choice')
+        stats[c.id] = applyKanjiAnswer(stats[c.id], { id: c.id, type, correct: true, given: '', ms: 1000 }, now)
+        now += 10_000
+      }
+    }
+    return { stats, opened }
+  }
+
+  it('opens every group once, after its counter was reviewed on a later day, and brings all its words', () => {
+    // long enough for the last kanji and all its words at this pace, with room to spare
+    const { stats, opened } = everyDay(SIMULATED_DAYS)
+    expect(opened.map(o => o.group).sort()).toEqual(wordGroups().map(g => g.id).sort())
+    for (const g of wordGroups()) {
+      for (const w of groupPractice(g)) expect(stats[w.id]?.correct, w.id).toBeGreaterThan(0)
+    }
+  })
 })

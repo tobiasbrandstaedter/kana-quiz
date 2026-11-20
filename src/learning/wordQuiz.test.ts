@@ -109,6 +109,20 @@ describe('pickMeaningOptions', () => {
     ]
     expect(pickMeaningOptions(words[0], words, new Set(), never, seeded()).sort()).toEqual(['w:d', 'w:e', 'w:g'])
   })
+
+  it('compares glosses by their parts, case and punctuation aside', () => {
+    const words = [
+      { id: 'w:a', gloss: 'what spot', glosses: ['what spot', 'how many spots'] },
+      { id: 'w:b', gloss: 'What spot?; what spot of the map?', glosses: ['What spot?; what spot of the map?'] },
+      { id: 'w:c', gloss: 'red', glosses: ['red'] },
+      { id: 'w:d', gloss: 'blue; Red.', glosses: ['blue; Red.'] },
+      { id: 'w:e', gloss: 'green', glosses: ['green'] },
+      { id: 'w:f', gloss: 'pink', glosses: ['pink'] },
+    ]
+    // b is the answer said again, d shares a part with c, which comes first
+    expect(pickMeaningOptions(words[0], words, new Set(), never, seeded()).sort()).toEqual(['w:c', 'w:e', 'w:f'])
+    expect(pickMeaningOptions(words[1], words, new Set(), never, seeded())).not.toContain('w:a')
+  })
 })
 
 describe('pickReadingOptions', () => {
@@ -154,6 +168,13 @@ describe('pickSpellOptions', () => {
     const opts = pickSpellOptions(WORD, small, none, new Set(['J']), none, never, seeded())
     expect(opts.slice(0, 2).sort()).toEqual(['AJる', 'JBる'])
     expect(opts[2]).toMatch(/^(HB|AH|IB|AI)る$/)
+  })
+
+  it('swaps one place of a kanji the word has twice', () => {
+    const twice = { form: 'ABA', reading: 'あいう', kanji: ['A', 'B'], split: [] }
+    const opts = pickSpellOptions(twice, ALL, k => k === 'A' ? ['C'] : [], new Set(), none, never, seeded())
+    expect(opts[0]).toBe('CBA')
+    for (const f of opts) expect([...f].filter((ch, i) => ch !== twice.form[i]), f).toHaveLength(1)
   })
 
   it('never makes the form of another word with the same reading, nor uses a kanji of the word', () => {

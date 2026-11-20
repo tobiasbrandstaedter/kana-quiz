@@ -65,11 +65,18 @@ describe('toKana', () => {
     expect(toKana('kama')).toBe('かま')
   })
 
-  it('reads an n before a vowel or y as ん on request', () => {
-    expect(toKana('kanya', { nAlone: true })).toBe('かんや')
-    expect(toKana('kana', { nAlone: true })).toBe('かんあ')
+  it('gives every way to read an n before a vowel or y, the plain one first', () => {
     expect(kanaWays('kanyou')).toEqual(['かにょう', 'かんよう'])
     expect(kanaWays('kanta')).toEqual(['かんた'])
+    // each such n on its own: the first one starts a syllable, the second is ん
+    expect(kanaWays('nanyo')).toEqual(['なにょ', 'なんよ'])
+    expect(kanaWays('kanina')).toEqual(['かにな', 'かんいな', 'かにんあ', 'かんいんあ'])
+    // n' decides it already
+    expect(kanaWays("kan'ya")).toEqual(['かんや'])
+    // nn before a vowel or y keeps the second n for the syllable, or is ん alone
+    expect(kanaWays('konnichi')).toEqual(['こんにち', 'こんいち'])
+    expect(kanaWays('kinnyou')).toEqual(['きんにょう', 'きんよう'])
+    expect(kanaWays('kannta')).toEqual(['かんた'])
   })
 
   it('keeps a trailing n a letter for the preview', () => {

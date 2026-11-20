@@ -38,16 +38,12 @@ export function cleanTyped(typed: string): string {
   return s.replace(/[^a-z'ぁ-ゖー]/g, '')
 }
 
-interface KanaOptions {
-  trailingN?: boolean  // a final n is ん, false keeps it a letter for the preview
-  nAlone?: boolean     // an n before a vowel or y is ん too (kinyoubi as きんようび)
-}
-
 /**
  * Hiragana for what was typed. Letters that don't make a kana (yet) stay as typed. ん comes
- * from `n'`, `nn`, an n before a consonant or kana, an m before b, p or m, and a final n.
+ * from `n'`, `nn`, an n before a consonant or kana, an m before b, p or m, and a final n
+ * (`trailingN` false keeps that one a letter for the preview).
  */
-export function toKana(typed: string, { trailingN = true, nAlone = false }: KanaOptions = {}): string {
+export function toKana(typed: string, { trailingN = true } = {}): string {
   const s = cleanTyped(typed)
   let out = ''
   let i = 0
@@ -70,7 +66,7 @@ export function toKana(typed: string, { trailingN = true, nAlone = false }: Kana
       i++
       continue
     }
-    const nIsN = ch === 'n' && (next === undefined || !joinsN(next) || nAlone)
+    const nIsN = ch === 'n' && (next === undefined || !joinsN(next))
     if (nIsN || (ch === 'm' && !!next && 'bpm'.includes(next))) {
       out += 'ん'
       i++
@@ -95,14 +91,33 @@ export function toKana(typed: string, { trailingN = true, nAlone = false }: Kana
   return out
 }
 
+// a reading has one or two such spots at most, the cap keeps the slip check (thousands of
+// conversions per answer) from blowing up on a long string of na na na
+const MAX_N_SPOTS = 3
+
 /**
- * The ways to read what was typed, the plain one first: an n before a vowel or y can be ん
- * when the learner left out the apostrophe (kinyoubi), so both are given when they differ.
+ * The ways to read what was typed, the plain one first. Where an n could start a syllable
+ * (な, にゃ) the learner may have meant ん without the apostrophe: kinyoubi, and nanyoubi with
+ * one of each. Where nn comes before a vowel or y, the plain reading keeps the second n for
+ * the syllable (konnichi), but nn can also be ん alone (kinnyoubi). Each such spot is read
+ * both ways and every mix is given, for the first MAX_N_SPOTS spots.
  */
 export function kanaWays(typed: string): string[] {
-  const plain = toKana(typed)
-  const alone = toKana(typed, { nAlone: true })
-  return alone === plain ? [plain] : [plain, alone]
+  const s = cleanTyped(typed)
+  // where to put an apostrophe that makes ん: after a lone n, or in place of the second n of nn
+  const spots: Array<{ at: number; drop: number }> = []
+  for (let i = 1; i < s.length && spots.length < MAX_N_SPOTS; i++) {
+    if (s[i] !== 'n' || s[i - 1] === 'n') continue
+    if (s[i + 1] === 'n' && joinsN(s[i + 2])) spots.push({ at: i + 1, drop: 1 })
+    else if (joinsN(s[i + 1])) spots.push({ at: i + 1, drop: 0 })
+  }
+  const ways = new Set<string>()
+  for (let mask = 0; mask < 1 << spots.length; mask++) {
+    // from the back, so the earlier spots stay where they are
+    const marked = spots.reduceRight((t, { at, drop }, j) => mask & (1 << j) ? `${t.slice(0, at)}'${t.slice(at + drop)}` : t, s)
+    ways.add(toKana(marked))
+  }
+  return [...ways]
 }
 
 /** The preview of what is being typed: runs of kana so far and of letters not kana yet. */
@@ -125,8 +140,8 @@ export function isRomajiSlip(typed: string, readings: string[]): boolean {
   if (hits(t)) return false
   // Listing every spelling of a reading would multiply out (si/shi, tu/tsu, n/nn ...), so
   // instead each string one edit away from the input is converted and looked up. That is
-  // about 55 conversions per letter, each done both ways for n, which is why the field is
-  // capped at 40 characters.
+  // about 55 conversions per letter, times the ways kanaWays reads an n, which is why the
+  // field is capped at 40 characters.
   for (let i = 0; i <= t.length; i++) {
     const head = t.slice(0, i)
     if (i < t.length && hits(head + t.slice(i + 1))) return true

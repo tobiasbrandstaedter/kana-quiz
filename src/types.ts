@@ -341,8 +341,8 @@ export interface KanjiAnswerRecord {
 }
 
 export interface KanjiCard {
-  id: string
-  home: string  // the kanji, for a word its home kanji
+  id: string    // an item id, or for the table of a group that opens g:<group id> (an intro, never stored)
+  home: string  // the kanji, for a word its home kanji, for a group card its counter
   type: QuestionType | 'intro'
   // kanji for 'meaning' and 'recognize' (a meaning card shows their keywords), word ids for
   // 'word-meaning' (shown as glosses), readings for 'read-choice', written forms for 'spell',
@@ -352,6 +352,8 @@ export interface KanjiCard {
   // the intro of a new kanji's first word: the kanji item that has to be answered right in
   // this session first, else the word's cards are dropped (KR14)
   needs?: string
+  // the intro of a group word in the session its group opens: the group card, which has to come first
+  after?: string
   reask?: boolean
 }
 
