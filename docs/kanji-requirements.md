@@ -52,9 +52,9 @@ G1 to G3 decide what counts as progress. G4 is offered and encouraged but never 
 
 ### KD1: the set is the former level 4 list plus 曜
 
-JLPT has published no kanji lists since 2010, on purpose. Two lists are in use: the kanji of the former level 4 (the level N5 replaced), carried as a tag in KANJIDIC2, and a shorter community list of 79 that jisho.org uses. The shorter one is a subset of the longer one. The app uses the longer one. A first count through a third party copy gave 102 kanji, 103 is the number usually quoted (新 is the likely one missing from that count), the data script counts them from KANJIDIC2 itself and that count is what the app shows.
+JLPT has published no kanji lists since 2010, on purpose. Two lists are in use: the kanji of the former level 4 (the level N5 replaced), carried as a tag in KANJIDIC2, and a shorter community list of 79 that jisho.org uses. The shorter one is a subset of the longer one. The app uses the longer one: 103 kanji, counted from KANJIDIC2 itself. With 曜 the set has 104.
 
-The 23 kanji found only in the longer list: 口 手 目 立 分 少 古 耳 花 足 会 多 社 言 空 安 店 週 魚 買 道 飲 駅.
+The 24 kanji found only in the longer list: 口 手 目 立 分 少 古 新 耳 花 足 会 多 社 言 空 安 店 週 魚 買 道 飲 駅.
 
 Why the longer list: those are everyday kanji whose words are N5 vocabulary (口, 手, 安い, 買う, 飲む, 駅), so a learner meets them in any N5 material. Four of them (口, 目, 耳, 言) are the building blocks of kanji in the short list (名, 見, 聞, 語), and teaching the whole before its parts makes no sense. They cost about a week at the planned pace. The list also comes straight out of the source file, so no hand typed list has to be trusted.
 
@@ -197,11 +197,11 @@ A word is a written form together with a reading. 一日 read いちにち and �
 
 Rules for picking words:
 
-- KR1: every word is N5 vocabulary (taken from an open N5 word list) and is written with kanji of the set and kana only. Two exceptions, both still checked against JMdict: where a kanji has no N5 word the learner can read when it is introduced, its first word may be the kanji standing alone as a word JMdict marks as common (火 ひ, 土 つち). And the members of a word group (KR73) only have to be JMdict entries.
+- KR1: every word is an entry JMdict marks as common and is written with kanji of the set and kana only. Words of the open N5 word list are the first choice. That list has only about 170 words that can be written this way and misses some as basic as 日本, so a word from outside it is allowed when the data notes why: a kanji has no N5 word the learner can read when it is introduced (火 ひ, 土 つち), or the word is too useful to leave out. At most 40 such words. The members of a word group (KR73) only have to be JMdict entries, common or not.
 - KR2: every kanji owns at least one word, its first word, and at most four, groups not counted. A reading of a kanji that occurs in two or more N5 words of the set is shown by at least one picked word, owned by this kanji or by another.
 - KR3: the first word of a kanji contains no kanji introduced later.
 - KR4: a word with a special reading is never a first word.
-- KR5: about 200 single words plus about 60 group members that are practiced. More is not better, see "Not in scope".
+- KR5: about 150 single words plus about 60 group members that are practiced. More is not better, see "Not in scope".
 
 ### Word groups
 
@@ -335,10 +335,10 @@ Everything not listed stays as it is for kana.
 ## 8. Content quality
 
 - KR60: one script builds the kanji data from pinned versions of the sources. Running it again gives the same file. The generated file is not edited by hand.
-- KR61: tests fail when a keyword is not among the source meanings of its kanji, a word or its reading is not in JMdict, a word contains a kanji outside the set, a word is not in the N5 word list and not one of the exceptions of KR1, or a rule of section 4 or 5 is broken.
+- KR61: tests fail when a keyword is not among the source meanings of its kanji, a word or its reading is not in JMdict, a word contains a kanji outside the set, a word is neither in the N5 word list nor carries a reason (KR1), or a rule of section 4 or 5 is broken.
 - KR62: memory hooks and lookalike hints are read by a second reviewer who did not write them, with the stroke data and the source meanings at hand. A hook that states a wrong fact about the kanji is rejected, a hook that is merely plain is fine.
-- KR63: the app has a Sources section of its own, reachable from the settings, that credits KANJIDIC2 and JMdict (EDRDG, CC BY-SA 4.0), KanjiVG (CC BY-SA 3.0) and the N5 word list, each with a link, its licence and the version of the data in the app. The EDRDG licence asks for a separate screen, a line on a start screen is not enough. The README carries the same credits.
-- KR70: the EDRDG licence wants the data kept current. The data is rebuilt from the newest source release whenever a release of the app touches kanji content, and at least twice a year. The Sources section shows the date, so a stale copy is visible.
+- KR63: the app has a Sources section of its own, reachable from the settings, that credits KANJIDIC2 and JMdict (EDRDG, CC BY-SA 4.0), JmdictFurigana (CC BY-SA), KanjiVG (CC BY-SA 3.0) and the N5 word list, each with a link, its licence and the version of the data in the app. The EDRDG licence asks for a separate screen, a line on a start screen is not enough. The README carries the same credits.
+- KR70: the EDRDG licence wants the data kept current. The data is rebuilt from the newest source release whenever a release of the app touches kanji content, and at least twice a year. The README says how in three lines. The Sources section shows the date, so a stale copy is visible.
 
 ## 9. Everything else
 
@@ -365,7 +365,7 @@ K5 only happens if the stroke check holds up for kanji with many strokes, which 
 
 ## 11. Checked before building
 
-Facts these requirements lean on, to be confirmed in the first phase of the plan. If one fails, the decision behind it is taken again.
+Facts these requirements lean on. Phase P0 of the plan has measured all of them but the voice, the numbers and the decisions taken from them are in section 6 of `kanji-plan.md`. Nothing had to be changed except the word rules (KR1, KR5).
 
 - The exact list: the kanji with level 4 in KANJIDIC2, and whether 新 is among them (KD1).
 - The stroke check accepts honest strokes and still catches order and direction faults on the densest kanji of the set, which have 14 strokes (語, 読, 聞, 駅) and 18 for 曜 (KD11, K5).
@@ -377,7 +377,7 @@ Facts these requirements lean on, to be confirmed in the first phase of the plan
 
 ## 12. Draft of the sets
 
-103 kanji in 17 sets, by KD7: the 102 counted so far plus 曜. The first word of each kanji and the final position inside a set come out of the data phase, which may move single kanji (KR3, KR8).
+104 kanji in 17 sets, by KD7: the 103 of the list plus 曜. The first word of each kanji and the final position inside a set come out of the data phase, which may move single kanji (KR3, KR8).
 
 | # | Set | Kanji | Why here |
 |---|---|---|---|
@@ -396,7 +396,7 @@ Facts these requirements lean on, to be confirmed in the first phase of the plan
 | 13 | Language | 言 語 話 読 書 聞 見 | 言 first, three others contain it. 聞 on 耳, 見 on 目 |
 | 14 | Coming and going | 行 来 出 入 立 会 休 | First verbs. 入 next to 人 and 八 |
 | 15 | Calendar | 年 毎 週 曜 | The weekdays become ready here (KR7) |
-| 16 | Eating and shopping | 食 飲 買 店 安 古 | 新 would go here next to 古 if it is in the list |
+| 16 | Eating and shopping | 食 飲 買 店 安 古 新 | 古 and 新 as a pair |
 | 17 | Town | 駅 道 社 車 電 | 電 builds on 雨. 電車, 電話, 会社 |
 
 Known knots for the data phase:

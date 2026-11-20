@@ -83,7 +83,7 @@ Kanji and words get their own types next to the kana ones, nothing is squeezed i
 
 ### Splitting a reading over the kanji
 
-Needed for the on and kun labels, for "another reading of the same kanji" as a wrong option (KR17) and for the special flag (KD14). P1 first looks at JmdictFurigana, an open data set that has exactly these splits for JMdict entries (licence to be checked). If it can't be used, the script cuts the reading itself: each kanji gets one of its KANJIDIC2 readings, allowing voicing and a small っ at the joints, and a word where no cut works is special.
+Needed for the on and kun labels, for "another reading of the same kanji" as a wrong option (KR17) and for the special flag (KD14). The splits come from JmdictFurigana (CC BY-SA, keyed by written form plus reading). A reading it gives as one block over several kanji (今日[きょう]) is a special reading. On or kun is found by comparing the part of a kanji with its KANJIDIC2 readings, voicing and a small っ allowed.
 
 ### Typing readings
 
@@ -170,7 +170,7 @@ Opus, only if P0 says the stroke check holds or can be made to. Draw mode for ka
 
 | Phase | Content | Status |
 |---|---|---|
-| P0 | Measure the list, stroke check, fonts, size, number words, licence, voice | open |
+| P0 | Measure the list, stroke check, fonts, size, number words, licence, voice | done, voice not measured |
 | P1 | Data script, course content, checks | open |
 | P2 | Groundwork, no visible change | open |
 | P3a | K1 practice | open |
@@ -183,7 +183,175 @@ Opus, only if P0 says the stroke check holds or can be made to. Draw mode for ka
 
 ## 6. Results of P0
 
-Empty until P0 has run.
+Measured on 2026-11-20. Downloads are in `scripts/.cache/sources/`, the throwaway scripts and their raw output in `scripts/.cache/p0/` (both git ignored). The voice test is not part of this run.
+
+Sources and pinned versions:
+
+| Source | Version | URL | Local file |
+|---|---|---|---|
+| KANJIDIC2 (JSON) | jmdict-simplified `3.6.2+20261116213322`, dictDate 2026-11-16, databaseVersion 2026-320 | `https://github.com/scriptin/jmdict-simplified/releases/download/3.6.2%2B20261116213322/kanjidic2-en-3.6.2%2B20261116213322.json.tgz` | `kanjidic2-en-3.6.2+20261116213322.json.tgz`, unpacked `kanjidic2-en-3.6.2.json` |
+| JMdict common | same tag | `.../jmdict-eng-common-3.6.2%2B20261116213322.json.tgz` | `jmdict-eng-common-3.6.2+20261116213322.json.tgz`, `jmdict-eng-common-3.6.2.json` |
+| JMdict full | same tag | `.../jmdict-eng-3.6.2%2B20261116213322.json.tgz` | `jmdict-eng-3.6.2+20261116213322.json.tgz`, `jmdict-eng-3.6.2.json` |
+| KanjiVG | tag `r20260714` | `https://raw.githubusercontent.com/KanjiVG/kanjivg/r20260714/kanji/<code>.svg` | `kanjivg-r20260714/*.svg` (104 files) |
+| N5 word list | commit `9b20cfa8d59e56018702543aa9060cb72a263692` (last commit on the file, 2023-07-16; repo HEAD `1ad66734`) | `https://raw.githubusercontent.com/jamsinclair/open-anki-jlpt-decks/9b20cfa8d59e56018702543aa9060cb72a263692/src/n5.csv` | `n5.csv` |
+| JmdictFurigana | release `2.3.1+2026-10-25` | `https://github.com/Doublevil/JmdictFurigana/releases/download/2.3.1%2B2026-10-25/JmdictFurigana.json.tar.gz` | `jmdictfurigana-2.3.1/JmdictFurigana.json` (+ `.tar.gz`, `README.md`) |
+| EDRDG licence | page as of 2026-11-20 | `https://www.edrdg.org/edrdg/licence.html` | `edrdg-licence.html`, `edrdg-licence.txt` |
+| Google Fonts css2 | fetched 2026-11-20 with a Chrome 142 desktop User-Agent | `https://fonts.googleapis.com/css2?family=<spec>&display=swap` | `google-fonts-css/*.css` |
+
+The jmdict-simplified assets come as `.tgz` too, not only `.zip`, so `tar`/gunzip is enough. tanos.co.uk is blocked by the proxy here (HTTP 502), the CC BY claim for the N5 list was not checked at the source.
+
+### 6.1 The list
+
+- KANJIDIC2 has **103** kanji with `jlptLevel` 4:
+  `安一飲右雨駅円下何火花会外学間気休魚金九空月見言古五午後語口校行高国今左三山四子時耳七社車手週十出書女小少上食新人水生西先千川前足多大男中長天店電土東道読南二日入年買白八半百父分聞母北本毎万名木目友来立六話`
+- Difference to the 102 of section 12 (17 sets minus 曜): one kanji, **新**, is in KANJIDIC2 and not in the draft. Nothing in the draft is missing from KANJIDIC2, no duplicates.
+- 新 has level 4 (grade 2, 13 strokes).
+- 曜 is not in the list. KANJIDIC2 gives it the former level **3** (grade 2, 18 strokes).
+- Set used for everything below: the 103 plus 曜, 104 kanji. Most strokes: 駅 語 読 聞 14, 新 電 話 13, 飲 12, 曜 18.
+
+### 6.2 Stroke check
+
+Method (`scripts/.cache/p0/strokes.mjs`): every stroke of the 104 kanji (656 strokes) sampled to 24 points the way `StrokeCanvas` does, input fed as a polyline with a point about every 3 units. A Node path sampler handles the commands KanjiVG uses (M, C, c, S, s). Cross-check: the same 1089 strokes (433 kana from `strokes.ts`, 656 kanji) sampled with `getPointAtLength` in the browser preview differ from the Node sampler by at most 0.008 units. Sloppy input: 20 trials per stroke with a random shift direction, fixed seed. Kana run the same way as a baseline.
+
+checkStroke as it is today:
+
+| | Kanji (656 strokes) | Kana (433 strokes) |
+|---|---|---|
+| Strokes under SHORT_STROKE (15 units), never checked for direction | 51 | 85 |
+| Exact stroke rejected | 0 | 0 |
+| Mild (90 % around the stroke's centre, shift 5, jitter 1.5) rejected | 0 of 13120 | 0 of 8660 |
+| Mild with the whole glyph at 90 % around the centre of the box | 0 of 13120 | 0 of 8660 |
+| Rough (80 %, shift 9, jitter 3) rejected | 26 of 13120, 15 strokes, all `shape` | 33 of 8660, 22 strokes, all `shape` |
+| Reversed stroke let through | 124 (51 short ones plus 73 longer than 15 units) | 126 (85 short plus 41 longer) |
+| Later stroke j drawn exactly in place of i: ok (order unseen) | 72 of 2345 pairs (3.1 %) | 40 of 536 (7.5 %) |
+| same: `order` | 2273 (96.9 %) | 496 (92.5 %) |
+| same: `shape` / `direction` | 0 / 0 | 0 / 0 |
+
+- Rough rejects in kanji: 雨火外国左四女人生多大南買万名.
+- The 73 longer reversed strokes that pass are 15 to 46 units long with start and end within 22 units of each other, so the reversed drawing fits forward (e.g. 学6 44 units, 魚2 46, 読6 35, 週7 30, and 曜3 4 6 7 9 10). The kana baseline has the same effect (41 strokes, e.g. に2 49 units, the handakuten circles 45). This does not match the note in phase 4 of the kana plan that every reversed stroke over 15 units is caught.
+- False accepts on order: 28 of 104 kanji have at least one. Of the 72, 5 are dot against dot (駅 8for7 9for8 10for9, 電 6for5 8for7), 67 involve a longer stroke, 55 of them are the next stroke (j = i + 1). In kana all 40 are the two dakuten ticks swapped.
+- Ten worst kanji (ok pairs / pairs): 読 7/91, 駅 6/91, 曜 6/153, 週 5/55, 書 4/45, 電 4/78, 語 4/91, 聞 4/91, 高 3/45, 買 3/66.
+- The hard cases:
+
+| Kanji | Strokes | Pairs | ok | order | shape | Pairs let through (j for i) |
+|---|---|---|---|---|---|---|
+| 語 | 14 | 91 | 4 | 87 | 0 | 3for2 4for3 7for5 7for6 |
+| 読 | 14 | 91 | 7 | 84 | 0 | 2for1 3for2 4for3 6for5 7for5 10for8 12for10 |
+| 聞 | 14 | 91 | 4 | 87 | 0 | 4for3 8for7 12for11 13for12 |
+| 駅 | 14 | 91 | 6 | 85 | 0 | 3for1 4for2 5for4 8for7 9for8 10for9 |
+| 曜 | 18 | 153 | 6 | 147 | 0 | 7for6 10for9 14for13 16for14 17for16 18for17 |
+
+Alternative tried, best fit: stroke i is accepted only if no later stroke fits with a lower mean distance (forward, and reversed for short strokes), thresholds unchanged.
+
+| | Kanji | Kana |
+|---|---|---|
+| Later stroke in place of i: ok | 0 of 2345 (all 2345 `order`) | 0 of 536 |
+| Exact stroke rejected | 0 | 0 |
+| Mild, stroke scaled around its centre | 11 of 13120 rejected as `order`, strokes in 駅 電 聞 | 119 of 8660, all dakuten ticks, as `order` |
+| Mild, whole glyph at 90 % | 162 of 13120 rejected as `order`, 32 strokes in 18 kanji: 飲駅間気見語高週書多男長電読買聞話曜 | 0 |
+| Rough | 437 of 13120 (411 `order`, 26 `shape`), 120 strokes in 44 kanji | 318 (285 `order`) |
+| Reversed let through | 124, unchanged | 126, unchanged |
+
+So best fit removes every simulated order false accept, and in exchange turns some honest sloppy strokes into `order` faults, which count against a correct drawing. It does nothing for the reversed strokes.
+
+### 6.3 Fonts
+
+Each spec fetched the way `loadKanaFont` builds it (weight 700, Kosugi Maru regular), plus Shippori Mincho 800 that the Sumi theme loads. Coverage is by `unicode-range` of the `@font-face` blocks, the glyph tables of the font files were not opened.
+
+| Family | Faces | Kanji of the 104 missing | Slices for the kanji | Slices for kana | Kana plus kanji |
+|---|---|---|---|---|---|
+| Zen Maru Gothic 700 | 122 | 0 | 21 | 3 | 22 |
+| Noto Sans JP 700 | 124 | 0 | 21 | 3 | 22 |
+| Noto Serif JP 700 | 124 | 0 | 21 | 3 | 22 |
+| M PLUS Rounded 1c 700 | 126 | 0 | 21 | 3 | 22 |
+| Kosugi Maru 400 | 121 | 0 | 21 | 3 | 22 |
+| BIZ UDGothic 700 | 124 | 0 | 21 | 3 | 22 |
+| Shippori Mincho 700 | 122 | 0 | 21 | 3 | 22 |
+| Shippori Mincho 800 | 122 | 0 | 21 | 3 | 22 |
+
+- The 22 slices of Zen Maru Gothic 700 that kana plus the kanji touch weigh 274 228 bytes together.
+- Cache in `vite.config.js` (committed state on `kanji-n5`; the working tree had 400 from other work at the end of this run): `google-fonts` with `maxEntries: 80`, one entry per stylesheet and per font file. One family with kanji needs 1 stylesheet plus 22 files, Nunito comes on top. Two families: about 46 entries. Four or more families used with kanji go over 80. The kana UI text outside the 104 kanji and kana is not counted here.
+
+### 6.4 Size
+
+| Data | Raw | gzip |
+|---|---|---|
+| Kanji strokes, 104 kanji, shape of `strokes.ts` (paths and numbers) | 68 291 B | 27 341 B |
+| Kana `strokes.ts` today, for comparison | 51 647 B | 14 664 B |
+| KANJIDIC2 part: all on and kun readings, English meanings, stroke count for 104 kanji | 18 307 B | 3 965 B |
+| Words: the 168 matched N5 rows of 6.6 with id, form, reading and up to 3 x 3 glosses | 31 177 B | 7 231 B |
+
+KANJIDIC2 averages 4.5 readings and 2.6 English meanings per kanji of the set. Data together about 118 KB raw and 39 KB gzipped, code of the chunk not included. The workbox limit is 2 MiB per file.
+
+### 6.5 Number words
+
+Looked up in jmdict-eng (219 127 entries), with jmdict-eng-common (22 661) for the common flag. A member counts when an entry has the written form with a reading that applies to it. "uc" means the reading is not marked common.
+
+| Group | Entries | Missing | Not in the common file |
+|---|---|---|---|
+| 二百 to 九百 | 8 of 8 | none | 五百 六百 七百 八百 九百 |
+| 二千 to 九千 | 4 of 8 | 二千 五千 六千 九千 | 七千 八千 |
+| 一時 to 十二時, 何時 | 13 of 13 | none | 二時 五時 六時 八時 九時 十時 十一時 十二時 |
+| 一分 to 十分, 何分 | 11 of 11 | none | 三分 四分 六分 七分 八分 九分 |
+| 一月 to 十二月, 何月 | 13 of 13 | none | 何月 |
+| 一日 to 十日, 二十日 | 11 of 11 | none | none |
+| 一人 to 十人, 何人 | 11 of 11 | none | 五人 六人 七人 八人 九人 十人 |
+| 一つ to 九つ, 十 (とお) | 10 of 10 | none | none |
+| 日曜日 to 土曜日, 何曜日 | 8 of 8 | none | 何曜日 |
+
+Readings found:
+
+- Hundreds: にひゃく, さんびゃく, よんひゃく, ごひゃく (uc), ろっぴゃく (uc), ななひゃく/しちひゃく (uc), はっぴゃく (uc), きゅうひゃく/くひゃく (uc).
+- Thousands: さんぜん, よんせん, ななせん/しちせん (uc), はっせん (uc).
+- Hours: いちじ (一時 also has ひととき, いっとき), にじ (uc), さんじ, よじ (四時 also しじ uc), ごじ (uc), ろくじ (uc), しちじ (no ななじ), はちじ (uc), くじ (uc), じゅうじ (uc), じゅういちじ (uc), じゅうにじ (uc), なんじ (何時 also いつ, なんどき).
+- Minutes, each as its own entry next to entries for other senses (いちぶ, にぶん, ごぶ, じゅうぶん ...): いっぷん (uc), にふん (uc), さんぷん (uc), よんぷん (uc), ごふん (uc), ろっぷん (uc), ななふん (uc), はっぷん (uc), きゅうふん (uc), じゅっぷん/じっぷん (uc), なんぷん (common).
+- Months: いちがつ to じゅうにがつ all common, しがつ, しちがつ (なながつ uc), くがつ; なんがつ (uc).
+- Days of the month: 一日 has ついたち (entry 2225040, common) and いちにち (entry 1576260, common) as separate entries, plus つきたち, ひとひ, いっぴ (uc). ふつか, みっか, よっか, いつか, むいか, なのか, ようか, ここのか, とおか, はつか, all common.
+- People: ひとり, ふたり, さんにん, よにん common; ごにん to じゅうにん (uc, くにん/きゅうにん, しちにん/ななにん); なんにん common.
+- Things: ひとつ to ここのつ all common, 十 has じゅう, とお (common) and と.
+- Weekdays: にちようび to どようび all common, なんようび (uc).
+
+Stand alone words, all entries marked common and in the common file: 火 ひ (1193610, "fire"), 土 つち (1445270, "earth"), 天 てん (1438210, "sky"), 気 き (1221520, "spirit"), 友 とも (1539980, "friend"). 友達 (1540170) has the form 友だち, also marked common, readings ともだち/トモダチ.
+
+### 6.6 N5 word list
+
+- `n5.csv` has 718 rows (columns expression, reading, meaning, tags, guid).
+- 155 rows are kana only, 169 are written with kanji of the set and kana only, 394 have another kanji or other characters (`～`, `;` between alternatives, brackets).
+- Of the 169, **168** match a JMdict entry by written form and reading, all 168 are in the common file. The one miss is 十 with the reading field `(〜を) とお`, a formatting quirk of the row. 何 (なん; なに) matches two entries.
+- Not counted in the 169: 18 counter rows with `～` whose kanji are all in the set (～円 ～か月 ～月 ～語 ～時 ～時間 ～中 ～週間 ～人 ～中 ～時 何～ ～日 ～人 ～年 ～分 ～本 ～前), and 2 rows with alternatives whose first form is in the set (足; 脚, 川; 河).
+- Duplicate expressions in the file: 九 ～中 一日 十 ～時 ～人 外 私.
+- 日本 is not in the list.
+- The 169: 会う 上げる 新しい 後 雨 言う 行く 一 一日 五日 五つ 今 入口 入れる 上 後ろ 生まれる 駅 多い 大きい 大きな お母さん お金 お父さん 男 男の子 大人 女 女の子 外国 外国人 会社 買う 書く 学生 学校 火曜日 木 聞く 北 九 今日 金曜日 九 下さい 口 国 来る 車 月曜日 五 午後 九日 九つ 午前 今年 今月 今週 魚 先 さ来年 三 四 時間 下 七 十 上手 白 白い 新聞 水曜日 少ない 少し 千 先月 先週 先生 外 空 大学 高い 出す 立つ 多分 食べる 小さい 小さな 父 一日 手 出かける 出口 出る 天気 電気 電車 電話 十 十日 年 土曜日 中 長い 七つ 何 七日 名前 二 西 日曜日 飲む 入る 八 二十日 花 話 話す 母 半 半分 東 左 人 一つ 一月 一人 百 二つ 二人 二日 古い 下手 外 本 毎月 毎週 毎日 毎年 前 万 右 水 店 見せる 道 三日 三つ 南 耳 見る 六日 六つ 目 木曜日 安い 休み 休む 八つ 山 八日 四日 四つ 読む 来月 来週 来年 六 分かる
+
+### 6.7 JmdictFurigana
+
+- Licence: the code repo is MIT, the README says the data is under the same licence as JMdict (CC BY-SA).
+- Format: one JSON array, 236 694 entries `{ text, reading, furigana: [{ ruby, rt? }] }`, keyed by written form plus reading, no JMdict id. The file starts with a BOM. A special reading spans several kanji in one `ruby` (大人[おとな]). Also offered as a compact text file and as `.zip`.
+- Asset used: `JmdictFurigana.json.tar.gz` (5.3 MB, 34.8 MB unpacked) of release `2.3.1+2026-10-25`.
+- All 168 matched N5 rows have a split. Sample: 今日[きょう], 一人[ひとり], 学[がっ]校[こう], 毎[まい]日[にち], 大人[おとな], 上手[じょうず], 一日[ついたち], 二十日[はつか], 下手[へた], 午[ご]後[ご], 先[せん]生[せい], 電[でん]車[しゃ], 天[てん]気[き], 名[な]前[まえ], 大[だい]学[がく], 今年[ことし], 外[がい]国[こく]人[じん], 出[で]口[ぐち], 入[いり]口[ぐち], 新[しん]聞[ぶん]. 日本 (not in the N5 list) is 日本[にほん]. 六日 comes split as 六[むい]日[か], not as one special block.
+
+### 6.8 Licence
+
+From `https://www.edrdg.org/edrdg/licence.html`, section 3 and 4:
+
+- Acknowledgement in apps: for smartphone and tablet apps, acknowledgement must be made "on a separate screen accessed from a menu", and "It is not sufficient just to mention it on a start-up/launch page". Software packages also have to provide the documentation and licence files or links to them on the EDRDG site.
+- Keeping data current: "there must be a procedure for regular updating of the data from the most recent versions available", and failure to keep versions up to date "is a violation of the licence".
+- Other points: the data is CC BY-SA 4.0, users "must NOT claim copyright over that material", commercial use is allowed. KANJIDIC2 has extra conditions for parts held by others (SKIP codes under their own licence, Pinyin, Four Corner, Morohashi, De Roo, Korean readings, Spahn and Hadamitzky descriptors).
+- What an app with a small pinned extract has to do: show a Sources screen reachable from a menu that names JMdict and KANJIDIC2, the EDRDG and links to the licence and project pages, and ship the extract under CC BY-SA 4.0. And it needs a written procedure to regenerate the extract from the newest release at regular intervals; the page names monthly only as the example for dictionary web servers.
+- JmdictFurigana carries the JMdict licence (CC BY-SA), so a split taken from it needs the same attribution and share alike, with JmdictFurigana named as a source next to JMdict.
+
+### 6.9 Decisions taken from these results
+
+- **KD1 stands, with 新.** The set is the 103 kanji of level 4 plus 曜, 104. 新 goes into set 16 next to 古.
+- **KD11 stands, K5 goes ahead, `checkStroke` stays as it is.** It catches 97 % of the order mistakes and rejects no honest stroke. The best fit variant catches all of them but turns down honest strokes (over 1 % when a kanji is drawn a little small), and for a learner a correct stroke called wrong is worse than a wrong one let through. Short strokes drawn backwards pass, as they do for kana. No change to the kana check either.
+- **KD13: not measured.** The sound button is shown wherever `speechSynthesis` exists and speaks on tap. If nothing is heard on some device, that is found in use.
+- **KD17 stands.** All groups are complete in JMdict except the thousands (4 of 8). The table of a group shows the members JMdict has, so the thousands show 千, 三千, 四千, 七千, 八千. The script reads the full JMdict for group members, the common file is too thin there.
+- **Words (KR1, KR5).** Only 169 rows of the N5 list are written with set kanji and kana, and words as basic as 日本 are not in the list at all. So a picked word has to be a common JMdict entry, the N5 list is the first choice, and a word from outside it is allowed with a reason noted in the data. About 150 single words.
+- **Splits come from JmdictFurigana** (all matched words are in it). A reading it gives as one block over several kanji is a special reading. No cutting script of our own.
+- **KR65 stands.** About 40 KB gzipped for all kanji data.
+- **KR69 stands, nothing to build.** Every font of the picker covers all 104 kanji by its declared ranges. One family needs about 22 font files, the cache limit of 400 from P2 covers all seven.
+- **KR70.** The README gets the procedure in three lines: bump the pinned versions in `extract-kanji.mjs`, run it, run the tests. Due with every release that touches kanji content and at least twice a year.
+- Noted, not acted on: 41 kana strokes over 15 units also pass when drawn backwards, which the note on phase 4 in `learning-improvements-plan.md` says does not happen.
 
 ## 7. Brief for an implementation session
 
