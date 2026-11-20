@@ -29,22 +29,22 @@ const movedUp = computed(() => roundOutcome.value.up.filter(u => !roundOutcome.v
     <section class="result-card">
       <span class="eyebrow">Session complete</span>
       <div class="result-score">{{ resultScore }}</div>
-      <div class="result-title">{{ resultLabel.title }} <span class="kana">{{ resultLabel.jp }}</span></div>
+      <div class="result-title">{{ resultLabel.title }} <span class="kana" lang="ja">{{ resultLabel.jp }}</span></div>
       <div class="result-detail">{{ resultLabel.detail }}</div>
     </section>
 
     <div class="outcome-section">
       <div v-if="roundOutcome.mastered.length" class="outcome-line mastered">
         <span class="outcome-tag">Mastered</span>
-        <span class="kana">{{ roundOutcome.mastered.join(' ') }}</span>
+        <span class="kana" lang="ja">{{ roundOutcome.mastered.join(' ') }}</span>
       </div>
       <div v-if="movedUp.length" class="outcome-line up">
         <span class="outcome-tag">Moved up</span>
-        <span class="kana">{{ movedUp.map(u => u.kana).join(' ') }}</span>
+        <span class="kana" lang="ja">{{ movedUp.map(u => u.kana).join(' ') }}</span>
       </div>
       <div v-if="roundOutcome.down.length" class="outcome-line down">
         <span class="outcome-tag">Back to learning</span>
-        <span class="kana">{{ roundOutcome.down.join(' ') }}</span>
+        <span class="kana" lang="ja">{{ roundOutcome.down.join(' ') }}</span>
       </div>
       <div v-if="!roundOutcome.up.length && !roundOutcome.down.length" class="outcome-line quiet">
         Nothing moved: kana only move up when they are due, extra practice still sharpens them.
@@ -67,7 +67,7 @@ const movedUp = computed(() => roundOutcome.value.up.filter(u => !roundOutcome.v
               <path v-else class="given" :d="kanaStrokes(p.kana)!.strokes[i].d" :transform="glyphShift(kanaStrokes(p.kana)!.strokes[i].dx)" />
             </template>
           </svg>
-          <span class="k">{{ p.kana }}</span>
+          <span class="k" lang="ja">{{ p.kana }}</span>
           <span class="r">{{ p.romaji }}</span>
         </button>
       </div>

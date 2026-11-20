@@ -18,7 +18,8 @@ export default defineConfig(({ command }) => ({
             options: {
               cacheName: 'google-fonts',
               // a Japanese font arrives in slices, a dozen per family for the kana alone
-              expiration: { maxEntries: 80, maxAgeSeconds: 60 * 60 * 24 * 365 },
+              // and many more once kanji are on screen
+              expiration: { maxEntries: 400, maxAgeSeconds: 60 * 60 * 24 * 365 },
               cacheableResponse: { statuses: [0, 200] },
             },
           },

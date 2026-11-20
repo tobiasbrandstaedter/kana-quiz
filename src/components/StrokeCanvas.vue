@@ -10,18 +10,20 @@ let penAt = 0
 import { ref, shallowRef, computed, onMounted } from 'vue'
 import type { Point, StrokeFault, DrawResult } from '../types'
 import { kanaStrokes, glyphShift, polylinePoints } from '../data/strokeGlyphs'
+import type { KanaStrokes } from '../data/strokeGlyphs'
 import { checkStroke, SAMPLES } from '../learning/strokeMatch'
 import type { StrokeCheck } from '../learning/strokeMatch'
 import Icon from './Icon.vue'
 
 // The parent re-creates this component per kana (via :key), so state never needs a reset.
-const props = defineProps<{ kana: string; mode: 'trace' | 'recall' }>()
+// `glyph` is for strokes that don't come from the kana table, without it they are looked up by `kana`.
+const props = defineProps<{ kana: string; glyph?: KanaStrokes; mode: 'trace' | 'recall' }>()
 const emit = defineEmits<{ done: [result: DrawResult] }>()
 
 // shorter than this (in KanjiVG units) is a tap or a twitch, not a stroke. Dakuten ticks are about 8.
 const MIN_STROKE = 3
 
-const layout = computed(() => kanaStrokes(props.kana) ?? { width: 109, strokes: [] })
+const layout = computed(() => props.glyph ?? kanaStrokes(props.kana) ?? { width: 109, strokes: [] })
 const strokes = computed(() => layout.value.strokes)
 const count = computed(() => strokes.value.length)
 

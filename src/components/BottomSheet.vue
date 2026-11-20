@@ -42,7 +42,7 @@ onBeforeUnmount(() => {
     <div class="sheet-backdrop" @click.self="emit('close')">
       <div ref="panel" class="sheet" role="dialog" aria-modal="true" :aria-label="title" tabindex="-1">
         <div class="sheet-head">
-          <div class="sheet-title">{{ title }}</div>
+          <div class="sheet-title"><slot name="title">{{ title }}</slot></div>
           <button class="icon-btn boxed" aria-label="Close" @click="emit('close')"><Icon name="x" :size="20" /></button>
         </div>
         <div class="sheet-body">

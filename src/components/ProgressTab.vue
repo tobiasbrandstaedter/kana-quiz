@@ -71,7 +71,7 @@ function sortState(col: StatsSortCol): 'ascending' | 'descending' | 'none' {
     <template v-else>
       <div class="error-table">
         <div v-for="e in errorPairs" :key="e.kana" class="error-row">
-          <button class="error-kana" :aria-label="`Details for ${e.kana}`" @click="openKana(e.kana)">{{ e.kana }}</button>
+          <button class="error-kana" :aria-label="`Details for ${e.kana}`" @click="openKana(e.kana)"><span lang="ja">{{ e.kana }}</span></button>
           <span class="error-romaji">{{ e.romaji }}</span>
           <span class="error-facts">
             {{ e.incorrect }} miss{{ e.incorrect === 1 ? '' : 'es' }}
@@ -96,7 +96,7 @@ function sortState(col: StatsSortCol): 'ascending' | 'descending' | 'none' {
     </div>
 
     <div v-if="filteredStatsRows.length === 0" class="no-stats-state">
-      <div class="big">統</div>
+      <div class="big" lang="ja">統</div>
       <div class="msg">No data yet, finish a session to see stats</div>
     </div>
     <div v-else class="stats-table">
@@ -111,7 +111,7 @@ function sortState(col: StatsSortCol): 'ascending' | 'descending' | 'none' {
         </template>
       </div>
       <button v-for="e in filteredStatsRows" :key="e.kana" class="stats-row" @click="openKana(e.kana)">
-        <span class="stats-kana-cell">{{ e.kana }}</span>
+        <span class="stats-kana-cell" lang="ja">{{ e.kana }}</span>
         <span class="stats-romaji-cell">{{ e.romaji }}</span>
         <div class="acc-bar-wrap">
           <div class="acc-bar-bg"><div class="acc-bar-fill" :class="e.accClass" :style="{ width: `${e.acc}%` }"></div></div>

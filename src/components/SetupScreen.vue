@@ -125,7 +125,7 @@ function badge(tab: SetupTab): number {
     <header class="topbar">
       <div class="greeting">
         <span class="hello">{{ greeting }}</span>
-        <h1 class="brand">Kana Quiz <span class="kana">かな</span></h1>
+        <h1 class="brand">Kana Quiz <span class="kana" lang="ja">かな</span></h1>
       </div>
       <div class="topbar-actions">
         <span v-if="today.streak" class="streak-pill" :aria-label="`${today.streak} day streak`">
@@ -176,7 +176,7 @@ function badge(tab: SetupTab): number {
 
         <div v-if="!caughtUp && smartSummary.nextNew.length" class="hero-new">
           <span class="hero-new-label">New</span>
-          <span v-for="k in smartSummary.nextNew" :key="k" class="hero-kana kana">{{ k }}</span>
+          <span v-for="k in smartSummary.nextNew" :key="k" class="hero-kana kana" lang="ja">{{ k }}</span>
         </div>
         <div v-if="smartSummary.newBlocked" class="hero-note">{{ NEW_BLOCKED[smartSummary.newBlocked] }}</div>
         <div v-if="caughtUp && smartSummary.fill" class="hero-note">

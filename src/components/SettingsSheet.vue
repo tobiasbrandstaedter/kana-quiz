@@ -3,7 +3,7 @@ import { inject, ref, onMounted } from 'vue'
 import { QUIZ_KEY } from '../composables/useQuiz'
 import { KANA_FONTS, loadKanaFont } from '../fonts'
 import { THEMES } from '../theme'
-import { buildBackup, parseBackup, kanaInBackup, restoreBackup } from '../backup'
+import { buildBackup, parseBackup, kanaInBackup, kanjiInBackup, restoreBackup } from '../backup'
 import type { Backup } from '../backup'
 import { dayKey } from '../learning/progress'
 import BottomSheet from './BottomSheet.vue'
@@ -93,7 +93,7 @@ function reset(): void {
         :aria-pressed="kanaFont === f.family"
         @click="setKanaFont(f.family)"
       >
-        <span class="fb-kana" :style="{ fontFamily: `'${f.family}', sans-serif` }">あ</span>
+        <span class="fb-kana" lang="ja" :style="{ fontFamily: `'${f.family}', sans-serif` }">あ</span>
         <span class="fb-label">{{ f.label }}</span>
       </button>
     </div>
@@ -117,7 +117,7 @@ function reset(): void {
         <p>
           Replace everything on this device with the backup
           <template v-if="pending.savedAt">from {{ new Date(pending.savedAt).toLocaleDateString() }}</template>
-          ({{ kanaInBackup(pending) }} kana)? What is here now is lost.
+          ({{ kanaInBackup(pending) }} kana<template v-if="kanjiInBackup(pending)">, {{ kanjiInBackup(pending) }} kanji</template>)? What is here now is lost.
         </p>
         <div class="danger-confirm">
           <button class="btn btn-sm btn-bad" @click="importBackup()">Yes, replace</button>

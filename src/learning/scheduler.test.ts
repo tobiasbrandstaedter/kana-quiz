@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import type { AnswerRecord, StatEntry, StatsMap } from '../types'
-import { review, isDue, dueAt, recentErrors, pickSmart, orderSession, reaskSlot, columnProgress, dueOutlook, mixedDirection, MAX_BOX } from './scheduler'
+import { review, isDue, dueAt, recentErrors, pickSmart, orderSession, reaskSlot, planReask, columnProgress, dueOutlook, mixedDirection, MAX_BOX } from './scheduler'
 import { allPairs, pairFor, HIRAGANA } from '../data/kana'
 import { newEntry } from './statsMigration'
 
@@ -48,7 +48,18 @@ describe('review', () => {
 describe('recentErrors', () => {
   it('only looks at the last ten answers per kana', () => {
     const log = [...answers('ぬ', '0000011111'), ...answers('ぬ', '1111111110')]
-    expect(recentErrors(log).get('ぬ')).toEqual({ errors: 1, answers: 10 })
+    expect(recentErrors(log, r => r.kana).get('ぬ')).toEqual({ errors: 1, answers: 10 })
+  })
+
+  it('counts by whatever field the caller names as the id', () => {
+    const log = [
+      { id: 'k:日', correct: false },
+      { id: 'k:日', correct: true },
+      { id: 'w:日本', correct: false },
+    ]
+    const m = recentErrors(log, r => r.id)
+    expect(m.get('k:日')).toEqual({ errors: 1, answers: 2 })
+    expect(m.get('w:日本')).toEqual({ errors: 1, answers: 1 })
   })
 })
 
@@ -125,6 +136,12 @@ describe('orderSession', () => {
     expect(items.filter(i => !i.intro && i.pair.kana !== 'あ').map(i => i.pair.kana).sort()).toEqual(['か', 'き', 'く', 'け'])
     expect(items.findIndex(i => i.intro)).toBeLessThan(items.findIndex(i => !i.intro && i.pair.kana === 'あ'))
   })
+
+  it('lays out items that are not kana the same way', () => {
+    const items = orderSession({ due: [], weak: [], fresh: ['k:日', 'k:月', 'k:火'], fill: [] }, fixedRng)
+    expect(items.map(i => (i.intro ? 'I' : 'T') + i.pair).join(' '))
+      .toBe('Ik:日 Ik:月 Tk:日 Ik:火 Tk:月 Tk:日 Tk:火 Tk:月 Tk:火')
+  })
 })
 
 describe('reaskSlot', () => {
@@ -145,6 +162,41 @@ describe('reaskSlot', () => {
     expect(reaskSlot(['あ', 'い', 'う', 'あ', 'え', 'お'], 0, 'あ', 3)).toEqual({ index: 5, pad: 0 })
     // the planned card is the last one, so one filler has to separate them
     expect(reaskSlot(['い', 'あ', 'う', 'え', 'あ'], 1, 'あ', 3)).toEqual({ index: 5, pad: 1 })
+  })
+})
+
+describe('planReask', () => {
+  const queue = ['あ', 'い', 'う', 'え', 'お', 'か', 'き', 'く', 'け', 'こ']
+  // rng 0 is the smallest offset (3), 0.99 the largest (6)
+  const low = () => 0
+  const high = () => 0.99
+
+  it('puts the re-ask 3 to 6 cards after the miss', () => {
+    expect(planReask(queue, 0, 'あ', queue, 0, low)).toEqual({ index: 3, pad: [] })
+    expect(planReask(queue, 0, 'あ', queue, 0, high)).toEqual({ index: 6, pad: [] })
+  })
+
+  it('re-asks an item at most twice', () => {
+    expect(planReask(queue, 0, 'あ', queue, 1, low)).not.toBeNull()
+    expect(planReask(queue, 0, 'あ', queue, 2, low)).toBeNull()
+  })
+
+  it('pads with other items of the round near the end', () => {
+    const plan = planReask(queue, 9, 'こ', queue, 0, low)!
+    expect(plan.index).toBe(10)
+    expect(plan.pad).toHaveLength(2)
+    expect(plan.pad).not.toContain('こ')
+    expect(new Set(plan.pad).size).toBe(2)
+  })
+
+  it('takes each padding item once, however often it is in the candidates', () => {
+    const plan = planReask(['あ', 'い', 'い', 'い'], 3, 'い', ['い', 'あ', 'あ', 'う', 'う'], 0, low)!
+    expect([...plan.pad].sort()).toEqual(['あ', 'う'])
+  })
+
+  it('drops the re-ask when there are too few other items to pad with', () => {
+    expect(planReask(['あ', 'い'], 1, 'い', ['あ', 'い'], 0, low)).toBeNull()
+    expect(planReask(['い'], 0, 'い', ['い'], 0, low)).toBeNull()
   })
 })
 

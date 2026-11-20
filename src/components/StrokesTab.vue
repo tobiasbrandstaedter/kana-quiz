@@ -107,7 +107,7 @@ watch(currentCol, col => {
         class="row-chip" :class="{ active: col.id === currentCol?.id }"
         role="tab" :aria-selected="col.id === currentCol?.id"
         @click="pickColumn(col.id)"
-      ><span class="kana">{{ col.sample }}</span> {{ col.romaji[0] }}</button>
+      ><span class="kana" lang="ja">{{ col.sample }}</span> {{ col.romaji[0] }}</button>
     </div>
     <div v-if="currentCol" class="stroke-picks">
       <button
@@ -115,12 +115,12 @@ watch(currentCol, col => {
         class="stroke-pick kana" :class="{ active: k === current, written: written(k) }"
         :aria-label="hideKana && k === current ? 'The kana to write' : `${k}${written(k) ? ', written cleanly before' : ''}`"
         @click="pick(k)"
-      >{{ hideKana && k === current ? '?' : k }}</button>
+      ><span lang="ja">{{ hideKana && k === current ? '?' : k }}</span></button>
     </div>
 
     <div v-if="current" class="stroke-panel">
       <div class="stroke-info">
-        <div class="stroke-kana kana" :class="{ hidden: hideKana }">{{ hideKana ? '?' : current }}</div>
+        <div class="stroke-kana kana" lang="ja" :class="{ hidden: hideKana }">{{ hideKana ? '?' : current }}</div>
         <div class="stroke-romaji">{{ romaji }}</div>
         <button class="icon-btn boxed butter" :aria-label="`Play ${romaji}`" @click="playKana(current)"><Icon name="speaker" :size="20" /></button>
         <div class="stroke-nav">
@@ -130,7 +130,7 @@ watch(currentCol, col => {
       </div>
       <div v-if="!hideKana && (lookalikes || mnemonicFor(current))" class="stroke-tips">
         <div v-if="mnemonicFor(current)" class="stroke-mnemonic">{{ mnemonicFor(current) }}</div>
-        <div v-if="lookalikes" class="stroke-lookalikes">Don't mix up with <span class="kana">{{ lookalikes }}</span></div>
+        <div v-if="lookalikes" class="stroke-lookalikes">Don't mix up with <span class="kana" lang="ja">{{ lookalikes }}</span></div>
       </div>
 
       <div ref="stageEl" class="stroke-stage">

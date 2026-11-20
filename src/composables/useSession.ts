@@ -4,7 +4,7 @@ import { allPairs, pairFor } from '../data/kana'
 import { lookalikeHint } from '../data/lookalikes'
 import { matchesRomaji, normalizeRomaji, isTypo, kanaForTyped } from '../learning/romaji'
 import { pickDistractors, shuffle } from '../learning/distractors'
-import { reaskSlot } from '../learning/scheduler'
+import { planReask } from '../learning/scheduler'
 import type { PlannedItem } from '../learning/scheduler'
 import { DEFAULT_LIMITS } from '../learning/progress'
 import type { FluencyLimits } from '../learning/progress'
@@ -53,8 +53,6 @@ export interface Explanation {
   givenLabel: string
   hint: string | null
 }
-
-const MAX_REASKS = 2
 
 export function useSession() {
   const questions = ref<QuizQuestion[]>([])
@@ -184,21 +182,17 @@ export function useSession() {
     )
   }
 
-  // a missed kana comes back a few questions later, up to MAX_REASKS times per session
   function queueReask(q: QuizQuestion): void {
-    const n = reaskCount[q.kana] ?? 0
-    if (n >= MAX_REASKS) return
     const qs = questions.value
-    const { index, pad } = reaskSlot(qs.map(x => x.kana), current.value, q.kana, 3 + Math.floor(Math.random() * 4))
-    // close to the end other kana of this round go in between. With none around,
-    // the kana is left for the next session, it is due there anyway.
-    const others = shuffle([...new Map(qs.filter(x => x.kana !== q.kana && x.inputType !== 'intro').map(x => [x.kana, x])).values()]).slice(0, pad)
-    if (others.length < pad) return
-    reaskCount[q.kana] = n + 1
+    const asked = qs.filter(x => x.inputType !== 'intro')
+    const plan = planReask(qs.map(x => x.kana), current.value, q.kana, asked.map(x => x.kana), reaskCount[q.kana] ?? 0)
+    if (!plan) return
+    reaskCount[q.kana] = (reaskCount[q.kana] ?? 0) + 1
     const again = (x: QuizQuestion, direction?: QuizDirection) =>
       makeQuestion({ kana: x.kana, romaji: x.romaji, script: x.script }, sessionMode, fullPairs, helpers, direction)
+    const padding = plan.pad.map(k => again(asked.find(x => x.kana === k)!))
     // the re-ask keeps the direction that was missed, mixed mode would fall back to the easiest one
-    qs.splice(index, 0, ...others.map(x => again(x)), { ...again(q, q.direction), reask: true })
+    qs.splice(plan.index, 0, ...padding, { ...again(q, q.direction), reask: true })
   }
 
   function noteResult(kana: string, correct: boolean): void {

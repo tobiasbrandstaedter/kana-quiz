@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, nextTick } from 'vue'
 import { kanaStrokes, glyphShift } from '../data/strokeGlyphs'
+import type { KanaStrokes } from '../data/strokeGlyphs'
 import Icon from './Icon.vue'
 
-const props = defineProps<{ kana: string; controls?: boolean }>()
+// `glyph` is for strokes that don't come from the kana table, without it they are looked up by `kana`
+const props = defineProps<{ kana: string; glyph?: KanaStrokes; controls?: boolean }>()
 
-const layout = computed(() => kanaStrokes(props.kana))
+const layout = computed(() => props.glyph ?? kanaStrokes(props.kana))
 const strokes = computed(() => layout.value?.strokes ?? [])
 const strokeCount = computed(() => strokes.value.length)
 
