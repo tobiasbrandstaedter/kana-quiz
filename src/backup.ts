@@ -1,4 +1,4 @@
-import { KANJI_KEYS, KANJI_STATS_KEY } from './kanjiKeys'
+import { KANJI_KEYS, KANJI_PROGRESS_KEYS, KANJI_STATS_KEY, kanjiOfId } from './kanjiKeys'
 
 // everything the app keeps in localStorage, so a backup carries progress and preferences
 const KANA_KEYS = ['kana_stats_v3', 'kana_answers_v1', 'kana_days_v1', 'kana_prefs', 'kana_script', 'hiragana_kana_font', 'kana_theme']
@@ -24,8 +24,9 @@ export function buildBackup(read: (key: string) => string | null, now: number): 
     const value = read(key)
     if (value !== null) data[key] = value
   }
-  // without kanji there is nothing new in it, and the previous build can still read a version 1
-  const version = KANJI_KEYS.some(key => key in data) ? 2 : 1
+  // without kanji progress there is nothing new in it, and the previous build can still read a
+  // version 1. Kanji prefs alone don't count, the previous build just leaves them out.
+  const version = KANJI_PROGRESS_KEYS.some(key => key in data) ? 2 : 1
   return { app: 'kana-quiz', version, savedAt: now, data }
 }
 
@@ -62,7 +63,7 @@ export function kanaInBackup(b: Backup): number {
 
 /** Same for kanji. The kanji stats also hold words (ids `w:...`), those don't count here. */
 export function kanjiInBackup(b: Backup): number {
-  return statsIds(b.data, KANJI_STATS_KEY).filter(id => id.startsWith('k:')).length
+  return statsIds(b.data, KANJI_STATS_KEY).filter(id => kanjiOfId(id) !== null).length
 }
 
 /** Replaces what is stored with the backup. Keys the backup doesn't have are removed. */

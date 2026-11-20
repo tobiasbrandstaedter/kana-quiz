@@ -5,7 +5,6 @@ import { review, recentErrors, MASTERED_BOX } from '../learning/scheduler'
 import { dayKey, streak } from '../learning/progress'
 import { clock } from '../clock'
 import { days, countAnswer, reloadDays, DAYS_KEY } from '../days'
-import { KANJI_PROGRESS_KEYS } from '../kanjiKeys'
 
 const LS_STATS = 'kana_stats_v3'
 const LS_STATS_V2 = 'kana_stats_v2'
@@ -114,9 +113,9 @@ export function useStats() {
     statsData.value = data
   }
 
-  // the one real reset, everything goes, kanji progress too
+  // the one real reset of kana progress and the streak, kanji progress goes through resetKanji
   function resetAll(): void {
-    for (const key of [LS_STATS, LS_STATS_V2, LS_ANSWERS, DAYS_KEY, ...KANJI_PROGRESS_KEYS]) {
+    for (const key of [LS_STATS, LS_STATS_V2, LS_ANSWERS, DAYS_KEY]) {
       try { localStorage.removeItem(key) } catch {}
     }
     statsData.value = {}

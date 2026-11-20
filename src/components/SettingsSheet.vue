@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { inject, ref, onMounted } from 'vue'
+import { inject, ref, computed, onMounted } from 'vue'
 import { QUIZ_KEY } from '../composables/useQuiz'
 import { KANA_FONTS, loadKanaFont } from '../fonts'
 import { THEMES } from '../theme'
 import { buildBackup, parseBackup, kanaInBackup, kanjiInBackup, restoreBackup } from '../backup'
 import type { Backup } from '../backup'
 import { dayKey } from '../learning/progress'
+import { kanjiTracked } from '../kanjiShell'
 import BottomSheet from './BottomSheet.vue'
 
 const emit = defineEmits<{ close: [] }>()
@@ -51,6 +52,12 @@ function importBackup(): void {
   // every composable reads its state at start, a reload is the one sure way to pick it all up
   location.reload()
 }
+
+const hasProgress = computed(() => kanaTracked.value > 0 || kanjiTracked.value > 0)
+const resetWhat = computed(() => [
+  kanaTracked.value ? `${kanaTracked.value} kana` : '',
+  kanjiTracked.value ? `${kanjiTracked.value} kanji` : '',
+].filter(Boolean).join(' and '))
 
 // two taps on purpose: this wipes everything and can't be undone
 const confirming = ref(false)
@@ -106,7 +113,7 @@ function reset(): void {
         <template v-else>Export a backup now and then, it also moves your progress to another device.</template>
       </p>
       <div class="backup-row">
-        <button class="btn btn-sm" :disabled="kanaTracked === 0" @click="exportBackup()">Export backup</button>
+        <button class="btn btn-sm" :disabled="!hasProgress" @click="exportBackup()">Export backup</button>
         <label class="btn btn-sm">
           Import backup
           <input class="file-input" type="file" accept="application/json,.json" @change="onFile">
@@ -128,10 +135,10 @@ function reset(): void {
 
     <div class="option-title">Progress</div>
     <div class="danger-zone">
-      <p>Deletes every answer, all review schedules and the streak. This can't be undone.</p>
-      <button v-if="!confirming" class="btn btn-sm" :disabled="kanaTracked === 0" @click="confirming = true">Reset all progress</button>
+      <p>Deletes every answer for kana and kanji, all review schedules and the streak. This can't be undone.</p>
+      <button v-if="!confirming" class="btn btn-sm" :disabled="!hasProgress" @click="confirming = true">Reset all progress</button>
       <div v-else class="danger-confirm">
-        <button class="btn btn-sm btn-bad" @click="reset()">Yes, delete {{ kanaTracked }} kana</button>
+        <button class="btn btn-sm btn-bad" @click="reset()">Yes, delete {{ resetWhat }}</button>
         <button class="btn btn-sm" @click="confirming = false">Keep it</button>
       </div>
     </div>

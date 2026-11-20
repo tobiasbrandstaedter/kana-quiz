@@ -211,7 +211,7 @@ describe('dueOutlook', () => {
   it('splits due now, due within a day and the next review time', () => {
     const s = stats(entry('か', 1, NOW - DAY), entry('き', 2, NOW + 10 * 60 * 60 * 1000), entry('く', 3, NOW + 5 * DAY))
     // the next review is announced for when it starts to count as due, slack included
-    expect(dueOutlook(s, ['hiragana'], NOW)).toEqual({ now: 1, soon: 1, nextAt: NOW + 6 * 60 * 60 * 1000 })
+    expect(dueOutlook(Object.values(s), NOW)).toEqual({ now: 1, soon: 1, nextAt: NOW + 6 * 60 * 60 * 1000 })
   })
 
   it('agrees with isDue on when a kana is due', () => {
@@ -221,7 +221,7 @@ describe('dueOutlook', () => {
   })
 
   it('reports nothing coming when nothing was seen', () => {
-    expect(dueOutlook({}, ['hiragana'], NOW)).toEqual({ now: 0, soon: 0, nextAt: 0 })
+    expect(dueOutlook([], NOW)).toEqual({ now: 0, soon: 0, nextAt: 0 })
   })
 })
 

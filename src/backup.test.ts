@@ -32,8 +32,13 @@ describe('backup', () => {
     expect(buildBackup(read, 1000).version).toBe(1)
   })
 
-  it('writes version 2 once a kanji key has a value', () => {
-    expect(buildBackup(key => ({ ...STORED, kanji_prefs: '{}' })[key] ?? null, 1000).version).toBe(2)
+  it('writes version 2 once kanji progress has a value', () => {
+    expect(buildBackup(key => ({ ...STORED, kanji_stats_v1: KANJI_STATS })[key] ?? null, 1000).version).toBe(2)
+    expect(buildBackup(key => ({ ...STORED, kanji_answers_v1: '[]' })[key] ?? null, 1000).version).toBe(2)
+  })
+
+  it('stays at version 1 when only the kanji prefs exist', () => {
+    expect(buildBackup(key => ({ ...STORED, kanji_prefs: '{"course":"kana"}' })[key] ?? null, 1000).version).toBe(1)
   })
 
   it('carries the kanji keys', () => {

@@ -132,7 +132,7 @@ Done when all tests pass, type check is clean, a kana session with a miss and a 
 
 ### P3a: K1, practice
 
-Opus. The chunk and its loading, Kanji in the script switch with the due dot, kanji stats, intro card, `meaning` and `recognize`, smart practice and custom quiz over all kanji, quiz screen, results screen. New card styles first: a keyword list in the choices, kanji in the choices at a size where 土 and 士 differ at 375px.
+Opus. The chunk and its loading, Kanji in the script switch with the due dot, kanji stats, intro card, `meaning` and `recognize`, smart practice with the three mode tiles, quiz screen, results screen. The custom quiz comes in P3b with the set picker, without sets there is nothing to pick from. New card styles first: a keyword list in the choices, kanji in the choices at a size where 土 and 士 differ at 375px.
 
 Done when a new learner can go through set 1 in the preview and come back the next day to reviews, and the KR ids of K1 that concern practice are met.
 

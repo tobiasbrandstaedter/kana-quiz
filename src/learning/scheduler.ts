@@ -65,7 +65,7 @@ export interface SmartPicks<T = KanaPair> {
 }
 
 /** Answered at least once. An entry can exist without that, e.g. after a migration. */
-export function isSeen(e: StatEntry | undefined): e is StatEntry {
+export function isSeen<E extends { correct: number; incorrect: number }>(e: E | undefined): e is E {
   return !!e && e.correct + e.incorrect > 0
 }
 
@@ -230,11 +230,11 @@ export interface DueOutlook {
   nextAt: number   // ms epoch when the next kana becomes due, 0 if none is waiting
 }
 
-/** For the "all caught up" message: what comes back and when. */
-export function dueOutlook(stats: StatsMap, scripts: ScriptName[], now: number): DueOutlook {
+/** For the "all caught up" message: what comes back and when, over the entries in play. */
+export function dueOutlook(entries: Array<Schedule & { correct: number; incorrect: number }>, now: number): DueOutlook {
   const out = { now: 0, soon: 0, nextAt: 0 }
-  for (const e of Object.values(stats)) {
-    if (!isSeen(e) || !scripts.includes(e.script)) continue
+  for (const e of entries) {
+    if (!isSeen(e)) continue
     if (isDue(e, now)) { out.now++; continue }
     const at = dueAt(e)
     if (at <= now + DAY) out.soon++

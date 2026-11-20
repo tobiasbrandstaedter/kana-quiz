@@ -1,0 +1,67 @@
+import { describe, it, expect } from 'vitest'
+import { applyKanjiAnswer, newKanjiEntry, normalizeKanjiStats } from './kanjiStats'
+import type { KanjiAnswerInput } from '../types'
+
+const DAY = 24 * 60 * 60 * 1000
+const NOW = 1_800_000_000_000
+
+const answer = (patch: Partial<KanjiAnswerInput> = {}): KanjiAnswerInput =>
+  ({ id: 'k:A', type: 'meaning', correct: true, given: 'k:A', ms: 2000, ...patch })
+
+describe('applyKanjiAnswer', () => {
+  it('starts a new entry and promotes a new item, it is due right away', () => {
+    const e = applyKanjiAnswer(undefined, answer(), NOW)
+    expect(e).toMatchObject({ id: 'k:A', correct: 1, incorrect: 0, streak: 1, box: 1, lastSeen: NOW, totalMs: 2000, count: 1 })
+    expect(e.byType).toEqual({ meaning: { correct: 1, incorrect: 0 } })
+    expect(e.due).toBe(NOW + DAY)
+  })
+
+  it('counts per question type', () => {
+    let e = applyKanjiAnswer(undefined, answer(), NOW)
+    e = applyKanjiAnswer(e, answer({ type: 'recognize', correct: false, given: 'k:B' }), NOW + 1)
+    expect(e.byType).toEqual({ meaning: { correct: 1, incorrect: 0 }, recognize: { correct: 0, incorrect: 1 } })
+  })
+
+  it('sends a miss back to box 0 and stores what was picked', () => {
+    const before = { ...newKanjiEntry('k:A'), correct: 4, box: 3, due: NOW + 5 * DAY, streak: 4 }
+    const e = applyKanjiAnswer(before, answer({ correct: false, given: 'k:B' }), NOW)
+    expect(e).toMatchObject({ box: 0, due: NOW, streak: 0, lastWrong: NOW, incorrect: 1 })
+    expect(e.confusions).toEqual({ 'k:B': 1 })
+  })
+
+  it('stores no confusion for "Don\'t know"', () => {
+    const e = applyKanjiAnswer(undefined, answer({ correct: false, given: '' }), NOW)
+    expect(e.incorrect).toBe(1)
+    expect(e.confusions).toEqual({})
+  })
+
+  it('only promotes an item that was due', () => {
+    const before = { ...newKanjiEntry('k:A'), correct: 1, box: 1, due: NOW + DAY }
+    expect(applyKanjiAnswer(before, answer(), NOW)).toMatchObject({ box: 1, due: NOW + DAY, correct: 2 })
+  })
+
+  it('holds the box on a re-ask after a miss in the same session', () => {
+    const before = { ...newKanjiEntry('k:A'), incorrect: 1, box: 0, due: NOW }
+    const e = applyKanjiAnswer(before, answer({ holdBox: true }), NOW)
+    expect(e).toMatchObject({ box: 0, due: NOW, correct: 1 })
+  })
+
+  it('leaves the old entry alone', () => {
+    const before = newKanjiEntry('k:A')
+    applyKanjiAnswer(before, answer({ correct: false, given: 'k:B' }), NOW)
+    expect(before).toEqual(newKanjiEntry('k:A'))
+  })
+
+  it('keeps answers without a useful time out of the timing', () => {
+    expect(applyKanjiAnswer(undefined, answer({ ms: 0 }), NOW)).toMatchObject({ totalMs: 0, count: 0 })
+    expect(applyKanjiAnswer(undefined, answer({ ms: 60_000 }), NOW)).toMatchObject({ totalMs: 0, count: 0 })
+  })
+})
+
+describe('normalizeKanjiStats', () => {
+  it('fills missing fields and drops what is not an entry', () => {
+    const out = normalizeKanjiStats({ 'k:A': { correct: 2, box: 1 }, 'k:B': 'nonsense' })
+    expect(out).toEqual({ 'k:A': { ...newKanjiEntry('k:A'), correct: 2, box: 1 } })
+    expect(normalizeKanjiStats(null)).toEqual({})
+  })
+})

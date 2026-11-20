@@ -3,19 +3,21 @@ import { inject, computed, ref, nextTick } from 'vue'
 import type { ActiveScript, QuizMode, SetupTab } from '../types'
 import { QUIZ_KEY } from '../composables/useQuiz'
 import { fromNow } from '../format'
-import { MAX_LEARNING } from '../learning/scheduler'
+import { MAX_LEARNING, isDue, isSeen } from '../learning/scheduler'
 import { clock } from '../clock'
+import { course, setCourse, kanjiDue } from '../kanjiShell'
 import ColumnSelector from './ColumnSelector.vue'
 import ProgressTab from './ProgressTab.vue'
 import StrokesTab from './StrokesTab.vue'
 import SettingsSheet from './SettingsSheet.vue'
+import KanjiPart from './KanjiPart.vue'
 import BottomSheet from './BottomSheet.vue'
 import Icon from './Icon.vue'
 
 const {
   today,
   activeTab, showTab, errorPairs, selectedCount, pickedCols, kanaTracked,
-  activeScript, setScript,
+  activeScript, setScript, statsData,
   selectorScripts, selectedCols, errorKanaSet, toggleCol, selectAll, selectNone, selectGroup,
   quizMode, setMode, timed, toggleTimed,
   smartSize, smartNew, setSmartSize, setSmartNew,
@@ -90,6 +92,24 @@ const SCRIPTS: Array<[ActiveScript, string]> = [
   ['both', 'Both'],
 ]
 
+// Kanji is a fourth segment but not a fourth script: it switches the course and leaves
+// activeScript alone, so no kana code ever sees it
+function pickScript(script: ActiveScript): void {
+  setCourse('kana')
+  setScript(script)
+}
+
+// scripts with kana due, for the dots on the kana segments while Kanji is on screen
+const kanaDueScripts = computed(() => {
+  const now = clock.value
+  return new Set(Object.values(statsData.value).filter(e => isSeen(e) && isDue(e, now)).map(e => e.script))
+})
+
+function segmentDot(script: ActiveScript): boolean {
+  if (course.value !== 'kanji') return false
+  return script === 'both' ? kanaDueScripts.value.size > 0 : kanaDueScripts.value.has(script)
+}
+
 const MODES: Array<{ mode: QuizMode; label: string; hint: string; icon: string; tint: string }> = [
   { mode: 'romaji-to-kana', label: 'Recognize', hint: 'see romaji, pick the kana', icon: 'pick', tint: 'mint' },
   { mode: 'kana-to-romaji', label: 'Read', hint: 'see the kana, type romaji', icon: 'eye', tint: 'lilac' },
@@ -114,6 +134,8 @@ function showErrors(): void {
 }
 
 function badge(tab: SetupTab): number {
+  // the kanji Progress tab has no error list yet
+  if (course.value === 'kanji') return tab === 'practice' ? kanjiDue.value : 0
   if (tab === 'practice') return smartSummary.value.outlook.now
   if (tab === 'progress') return errorPairs.value.length
   return 0
@@ -140,14 +162,23 @@ function badge(tab: SetupTab): number {
     <div class="segmented script-toggle" role="group" aria-label="Script">
       <button
         v-for="[val, label] in SCRIPTS" :key="val"
-        class="seg-btn" :class="{ active: activeScript === val }"
-        :aria-pressed="activeScript === val"
-        @click="setScript(val)"
-      >{{ label }}</button>
+        class="seg-btn" :class="{ active: course === 'kana' && activeScript === val }"
+        :aria-pressed="course === 'kana' && activeScript === val"
+        @click="pickScript(val)"
+      >{{ label }}<span v-if="segmentDot(val)" class="seg-dot"><span class="sr-only">, reviews due</span></span></button>
+      <button
+        class="seg-btn" :class="{ active: course === 'kanji' }"
+        :aria-pressed="course === 'kanji'"
+        @click="setCourse('kanji')"
+      >Kanji<span v-if="course === 'kana' && kanjiDue" class="seg-dot"><span class="sr-only">, reviews due</span></span></button>
+    </div>
+
+    <div v-if="course === 'kanji' && activeTab === 'practice'" class="tab-page">
+      <KanjiPart part="KanjiPractice" />
     </div>
 
     <!-- Practice tab -->
-    <div v-show="activeTab === 'practice'" class="tab-page">
+    <div v-show="course === 'kana' && activeTab === 'practice'" class="tab-page">
       <section class="hero" aria-labelledby="hero-title">
         <div class="hero-top">
           <div class="hero-text">
@@ -279,12 +310,21 @@ function badge(tab: SetupTab): number {
     </div>
 
     <!-- writing tab, v-if so the animation only runs while it is visible -->
-    <div v-if="activeTab === 'strokes'" class="tab-page">
+    <div v-if="course === 'kana' && activeTab === 'strokes'" class="tab-page">
       <StrokesTab />
     </div>
 
-    <div v-if="activeTab === 'progress'" class="tab-page">
+    <div v-if="course === 'kana' && activeTab === 'progress'" class="tab-page">
       <ProgressTab />
+    </div>
+
+    <!-- kanji Writing and Progress come with the next step -->
+    <div v-if="course === 'kanji' && activeTab !== 'practice'" class="tab-page">
+      <div class="no-stats-state">
+        <span class="msg">{{ activeTab === 'strokes'
+          ? 'Kanji writing comes with the next update. Until then every new kanji is traced once on its intro card.'
+          : 'Kanji progress comes with the next update. Your answers are saved already and will show up here.' }}</span>
+      </div>
     </div>
 
     <nav class="tabbar" aria-label="Sections">
