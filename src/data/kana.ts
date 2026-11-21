@@ -76,6 +76,9 @@ export const GROUP_NAMES: Record<string, string> = {
   combo: 'Combination Kana (拗音)',
 }
 
+/** Katakana as hiragana, everything else as it is. */
+export const katakanaToHiragana = (s: string) => s.replace(/[ァ-ヶ]/g, c => String.fromCharCode(c.charCodeAt(0) - 0x60))
+
 export function allPairs(): KanaPair[] {
   const pairs: KanaPair[] = []
   const add = (data: KanaData, script: ScriptName) => {

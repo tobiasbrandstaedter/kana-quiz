@@ -204,7 +204,7 @@ onBeforeUnmount(() => {
 
         <template v-if="isIntro && currentQuestion">
           <StrokeDemo v-if="introStep === 'watch'" :kana="currentQuestion.kana" class="intro-strokes" />
-          <div v-else class="q-main intro-small">{{ currentQuestion.kana }}</div>
+          <div v-else class="q-main intro-small" lang="ja">{{ currentQuestion.kana }}</div>
           <div class="intro-romaji">{{ currentQuestion.romaji }}</div>
         </template>
 
@@ -218,7 +218,10 @@ onBeforeUnmount(() => {
           <div v-else class="listen-note">No sound? Check the silent switch.</div>
         </template>
 
-        <div v-else class="q-main" :class="{ 'romaji-q': currentQuestion?.direction !== 'kana-to-romaji', 'draw-q': isDraw }">
+        <div
+          v-else class="q-main" :class="{ 'romaji-q': currentQuestion?.direction !== 'kana-to-romaji', 'draw-q': isDraw }"
+          :lang="currentQuestion?.direction === 'kana-to-romaji' ? 'ja' : undefined"
+        >
           {{ currentQuestion?.question }}
         </div>
 
@@ -270,7 +273,7 @@ onBeforeUnmount(() => {
           @done="introStep = 'traced'"
         />
 
-        <div v-if="isChoice && currentQuestion" class="options-grid">
+        <div v-if="isChoice && currentQuestion" class="options-grid" lang="ja">
           <button
             v-for="(opt, i) in currentQuestion.options" :key="opt"
             class="option-btn"
@@ -300,7 +303,7 @@ onBeforeUnmount(() => {
             {{ feedbackText }}
             <!-- choice: both kana are already colored above, so only say what the picked one was -->
             <span v-if="answered && explanation && isChoice" class="feedback-sub">
-              <span class="kana">{{ explanation.givenKana }}</span> is {{ explanation.givenLabel }}.
+              <span class="kana" lang="ja">{{ explanation.givenKana }}</span> is {{ explanation.givenLabel }}.
               <template v-if="explanation.hint">{{ explanation.hint }}</template>
             </span>
           </span>
@@ -309,7 +312,7 @@ onBeforeUnmount(() => {
         <div v-if="mnemonic" class="mnemonic"><Icon name="bulb" :size="20" /><span>{{ mnemonic }}</span></div>
 
         <div v-if="introWarning" class="explain intro-warning">
-          <div class="explain-hint">Easy to confuse with <span class="kana">{{ introWarning.others }}</span></div>
+          <div class="explain-hint">Easy to confuse with <span class="kana" lang="ja">{{ introWarning.others }}</span></div>
           <div v-if="introWarning.hint" class="explain-hint">{{ introWarning.hint }}</div>
         </div>
 
@@ -317,12 +320,12 @@ onBeforeUnmount(() => {
           <div class="explain-pair">
             <div class="explain-item yours">
               <span class="tag">yours</span>
-              <span class="k">{{ explanation.givenKana ?? '?' }}</span>
+              <span class="k" lang="ja">{{ explanation.givenKana ?? '?' }}</span>
               <span class="r">{{ explanation.givenLabel }}</span>
             </div>
             <div class="explain-item right">
               <span class="tag">correct</span>
-              <span class="k">{{ currentQuestion.kana }}</span>
+              <span class="k" lang="ja">{{ currentQuestion.kana }}</span>
               <span class="r">{{ currentQuestion.romaji }}</span>
             </div>
           </div>

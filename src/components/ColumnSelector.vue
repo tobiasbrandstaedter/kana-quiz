@@ -46,7 +46,8 @@ const emit = defineEmits<{
 
     <template v-for="([scriptName, columns], si) in selectorScripts" :key="scriptName">
       <div v-if="selectorScripts.length > 1" class="script-title" :class="{ first: si === 0 }">
-        {{ scriptName === 'hiragana' ? 'Hiragana (ひらがな)' : 'Katakana (カタカナ)' }}
+        <template v-if="scriptName === 'hiragana'">Hiragana (<span lang="ja">ひらがな</span>)</template>
+        <template v-else>Katakana (<span lang="ja">カタカナ</span>)</template>
       </div>
 
       <template v-for="[group, cols] in Object.entries(columns)" :key="group">
@@ -67,7 +68,7 @@ const emit = defineEmits<{
             :aria-label="`${col.label}, ${progressTitle(progress[col.id])}`"
             @click="emit('toggle', col.id)"
           >
-            <span class="kana-sample">{{ col.sample }}</span>
+            <span class="kana-sample" lang="ja">{{ col.sample }}</span>
             <!-- romaji, so the rows can be told apart before the kana can be read -->
             <span class="romaji-label">{{ col.romaji[0] }}</span>
             <span class="error-dot"></span>

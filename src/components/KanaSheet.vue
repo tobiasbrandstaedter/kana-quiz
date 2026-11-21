@@ -60,6 +60,7 @@ function practice(): void {
 
 <template>
   <BottomSheet v-if="detailKana && pair" :title="`${kana} ${pair.romaji}`" @close="closeKana()">
+    <template #title><span lang="ja">{{ kana }}</span> {{ pair.romaji }}</template>
     <div class="kana-detail">
       <div class="kd-top">
         <div class="kd-glyph">
@@ -91,12 +92,12 @@ function practice(): void {
       <div v-if="confusions.length" class="kd-block">
         <div class="kd-block-title">Mixed up with</div>
         <div class="kd-chips">
-          <span v-for="c in confusions" :key="c.kana" class="kd-chip"><span class="kana">{{ c.kana }}</span> {{ c.n }}×</span>
+          <span v-for="c in confusions" :key="c.kana" class="kd-chip"><span class="kana" lang="ja">{{ c.kana }}</span> {{ c.n }}×</span>
         </div>
       </div>
 
       <div v-if="others.length" class="kd-block">
-        <div class="kd-block-title">Looks like <span class="kana">{{ others.join('・') }}</span></div>
+        <div class="kd-block-title">Looks like <span class="kana" lang="ja">{{ others.join('・') }}</span></div>
         <div class="kd-hint">{{ lookalikeHint(kana, others[0]) }}</div>
       </div>
 

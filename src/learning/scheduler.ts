@@ -8,6 +8,9 @@ const DAY = 24 * 60 * 60 * 1000
 const INTERVALS = [0, 1, 3, 7, 14, 30].map(d => d * DAY)
 export const MAX_BOX = INTERVALS.length - 1
 export const MASTERED_BOX = 3
+// Kanji and words go on to 60 and 120 days: with a ceiling of 30 the reviews of some 350
+// items would fill every session for good and nothing new would come
+export const KANJI_INTERVALS = [...INTERVALS, 60 * DAY, 120 * DAY]
 
 // reviews done a few hours early still count, nobody studies at the exact same time every day
 const DUE_SLACK = 4 * 60 * 60 * 1000
@@ -34,37 +37,44 @@ export function isDue(s: Schedule, now: number): boolean {
 /**
  * Wrong answers drop back to box 0. Correct answers only promote when the kana
  * was actually due, so answering it five times in one sitting doesn't fake mastery.
+ * `intervals` is the rest per box, the last one is the top box.
  */
-export function review(s: Schedule, correct: boolean, now: number): Schedule {
+export function review(s: Schedule, correct: boolean, now: number, intervals: number[] = INTERVALS): Schedule {
   if (!correct) return { box: 0, due: now }
   if (!isDue(s, now)) return s
-  const box = Math.min(MAX_BOX, s.box + 1)
-  return { box, due: now + INTERVALS[box] }
+  const box = Math.min(intervals.length - 1, s.box + 1)
+  return { box, due: now + intervals[box] }
 }
 
-/** Errors per kana within its last RECENT_WINDOW answers in the log. */
-export function recentErrors(log: AnswerRecord[]): Map<string, { errors: number; answers: number }> {
+/** Errors per item within its last RECENT_WINDOW answers in the log. `idOf` says which item a record is about. */
+export function recentErrors<R extends { correct: boolean }>(log: R[], idOf: (r: R) => string): Map<string, { errors: number; answers: number }> {
   const out = new Map<string, { errors: number; answers: number }>()
   for (let i = log.length - 1; i >= 0; i--) {
     const r = log[i]
-    const m = out.get(r.kana) ?? { errors: 0, answers: 0 }
+    const id = idOf(r)
+    const m = out.get(id) ?? { errors: 0, answers: 0 }
     if (m.answers >= RECENT_WINDOW) continue
     m.answers++
     if (!r.correct) m.errors++
-    out.set(r.kana, m)
+    out.set(id, m)
   }
   return out
 }
 
-export interface SmartPicks {
-  due: KanaPair[]
-  weak: KanaPair[]
-  fresh: KanaPair[]
-  fill: KanaPair[]
+/** An open error: missed at some point, not back in a mastered box and not resolved since the last miss. */
+export function hasOpenError(e: { incorrect: number; box: number; lastWrong: number; resolvedAt: number }): boolean {
+  return e.incorrect > 0 && e.box < MASTERED_BOX && e.lastWrong >= e.resolvedAt
+}
+
+export interface SmartPicks<T = KanaPair> {
+  due: T[]
+  weak: T[]
+  fresh: T[]
+  fill: T[]
 }
 
 /** Answered at least once. An entry can exist without that, e.g. after a migration. */
-export function isSeen(e: StatEntry | undefined): e is StatEntry {
+export function isSeen<E extends { correct: number; incorrect: number }>(e: E | undefined): e is E {
   return !!e && e.correct + e.incorrect > 0
 }
 
@@ -111,7 +121,7 @@ export function pickSmart(
     size,
   )
 
-  const recent = recentErrors(log)
+  const recent = recentErrors(log, r => r.kana)
   const rate = (e: StatEntry) => {
     const r = recent.get(e.kana)
     return r && r.answers >= 3 ? r.errors / r.answers : 0
@@ -138,8 +148,8 @@ export function pickSmart(
   return { due, weak, fresh, fill }
 }
 
-export interface PlannedItem {
-  pair: KanaPair
+export interface PlannedItem<T = KanaPair> {
+  pair: T
   intro: boolean
 }
 
@@ -148,10 +158,10 @@ export interface PlannedItem {
  * gets an intro card, a test shortly after and one more later, interleaved with
  * the other new kana so the user doesn't just echo what they saw a second ago.
  */
-export function orderSession(picks: SmartPicks, rng: () => number = Math.random): PlannedItem[] {
+export function orderSession<T>(picks: SmartPicks<T>, rng: () => number = Math.random): PlannedItem<T>[] {
   const reviews = shuffle([...picks.due, ...picks.weak, ...picks.fill], rng)
   const total = reviews.length + picks.fresh.length * 3
-  const slots: Array<{ pos: number; item: PlannedItem }> = []
+  const slots: Array<{ pos: number; item: PlannedItem<T> }> = []
 
   reviews.forEach((pair, i) => {
     slots.push({ pos: (i + 0.5) * total / Math.max(1, reviews.length), item: { pair, intro: false } })
@@ -184,6 +194,27 @@ export function reaskSlot(queue: string[], current: number, kana: string, offset
   return { index, pad: Math.max(REASK_GAP - (index - current - 1), behindSameKana ? 1 : 0) }
 }
 
+const MAX_REASKS = 2
+
+/**
+ * How a missed item comes back: 3 to 6 cards later, at most MAX_REASKS times per session
+ * (`reasked` is how often it already came back). `candidates` are the ids of the round that
+ * may go in front of it as padding, `pad` says which ones the caller has to insert before
+ * the re-ask at `index`, never the item of the card right before `index`. Null when the re-ask is dropped: asked back often enough, or too
+ * few other items left to pad with, it is due next session anyway.
+ */
+export function planReask(
+  queue: string[], current: number, id: string, candidates: string[], reasked: number,
+  rng: () => number = Math.random,
+): { index: number; pad: string[] } | null {
+  if (reasked >= MAX_REASKS) return null
+  const { index, pad } = reaskSlot(queue, current, id, 3 + Math.floor(rng() * 4))
+  // not the item asked right before the slot either, it would come twice in a row
+  const others = shuffle([...new Set(candidates.filter(c => c !== id && c !== queue[index - 1]))], rng).slice(0, pad)
+  if (others.length < pad) return null
+  return { index, pad: others }
+}
+
 export interface ColumnProgress {
   total: number
   seen: number
@@ -191,10 +222,13 @@ export interface ColumnProgress {
   due: number
 }
 
-export function columnProgress(kana: string[], stats: StatsMap, now: number): ColumnProgress {
-  const p = { total: kana.length, seen: 0, mastered: 0, due: 0 }
-  for (const k of kana) {
-    const e = stats[k]
+// kana pass the kana of a row, kanji the item ids of a set with their own stats map
+export function columnProgress(
+  ids: string[], stats: Record<string, (Schedule & { correct: number; incorrect: number }) | undefined>, now: number,
+): ColumnProgress {
+  const p = { total: ids.length, seen: 0, mastered: 0, due: 0 }
+  for (const id of ids) {
+    const e = stats[id]
     if (!isSeen(e)) continue
     p.seen++
     if (e.box >= MASTERED_BOX) p.mastered++
@@ -209,11 +243,11 @@ export interface DueOutlook {
   nextAt: number   // ms epoch when the next kana becomes due, 0 if none is waiting
 }
 
-/** For the "all caught up" message: what comes back and when. */
-export function dueOutlook(stats: StatsMap, scripts: ScriptName[], now: number): DueOutlook {
+/** For the "all caught up" message: what comes back and when, over the entries in play. */
+export function dueOutlook(entries: Array<Schedule & { correct: number; incorrect: number }>, now: number): DueOutlook {
   const out = { now: 0, soon: 0, nextAt: 0 }
-  for (const e of Object.values(stats)) {
-    if (!isSeen(e) || !scripts.includes(e.script)) continue
+  for (const e of entries) {
+    if (!isSeen(e)) continue
     if (isDue(e, now)) { out.now++; continue }
     const at = dueAt(e)
     if (at <= now + DAY) out.soon++

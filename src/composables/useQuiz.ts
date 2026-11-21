@@ -10,6 +10,7 @@ import { fluencyLimits, dayKey } from '../learning/progress'
 import { shuffle } from '../learning/distractors'
 import { accuracy, accClass } from '../format'
 import { clock } from '../clock'
+import { setCourse, resetKanji, kanjiScreen, closeKanji } from '../kanjiShell'
 import { useStats } from './useStats'
 import type { BoxMove } from './useStats'
 import { useSetup } from './useSetup'
@@ -93,7 +94,7 @@ export function useQuiz() {
       cards: p.due.length + p.weak.length + p.fill.length + p.fresh.length * 3,
       nextNew: p.fresh.map(x => x.kana),
       fromSelection: setup.selectedCount.value > 0,
-      outlook: dueOutlook(stats.statsData.value, scriptsInPlay.value, now),
+      outlook: dueOutlook(Object.values(stats.statsData.value).filter(e => scriptsInPlay.value.includes(e.script)), now),
       mastered: inPlay.filter(e => e.box >= MASTERED_BOX).length,
       seen: inPlay.length,
       newBlocked: newBlocked(p.fresh.length, inPlay.filter(e => e.box <= 1).length),
@@ -192,7 +193,7 @@ export function useQuiz() {
 
   const roundOutcome = computed(() => {
     const moves = Object.entries(roundMoves.value)
-    const outlook = dueOutlook(stats.statsData.value, scriptsInPlay.value, clock.value)
+    const outlook = dueOutlook(Object.values(stats.statsData.value).filter(e => scriptsInPlay.value.includes(e.script)), clock.value)
     return {
       up: moves.filter(([, m]) => m.to > m.from).map(([k, m]) => ({ kana: k, box: m.to })),
       down: moves.filter(([, m]) => m.to < m.from).map(([k]) => k),
@@ -408,6 +409,11 @@ export function useQuiz() {
         label: 'Resume',
         run: () => {
           if (session.startedAt.value !== id) return
+          // the learner may have switched to Kanji in the meantime, even started a kanji session
+          setCourse('kana')
+          kanjiScreen.value = 'setup'
+          // a kanji sheet left open would sit over the quiz while its keys answer behind it
+          closeKanji()
           session.questionStartTime.value = Date.now()
           screen.value = 'quiz'
         },
@@ -427,7 +433,9 @@ export function useQuiz() {
   }
 
   function resetAll(): void {
+    // kana progress with the streak, then kanji progress, each wiped once
     stats.resetAll()
+    resetKanji()
     notify('All progress deleted')
   }
 
@@ -437,7 +445,7 @@ export function useQuiz() {
 
   return {
     // orchestration
-    screen, activeTab, statsSort, notice, noticeAction, runNoticeAction, detailKana, openKana, closeKana, timerRun,
+    screen, activeTab, statsSort, notice, noticeAction, notify, runNoticeAction, detailKana, openKana, closeKana, timerRun,
     statsSummary, filteredStatsRows, allPatterns, roundPatterns, smartSummary, columnProgressMap, roundOutcome,
     weakPool, slowPool, replayLabel,
     showTab, setStatsSort, startQuiz, startWorstPractice, startSlowestPractice, startPatternPractice, startSmartPractice, startKanaPractice,

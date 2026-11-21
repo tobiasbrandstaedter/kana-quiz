@@ -42,7 +42,8 @@ const opened = ref(new Set<string>())
 
 const tables = computed(() => selectorScripts.value.map(([script, data]) => ({
   script,
-  title: script === 'hiragana' ? 'Hiragana ひらがな' : 'Katakana カタカナ',
+  title: script === 'hiragana' ? 'Hiragana' : 'Katakana',
+  jp: script === 'hiragana' ? 'ひらがな' : 'カタカナ',
   groups: [
     { name: 'main', label: 'Main kana', rows: gojuon(data.main), width: 5 },
     { name: 'dakuten', label: 'Dakuten', rows: plain(data.dakuten), width: 5 },
@@ -93,7 +94,7 @@ const counts = computed(() => {
     </div>
 
     <div v-for="t in tables" :key="t.script" class="chart-script">
-      <div v-if="tables.length > 1" class="group-title">{{ t.title }}</div>
+      <div v-if="tables.length > 1" class="group-title">{{ t.title }} <span lang="ja">{{ t.jp }}</span></div>
       <template v-for="g in t.groups" :key="g.name">
         <div v-if="g.open" class="chart-grid" :class="`w${g.width}`">
           <template v-for="(row, ri) in g.rows" :key="ri">
@@ -104,7 +105,7 @@ const counts = computed(() => {
                 :aria-label="cellLabel(cell)"
                 @click="openKana(cell.kana)"
               >
-                <span class="cc-kana">{{ cell.kana }}</span>
+                <span class="cc-kana" lang="ja">{{ cell.kana }}</span>
                 <span class="cc-romaji">{{ cell.romaji }}</span>
               </button>
               <span v-else class="chart-gap" aria-hidden="true"></span>

@@ -6,3 +6,4 @@ dist
 .claude
 .npmrc
 .idea
+scripts/.cache

@@ -21,7 +21,7 @@ const emit = defineEmits<{
         <div class="pattern-title">{{ p.title }}</div>
         <div class="pattern-detail">{{ p.detail }}</div>
         <div class="pattern-kana">
-          <span v-for="k in p.kana.slice(0, 12)" :key="k">{{ k }}</span>
+          <span v-for="k in p.kana.slice(0, 12)" :key="k" lang="ja">{{ k }}</span>
           <span v-if="p.kana.length > 12" class="more">+{{ p.kana.length - 12 }}</span>
         </div>
       </div>

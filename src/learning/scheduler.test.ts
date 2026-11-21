@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import type { AnswerRecord, StatEntry, StatsMap } from '../types'
-import { review, isDue, dueAt, recentErrors, pickSmart, orderSession, reaskSlot, columnProgress, dueOutlook, mixedDirection, MAX_BOX } from './scheduler'
+import { review, isDue, dueAt, recentErrors, pickSmart, orderSession, reaskSlot, planReask, columnProgress, dueOutlook, mixedDirection, MAX_BOX, KANJI_INTERVALS } from './scheduler'
 import { allPairs, pairFor, HIRAGANA } from '../data/kana'
 import { newEntry } from './statsMigration'
 
@@ -43,12 +43,29 @@ describe('review', () => {
   it('caps at the top box', () => {
     expect(review({ box: MAX_BOX, due: 0 }, true, NOW).box).toBe(MAX_BOX)
   })
+
+  it('takes a longer interval table for kanji, the kana one stays', () => {
+    expect(review({ box: MAX_BOX, due: 0 }, true, NOW, KANJI_INTERVALS)).toEqual({ box: MAX_BOX + 1, due: NOW + 60 * DAY })
+    expect(review({ box: MAX_BOX + 1, due: 0 }, true, NOW, KANJI_INTERVALS)).toEqual({ box: MAX_BOX + 2, due: NOW + 120 * DAY })
+    expect(review({ box: MAX_BOX + 2, due: 0 }, true, NOW, KANJI_INTERVALS).box).toBe(MAX_BOX + 2)
+  })
 })
 
 describe('recentErrors', () => {
   it('only looks at the last ten answers per kana', () => {
     const log = [...answers('ぬ', '0000011111'), ...answers('ぬ', '1111111110')]
-    expect(recentErrors(log).get('ぬ')).toEqual({ errors: 1, answers: 10 })
+    expect(recentErrors(log, r => r.kana).get('ぬ')).toEqual({ errors: 1, answers: 10 })
+  })
+
+  it('counts by whatever field the caller names as the id', () => {
+    const log = [
+      { id: 'k:A', correct: false },
+      { id: 'k:A', correct: true },
+      { id: 'w:x:y', correct: false },
+    ]
+    const m = recentErrors(log, r => r.id)
+    expect(m.get('k:A')).toEqual({ errors: 1, answers: 2 })
+    expect(m.get('w:x:y')).toEqual({ errors: 1, answers: 1 })
   })
 })
 
@@ -125,6 +142,12 @@ describe('orderSession', () => {
     expect(items.filter(i => !i.intro && i.pair.kana !== 'あ').map(i => i.pair.kana).sort()).toEqual(['か', 'き', 'く', 'け'])
     expect(items.findIndex(i => i.intro)).toBeLessThan(items.findIndex(i => !i.intro && i.pair.kana === 'あ'))
   })
+
+  it('lays out items that are not kana the same way', () => {
+    const items = orderSession({ due: [], weak: [], fresh: ['k:A', 'k:月', 'k:火'], fill: [] }, fixedRng)
+    expect(items.map(i => (i.intro ? 'I' : 'T') + i.pair).join(' '))
+      .toBe('Ik:A Ik:月 Tk:A Ik:火 Tk:月 Tk:A Tk:火 Tk:月 Tk:火')
+  })
 })
 
 describe('reaskSlot', () => {
@@ -148,6 +171,51 @@ describe('reaskSlot', () => {
   })
 })
 
+describe('planReask', () => {
+  const queue = ['あ', 'い', 'う', 'え', 'お', 'か', 'き', 'く', 'け', 'こ']
+  // rng 0 is the smallest offset (3), 0.99 the largest (6)
+  const low = () => 0
+  const high = () => 0.99
+
+  it('puts the re-ask 3 to 6 cards after the miss', () => {
+    expect(planReask(queue, 0, 'あ', queue, 0, low)).toEqual({ index: 3, pad: [] })
+    expect(planReask(queue, 0, 'あ', queue, 0, high)).toEqual({ index: 6, pad: [] })
+  })
+
+  it('re-asks an item at most twice', () => {
+    expect(planReask(queue, 0, 'あ', queue, 1, low)).not.toBeNull()
+    expect(planReask(queue, 0, 'あ', queue, 2, low)).toBeNull()
+  })
+
+  it('pads with other items of the round near the end', () => {
+    const plan = planReask(queue, 9, 'こ', queue, 0, low)!
+    expect(plan.index).toBe(10)
+    expect(plan.pad).toHaveLength(2)
+    expect(plan.pad).not.toContain('こ')
+    expect(new Set(plan.pad).size).toBe(2)
+  })
+
+  it('takes each padding item once, however often it is in the candidates', () => {
+    const plan = planReask(['あ', 'い', 'い', 'い'], 3, 'い', ['い', 'あ', 'あ', 'う', 'う'], 0, low)!
+    expect([...plan.pad].sort()).toEqual(['あ', 'う'])
+  })
+
+  it('never pads with the item of the card right before the slot', () => {
+    // い missed on card 1, the slot is at the end behind え: え first in the padding would
+    // be え twice in a row
+    for (const rng of [low, () => 0.5, high]) {
+      expect(planReask(['あ', 'い', 'え'], 1, 'い', ['い', 'え', 'う'], 0, rng)!.pad).toEqual(['う'])
+    }
+    // with nothing else to pad with the re-ask is dropped rather than doubled
+    expect(planReask(['あ', 'い', 'え'], 1, 'い', ['い', 'え'], 0, low)).toBeNull()
+  })
+
+  it('drops the re-ask when there are too few other items to pad with', () => {
+    expect(planReask(['あ', 'い'], 1, 'い', ['あ', 'い'], 0, low)).toBeNull()
+    expect(planReask(['い'], 0, 'い', ['い'], 0, low)).toBeNull()
+  })
+})
+
 describe('columnProgress', () => {
   it('counts seen, mastered and due kana', () => {
     const s = stats(entry('か', 3, NOW + DAY), entry('き', 1, NOW - DAY), entry('く', 0, 0, { correct: 0 }))
@@ -159,7 +227,7 @@ describe('dueOutlook', () => {
   it('splits due now, due within a day and the next review time', () => {
     const s = stats(entry('か', 1, NOW - DAY), entry('き', 2, NOW + 10 * 60 * 60 * 1000), entry('く', 3, NOW + 5 * DAY))
     // the next review is announced for when it starts to count as due, slack included
-    expect(dueOutlook(s, ['hiragana'], NOW)).toEqual({ now: 1, soon: 1, nextAt: NOW + 6 * 60 * 60 * 1000 })
+    expect(dueOutlook(Object.values(s), NOW)).toEqual({ now: 1, soon: 1, nextAt: NOW + 6 * 60 * 60 * 1000 })
   })
 
   it('agrees with isDue on when a kana is due', () => {
@@ -169,7 +237,7 @@ describe('dueOutlook', () => {
   })
 
   it('reports nothing coming when nothing was seen', () => {
-    expect(dueOutlook({}, ['hiragana'], NOW)).toEqual({ now: 0, soon: 0, nextAt: 0 })
+    expect(dueOutlook([], NOW)).toEqual({ now: 0, soon: 0, nextAt: 0 })
   })
 })
 

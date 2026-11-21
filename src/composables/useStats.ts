@@ -1,14 +1,14 @@
 import { ref, computed } from 'vue'
 import type { StatsMap, StatEntry, AnswerInput, AnswerRecord, StrokeFault } from '../types'
 import { normalizeStats, newEntry } from '../learning/statsMigration'
-import { review, recentErrors, MASTERED_BOX } from '../learning/scheduler'
+import { review, recentErrors, hasOpenError } from '../learning/scheduler'
 import { dayKey, streak } from '../learning/progress'
 import { clock } from '../clock'
+import { days, countAnswer, reloadDays, DAYS_KEY } from '../days'
 
 const LS_STATS = 'kana_stats_v3'
 const LS_STATS_V2 = 'kana_stats_v2'
 const LS_ANSWERS = 'kana_answers_v1'
-const LS_DAYS = 'kana_days_v1'
 const MAX_ANSWERS = 1000
 
 function readJson(key: string): unknown {
@@ -30,20 +30,13 @@ function loadAnswers(): AnswerRecord[] {
   return Array.isArray(raw) ? raw : []
 }
 
-// answers per local day, only for the streak. Tiny, so it is never trimmed.
-function loadDays(): Record<string, number> {
-  const raw = readJson(LS_DAYS)
-  return raw && typeof raw === 'object' ? raw as Record<string, number> : {}
-}
-
 export interface BoxMove { from: number; to: number }
 
 export function useStats() {
   const statsData = ref<StatsMap>(loadStats())
   const answerLog = ref<AnswerRecord[]>(loadAnswers())
-  const days = ref<Record<string, number>>(loadDays())
 
-  const recentErrorMap = computed(() => recentErrors(answerLog.value))
+  const recentErrorMap = computed(() => recentErrors(answerLog.value, r => r.kana))
 
   function recentErrorCount(kana: string): number {
     return recentErrorMap.value.get(kana)?.errors ?? 0
@@ -53,7 +46,7 @@ export function useStats() {
   // or when the user marked it as resolved and hasn't missed it since
   const errorPairs = computed<StatEntry[]>(() =>
     Object.values(statsData.value)
-      .filter(e => e.incorrect > 0 && e.box < MASTERED_BOX && e.lastWrong >= e.resolvedAt)
+      .filter(hasOpenError)
       .sort((a, b) => recentErrorCount(b.kana) - recentErrorCount(a.kana) || b.incorrect - a.incorrect)
   )
 
@@ -106,10 +99,7 @@ export function useStats() {
     writeJson(LS_ANSWERS, log)
     answerLog.value = log
 
-    const d = { ...loadDays() }
-    d[dayKey(now)] = (d[dayKey(now)] ?? 0) + 1
-    writeJson(LS_DAYS, d)
-    days.value = d
+    countAnswer(now)
 
     return { from, to: e.box }
   }
@@ -123,20 +113,20 @@ export function useStats() {
     statsData.value = data
   }
 
-  // the one real reset, everything goes
+  // the one real reset of kana progress and the streak, kanji progress goes through resetKanji
   function resetAll(): void {
-    for (const key of [LS_STATS, LS_STATS_V2, LS_ANSWERS, LS_DAYS]) {
+    for (const key of [LS_STATS, LS_STATS_V2, LS_ANSWERS, DAYS_KEY]) {
       try { localStorage.removeItem(key) } catch {}
     }
     statsData.value = {}
     answerLog.value = []
-    days.value = {}
+    reloadDays()
   }
 
   function refresh(): void {
     statsData.value = loadStats()
     answerLog.value = loadAnswers()
-    days.value = loadDays()
+    reloadDays()
   }
 
   return {
