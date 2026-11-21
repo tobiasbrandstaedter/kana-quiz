@@ -4,23 +4,24 @@ import type {
   QuestionType,
 } from '../types'
 import { allKanji, groupById, kanjiSets } from '../data/kanjiData'
-import { applyKanjiAnswer, normalizeKanjiStats } from '../learning/kanjiStats'
+import { applyKanjiAnswer, normalizeKanjiLog, normalizeKanjiStats } from '../learning/kanjiStats'
 import {
   planKanji, planCards, pickedKanjiIds, pickedWordIds, errorPracticeIds, singleKanjiOrder, wordLock, groupLock,
 } from '../learning/kanjiPlan'
-import { orderKanjiSession, readyCard } from '../learning/kanjiSession'
+import { orderKanjiSession, readyCard, reaskCards } from '../learning/kanjiSession'
 import type { PlannedCard } from '../learning/kanjiSession'
-import { noteResult, summarizeRound, resultScore, resultLabel, splitMoves } from '../learning/kanjiQuiz'
+import { holdsBox, noteResult, summarizeRound, resultScore, resultLabel, splitMoves } from '../learning/kanjiQuiz'
 import type { RoundResults } from '../learning/kanjiQuiz'
-import { itemInfo, itemOrder, makeCard, storedAnswer, wordReadingMistake, wordTypedVerdict, writeCue, PATTERN_COURSE, PLAN_COURSE } from '../learning/kanjiCards'
+import { itemInfo, itemOrder, makeCard, metSoFar, storedAnswer, unlikePrevious, wordReadingMistake, wordTypedVerdict, writeCue, PATTERN_COURSE, PLAN_COURSE } from '../learning/kanjiCards'
 import { recallAnswers, trimLog, writeCorrect, writePractice, writeQuizIds } from '../learning/kanjiWrite'
 import { detectKanjiPatterns, kanjiStatsFromLog, patternCards } from '../learning/kanjiPatterns'
 import type { KanjiPattern } from '../learning/kanjiPatterns'
 import { cleanTyped, hasKanji } from '../learning/kanaInput'
+import { verdictAnswer } from '../learning/readings'
 import type { ReadingMistake, TypedVerdict } from '../learning/readings'
 import { isWordType } from '../learning/wordQuiz'
 import { itemRow, openKanjiErrors, sortKanjiRows } from '../learning/kanjiProgress'
-import { planReask, dueOutlook, columnProgress, isSeen, MASTERED_BOX } from '../learning/scheduler'
+import { dueOutlook, columnProgress, isSeen, MASTERED_BOX } from '../learning/scheduler'
 import type { ColumnProgress } from '../learning/scheduler'
 import { shuffle } from '../learning/distractors'
 import { KANJI_ANSWERS_KEY, KANJI_STATS_KEY, kanjiId, kanjiOfId } from '../kanjiKeys'
@@ -32,11 +33,7 @@ import type { BoxMove } from './useStats'
 
 
 const loadStats = () => normalizeKanjiStats(readJson(KANJI_STATS_KEY))
-
-function loadLog(): KanjiAnswerRecord[] {
-  const raw = readJson(KANJI_ANSWERS_KEY)
-  return Array.isArray(raw) ? raw : []
-}
+const loadLog = () => normalizeKanjiLog(readJson(KANJI_ANSWERS_KEY))
 
 function createKanji() {
   const sets = kanjiSets()
@@ -249,9 +246,9 @@ function createKanji() {
 
   function begin(items: PlannedCard[], forcedMode: KanjiMode | null = null): void {
     sessionMode = forcedMode
-    const ids = [...seenStats.value.map(stat => stat.id), ...seenWords.value.map(stat => stat.id), ...items.map(i => i.id)]
-    knownKanji = new Set(ids.map(kanjiOfId).filter((k): k is string => !!k))
-    knownWords = new Set(ids.filter(id => planWords.has(id)))
+    const met = metSoFar(stats.value, items.map(i => i.id))
+    knownKanji = met.kanji
+    knownWords = met.words
     reasked = {}
     rightIds = new Set()
     moves.value = {}
@@ -292,11 +289,13 @@ function createKanji() {
   const writeIds = computed(() => writeQuizIds(pickedKanjiIds(sets, pickedSets.value), stats.value))
 
   // every kanji of the picked sets once, no intro, a kanji not met yet is asked like any other.
-  // In a word mode every word of their kanji that has been introduced, in Write every kanji met.
+  // In a word mode every word of their kanji that has been introduced, in Mixed both (KR47),
+  // in Write every kanji met.
   function startCustom(): boolean {
     const kanji = pickedKanjiIds(sets, pickedSets.value)
+    const words = () => pickedWordIds(kanji, PLAN_COURSE.words, stats.value)
     const write = mode.value === 'write'
-    const ids = shuffle(write ? writeIds.value : wordMode.value ? pickedWordIds(kanji, PLAN_COURSE.words, stats.value) : kanji)
+    const ids = shuffle(write ? writeIds.value : wordMode.value ? words() : mode.value === 'mixed' ? [...kanji, ...words()] : kanji)
     if (ids.length === 0) return false
     remember(startCustom, 'Again')
     begin(write ? ids.map(id => ({ id, type: 'write' as const })) : questionsOnly(ids))
@@ -361,8 +360,7 @@ function createKanji() {
   type CardAnswer = Omit<KanjiAnswerInput, 'ms' | 'holdBox'>
 
   function record(a: CardAnswer): void {
-    // right on the re-ask, seconds after seeing the answer, is no reason to promote
-    const move = saveAnswer({ ...a, holdBox: a.correct && !!results.value[a.id]?.missed })
+    const move = saveAnswer({ ...a, holdBox: holdsBox(results.value, a.id, a.correct) })
     const prev = moves.value[a.id]
     moves.value = { ...moves.value, [a.id]: { from: prev?.from ?? move.from, to: move.to } }
     results.value = noteResult(results.value, a.id, a.correct)
@@ -374,14 +372,12 @@ function createKanji() {
 
   // a missed item comes back a few cards later, in the type that was missed
   function queueReask(id: string, type: QuestionType): void {
-    const qs = cards.value
-    const asked = qs.filter(x => x.type !== 'intro')
-    const slot = planReask(qs.map(x => x.id), current.value, id, asked.map(x => x.id), reasked[id] ?? 0)
+    const slot = reaskCards(cards.value, current.value, id, type, reasked[id] ?? 0)
     if (!slot) return
     reasked[id] = (reasked[id] ?? 0) + 1
-    // in a write quiz the cards in between are writes too
-    const padding = slot.pad.map(p => buildCard({ id: p, ...(type === 'write' ? { type } : {}) }))
-    qs.splice(slot.index, 0, ...padding, { ...buildCard({ id, type }), reask: true })
+    const built = slot.cards.map(buildCard)
+    built[built.length - 1].reask = true
+    cards.value.splice(slot.index, 0, ...built)
   }
 
   function settle(a: CardAnswer): void {
@@ -422,11 +418,9 @@ function createKanji() {
     const v = wordTypedVerdict(c.id, typed, slipped.value)
     verdict.value = v
     if (v.result === 'slip') slipped.value = true
-    else if (v.result === 'right') settle({ id: c.id, type: c.type, correct: true, given: v.kana })
-    else if (v.result === 'wrong') {
-      mistake.value = v.mistake
-      settle({ id: c.id, type: c.type, correct: false, given: v.given, typo: v.typo, mistake: v.mistake?.kind })
-    }
+    if (v.result === 'wrong') mistake.value = v.mistake
+    const counted = verdictAnswer(v)
+    if (counted) settle({ id: c.id, type: c.type, ...counted })
   }
 
   // a write card once every stroke is down: correct means no hint and no order or direction fault
@@ -462,8 +456,11 @@ function createKanji() {
   function next(): void {
     current.value++
     // a new kanji's first word only comes once the kanji was answered right (KR14)
-    cards.value = readyCard(cards.value, current.value, rightIds)
-    if (current.value >= cards.value.length) kanjiScreen.value = 'results'
+    const list = readyCard(cards.value, current.value, rightIds)
+    const at = current.value
+    if (at < list.length) list[at] = unlikePrevious(list[at], list[at - 1])
+    cards.value = list
+    if (at >= list.length) kanjiScreen.value = 'results'
     else resetCard()
   }
 
@@ -500,8 +497,8 @@ function createKanji() {
 
   const roundOutcome = computed(() => {
     const { up, down, mastered } = splitMoves(moves.value)
-    const text = (ids: string[]) => ids.map(id => itemInfo(id)?.text ?? '')
-    return { up: text(up), down: text(down), mastered: text(mastered), outlook: summary.value.outlook }
+    const items = (ids: string[]) => ids.map(itemInfo).filter((item): item is ItemInfo => !!item)
+    return { up: items(up), down: items(down), mastered: items(mastered), outlook: summary.value.outlook }
   })
 
   // Reset in the settings: kanjiShell has wiped storage, drop what is held here too

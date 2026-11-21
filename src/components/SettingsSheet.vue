@@ -6,7 +6,7 @@ import { THEMES } from '../theme'
 import { buildBackup, parseBackup, kanaInBackup, kanjiInBackup, restoreBackup } from '../backup'
 import type { Backup } from '../backup'
 import { dayKey } from '../learning/progress'
-import { kanjiTracked } from '../kanjiShell'
+import { kanjiStored, kanjiTracked } from '../kanjiShell'
 import BottomSheet from './BottomSheet.vue'
 import Icon from './Icon.vue'
 import KanjiPart from './KanjiPart.vue'
@@ -55,10 +55,11 @@ function importBackup(): void {
   location.reload()
 }
 
-const hasProgress = computed(() => kanaTracked.value > 0 || kanjiTracked.value > 0)
+// kanji progress counts as soon as a key is there: a value too broken to count must still go
+const hasProgress = computed(() => kanaTracked.value > 0 || kanjiStored.value)
 const resetWhat = computed(() => [
   kanaTracked.value ? `${kanaTracked.value} kana` : '',
-  kanjiTracked.value ? `${kanjiTracked.value} kanji` : '',
+  kanjiTracked.value ? `${kanjiTracked.value} kanji` : kanjiStored.value ? 'kanji progress' : '',
 ].filter(Boolean).join(' and '))
 
 // two taps on purpose: this wipes everything and can't be undone

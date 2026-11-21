@@ -7,13 +7,22 @@
 // The sources are CC BY-SA (EDRDG 4.0, KanjiVG 3.0), so are the generated files.
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs'
 import { gunzipSync } from 'node:zlib'
+import { createHash } from 'node:crypto'
 import { KANJI_SETS, WORD_GROUPS } from '../src/data/kanjiCourse.ts'
+import { isIrregular as markIrregular, numberPart } from '../src/learning/groupMarks.ts'
 
 // pinned so a rerun gives the same files, bump these to refresh the data (KR70)
+// Each with the sha256 of what the script reads from it, so a changed download stops the run.
+// A refreshed source gets its new hash on purpose, after a look at what changed.
 const JMDICT_TAG = '3.6.2+20261116213322'          // jmdict-simplified, KANJIDIC2 and JMdict
+const KANJIDIC_SHA = 'abfe3709003a43ec0369c5fc839746a758b56e87534b196a53755cc545767925'
+const JMDICT_SHA = '389f56c0a68f328980c04e3e5e707b716f0a4b964f6fd1f166304c87bf5b9c99'
 const FURIGANA_TAG = '2.3.1+2026-10-25'            // JmdictFurigana
+const FURIGANA_SHA = '57c2afa7d153d42df97811d4a44865d10fb9104f6a7bacbbe32a0bf0c38e5abc'
 const KANJIVG_TAG = 'r20260714'                    // same as extract-strokes.mjs
+const KANJIVG_SHA = '78afce9a053988f6f8cbe53f1c7ecbf305896a1161d3d04662715769351b7bcb'  // over the files of the set in set order, names included
 const N5_COMMIT = '9b20cfa8d59e56018702543aa9060cb72a263692'  // open-anki-jlpt-decks, src/n5.csv
+const N5_SHA = 'f89abc86b391c4f2b551bbf8910b0de6cd600973b3a9f8d98347513921929ebe'
 
 const JMDICT_VERSION = JMDICT_TAG.split('+')[0]
 const FURIGANA_VERSION = FURIGANA_TAG.split('+')[0]
@@ -48,15 +57,26 @@ function untar(gz, wanted) {
   fail(`${wanted} is not in the downloaded archive, check the pinned version`)
 }
 
-// cached json out of a release archive, downloaded and unpacked when missing
-async function archivedJson(dir, archive, url, inner, local) {
+const sha256 = buf => createHash('sha256').update(buf).digest('hex')
+
+function checkHash(what, actual, expected, constant) {
+  if (actual === expected) return
+  fail(`${what}: sha256 ${actual}, but ${constant} at the top of the script expects ${expected}. ` +
+    'If you bumped the pinned version on purpose, look at what changed and put the new hash into ' +
+    `${constant}. Otherwise delete it so it is fetched again`)
+}
+
+// cached json out of a release archive, downloaded and unpacked when missing, checked against its hash
+async function archivedJson(dir, archive, url, inner, local, hash, constant) {
   const file = new URL(dir + local, SOURCES)
   if (!existsSync(file)) {
     const gz = new URL(dir + archive, SOURCES)
     if (!existsSync(gz)) await download(url, gz)
     writeFileSync(file, untar(readFileSync(gz), inner))
   }
-  return JSON.parse(readFileSync(file, 'utf8').replace(/^﻿/, ''))
+  const buf = readFileSync(file)
+  checkHash(`scripts/.cache/sources/${dir + local}`, sha256(buf), hash, constant)
+  return JSON.parse(buf.toString('utf8').replace(/^﻿/, ''))
 }
 
 async function cachedText(path, url) {
@@ -64,6 +84,9 @@ async function cachedText(path, url) {
   if (!existsSync(file)) await download(url, file)
   return readFileSync(file, 'utf8')
 }
+
+// downloaded text goes between quotes in generated source, so it is escaped like JSON
+const quoted = s => `'${JSON.stringify(s).slice(1, -1).replace(/\\"/g, '"').replace(/'/g, "\\'")}'`
 
 // --- text helpers ---
 
@@ -76,15 +99,16 @@ const unique = xs => [...new Set(xs)]
 
 const kanjidic = await archivedJson('', `kanjidic2-en-${JMDICT_TAG}.json.tgz`,
   `${SIMPLIFIED}/kanjidic2-en-${encodeURIComponent(JMDICT_TAG)}.json.tgz`,
-  `kanjidic2-en-${JMDICT_VERSION}.json`, `kanjidic2-en-${JMDICT_VERSION}.json`)
+  `kanjidic2-en-${JMDICT_VERSION}.json`, `kanjidic2-en-${JMDICT_VERSION}.json`, KANJIDIC_SHA, 'KANJIDIC_SHA')
 const jmdict = await archivedJson('', `jmdict-eng-${JMDICT_TAG}.json.tgz`,
   `${SIMPLIFIED}/jmdict-eng-${encodeURIComponent(JMDICT_TAG)}.json.tgz`,
-  `jmdict-eng-${JMDICT_VERSION}.json`, `jmdict-eng-${JMDICT_VERSION}.json`)
+  `jmdict-eng-${JMDICT_VERSION}.json`, `jmdict-eng-${JMDICT_VERSION}.json`, JMDICT_SHA, 'JMDICT_SHA')
 const furigana = await archivedJson(`jmdictfurigana-${FURIGANA_VERSION}/`, 'JmdictFurigana.json.tar.gz',
   `https://github.com/Doublevil/JmdictFurigana/releases/download/${encodeURIComponent(FURIGANA_TAG)}/JmdictFurigana.json.tar.gz`,
-  'JmdictFurigana.json', 'JmdictFurigana.json')
+  'JmdictFurigana.json', 'JmdictFurigana.json', FURIGANA_SHA, 'FURIGANA_SHA')
 const n5csv = await cachedText(`n5-${N5_COMMIT.slice(0, 8)}.csv`,
   `https://raw.githubusercontent.com/jamsinclair/open-anki-jlpt-decks/${N5_COMMIT}/src/n5.csv`)
+checkHash(`scripts/.cache/sources/n5-${N5_COMMIT.slice(0, 8)}.csv`, sha256(n5csv), N5_SHA, 'N5_SHA')
 
 // The set: former JLPT level 4 in KANJIDIC2 plus 曜 (KD1), in the order of the file
 const characters = new Map(kanjidic.characters.map(c => [c.literal, c]))
@@ -105,8 +129,10 @@ const dropped = []
 
 const strokes = {}
 const kanjiSource = {}
+const svgHash = createHash('sha256')
 for (const k of SET) {
   const svg = await kanjivg(k)
+  svgHash.update(k).update(svg)
   const paths = [...svg.matchAll(/<path id="kvg:[^"]*-s(\d+)"[^>]*\sd="([^"]+)"/g)]
     .sort((a, b) => a[1] - b[1])
     .map(m => m[2])
@@ -135,6 +161,8 @@ for (const k of SET) {
     n5Readings: [],
   }
 }
+
+checkHash(`the KanjiVG files of the set in scripts/.cache/sources/kanjivg-${KANJIVG_TAG}/`, svgHash.digest('hex'), KANJIVG_SHA, 'KANJIVG_SHA')
 
 // JMdict: by id, and by written form for forms made of set kanji and kana
 const byId = new Map()
@@ -323,22 +351,8 @@ for (const set of KANJI_SETS)
   }
 
 // regular: the number read the way its kanji read as words of their own (十一 is じゅう
-// plus いち) followed by some common reading of the rest. The number is what comes before
-// the counter kanji, or the leading kanji when the counter isn't in the form (一つ).
-// null when a kanji of the number has no word of its own in the course yet.
-function numberPart(form, counter) {
-  const at = counter ? form.indexOf(counter) : -1
-  return at > 0 ? form.slice(0, at) : form.match(/^\p{Script=Han}+/u)?.[0] ?? ''
-}
-
-function isIrregular(form, reading, counter) {
-  const head = numberPart(form, counter)
-  if ([...head].some(ch => !ownReading.has(ch))) return null
-  const h = [...head].map(ch => ownReading.get(ch)).join('')
-  const tail = form.slice(head.length)
-  const tails = tail === '' ? [''] : [...tail].every(isKana) ? [toHira(tail)] : commonReadings(tail)
-  return !tails.some(t => h + t === reading)
-}
+// plus いち) followed by some common reading of the rest, see src/learning/groupMarks.ts
+const isIrregular = (form, reading, counter) => markIrregular(form, reading, counter, ownReading, commonReadings)
 
 const groups = {}
 const missing = []
@@ -423,12 +437,12 @@ const header = `// Generated by scripts/extract-kanji.mjs, do not edit by hand.
 // KanjiVG ${KANJIVG_TAG} (c) Ulrich Apel, CC BY-SA 3.0, https://kanjivg.tagaini.net.
 // N5 word list from https://github.com/jamsinclair/open-anki-jlpt-decks at ${N5_COMMIT.slice(0, 8)}.
 `
-const lines = obj => Object.entries(obj).map(([key, v]) => `  '${key}': ${JSON.stringify(v)},`).join('\n')
+const lines = obj => Object.entries(obj).map(([key, v]) => `  ${quoted(key)}: ${JSON.stringify(v)},`).join('\n')
 
 writeFileSync(new URL('../src/data/kanjiSource.ts', import.meta.url), `${header}// This file is under CC BY-SA 4.0.
 import type { KanjiSourceInfo, SourceGroup, SourceKanji, SourceWord } from '../types'
 
-export const KANJI_DATA_DATE = '${jmdict.dictDate}'
+export const KANJI_DATA_DATE = ${quoted(jmdict.dictDate)}
 
 export const KANJI_SOURCES: KanjiSourceInfo[] = ${JSON.stringify(sourceInfo, null, 2)}
 

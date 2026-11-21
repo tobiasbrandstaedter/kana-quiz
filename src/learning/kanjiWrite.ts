@@ -26,6 +26,25 @@ export function writePractice(
   return 'save'
 }
 
+export type WriteView = 'watch' | 'trace' | 'recall'
+
+export type WriteTabEvent =
+  | { kind: 'pick'; view: WriteView }                // another kanji picked while this view is on screen
+  | { kind: 'view'; from: WriteView; to: WriteView } // a view tapped, the same one again included
+  | { kind: 'done' }                                 // a drawing finished, the kanji is on screen now
+
+/**
+ * Whether the kanji on the Writing tab was on screen since it was picked (KR50), after an
+ * event. Picked while writing it is unseen, picked in Watch or Trace it was shown. Going to
+ * Write from another view keeps what was, any other view shows it, and tapping Write while
+ * writing starts over with the strokes so far seen. A finished drawing shows the kanji.
+ */
+export function peekedAfter(peeked: boolean, e: WriteTabEvent): boolean {
+  if (e.kind === 'pick') return e.view !== 'recall'
+  if (e.kind === 'view') return e.to !== 'recall' || e.from === 'recall' ? true : peeked
+  return true
+}
+
 /** The log without written answers. Weak items, open errors and patterns are about knowing an item on sight. */
 export function recallAnswers(log: KanjiAnswerRecord[]): KanjiAnswerRecord[] {
   return log.filter(r => r.type !== 'write')

@@ -137,7 +137,7 @@ export function sameForm(word: WordEntry): WordEntry[] {
 
 /** Kanji of the course that have this reading in one of their words, in course order. */
 export function kanjiWithReading(reading: string): string[] {
-  return ORDER.filter(k => kanjiReadings(k).some(r => r.reading === reading))
+  return BY_READING.get(reading) ?? []
 }
 
 /** Course words (not group members) that contain the kanji, in course order. */
@@ -194,6 +194,12 @@ export function homeWords(kanji: string): WordEntry[] {
 
 // every word that gets practiced, in course order
 const PRACTICED = ORDER.flatMap(homeWords)
+
+// reading -> the kanji that have it, in course order. The course is static, so once
+const BY_READING = new Map<string, string[]>()
+for (const k of ORDER) {
+  for (const { reading } of kanjiReadings(k)) BY_READING.set(reading, [...(BY_READING.get(reading) ?? []), k])
+}
 
 /** Course words and practiced group words, by home kanji: the pool for wrong options and known readings. */
 export const practicedWords = (): WordEntry[] => PRACTICED

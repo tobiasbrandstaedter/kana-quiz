@@ -61,7 +61,7 @@ Kanji and words get their own types next to the kana ones, nothing is squeezed i
 - The day counter moves into one small module with one write function that both stat stores call. Today `useStats` owns the ref behind the streak, a second writer would leave it stale.
 - A small module outside the chunk knows the kanji keys and can count due items from `kanji_stats_v1`. The due dot (KR43), Reset (KR67) and the backup need that without loading the kanji data.
 - Backup: version 2 carries the kanji keys. The app reads 1 and 2. Restoring a version 1 backup leaves kanji progress alone, since that backup can't know about it. Restoring a version 2 backup replaces everything, as today. The confirm step says how many kana and how many kanji the backup holds. The check for an empty backup accepts kanji progress alone.
-- Expected size: about 350 entries, well under 200 KB with the log.
+- Size as measured with every item learned: 321 entries, 146 kB of stats and 129 kB of log as JSON.
 
 ### Data
 
@@ -375,3 +375,60 @@ and for every KR id you can name the file and the test or the screen that shows 
 Report per KR id: met, or not met and why. Say plainly what you did not verify.
 Do not commit, do not push.
 ```
+
+## 8. Content readings (KR62)
+
+Every time hand written content is read by someone who did not write it, it goes in here.
+
+| When | What | Written by | Read by | Against | Outcome |
+|---|---|---|---|---|---|
+| 2026-11-20 | all of `kanjiCourse.ts`: 104 keywords, hooks and part lists, 156 words with glosses, 9 groups, 18 lookalike groups, close meanings | a Fable agent, from `candidates.md` only | an Opus agent with no part in the writing | the KanjiVG component and stroke data of all 104 kanji (15 of them down to stroke coordinates), `candidates.md`, `kanjiSource.ts` | 2 wrong facts (the irregular marks of the weekdays, the hook of 百 leaving out its tick), 13 weak points (6 hooks leaning on katakana, 4 hooks missing the telling stroke, word and reading picks), 9 optional. 25 changes decided and made, commit `6981736`. One was turned down by the data rule: "(polite)" for お父さん is in no dictionary sense |
+
+Not read a second time: the 25 changes themselves. They were made by the first author to the reader's wording and pass the content tests, but nobody read the file again after them.
+
+## 9. Acceptance, 2026-11-21
+
+An agent went through KR1 to KR80 against the tests and the running app at 375 px, with nine flows from a first session to the themes. No requirement was not met. Five had a gap:
+
+- KR78: the retry hint for 十 named the same meaning for both words. Fixed in the last round.
+- KR24, KR25: a picked mode overrides the box rule in smart practice. That is how the kana modes work and what the screen says, so the requirement was reworded. The Mixed custom quiz asked kanji only, it now asks words too.
+- KR62: no record of the second reading in the repo. Section 8.
+- KR32: in a first session a missed kanji came back nine cards later, because the spreading keeps its cards and its word's cards apart. Left as it is.
+- KR54: the sheet has the stage row above the meanings, like the kana sheet. The requirement now says that order.
+
+Three reviews of the whole branch ran next to it (security, performance, tests with about 65 mutations). What they found and what was done is in the commit of the last round.
+
+### Not verified by anyone
+
+These need a real device or a person, and nothing in the repo can stand in for them:
+
+- Sound: the button calls the system voice with ja-JP. Whether anything is heard on an iPhone, in the installed app or on Android has not been tried.
+- The on screen keyboard on iOS with the typed reading card, and a Japanese keyboard with composition. The handling is built from the documented behavior, not from a test on a device.
+- Finger and pen on the writing canvas for kanji. The checks ran with pointer events along the stroke paths.
+- Offline use of the kanji part in an installed build.
+- Japanese against Chinese glyph shapes on a device without Japanese fonts.
+
+### Known limits, left on purpose
+
+- The stroke check lets about 3 of 100 order mistakes inside dense kanji through, and short strokes drawn backwards (section 6.2). It never rejects a correct stroke.
+- At 20 cards a day the course takes five to ten months (KD9). Sessions of 10 with a miss rate of 15 % do not reach the end within 600 days, the hero then says that reviews fill the session.
+- A learner who keeps missing a third of all answers stays at the limit of twelve unsettled items. The simulation assumes a miss rate that never improves, a real learner's does.
+- With sets picked, a kanji can be introduced before a part of it from a set that is not picked. Kana rows behave the same.
+- Reading choice cards for one kanji words rarely offer another reading of the same kanji, because those readings are right for the spelling in another word (homographs).
+
+### Worth doing later
+
+- Fonts: the first switch to Kanji loads 19 font files (233 kB) per family. One request with `text=` for the 104 kanji would be 17 kB. It changes how the font faces stack, so it wants a careful look in every theme.
+- The pattern of a habit (long vowels) could offer a typed drill over words the learner has not mastered yet.
+- Example sentences, the way the exam shows kanji (out of scope, see the requirements).
+
+## 10. How the agent work went
+
+For whoever plans the next feature this way.
+
+- The split held: Fable for decisions and briefs, Opus for building, separate reviewers per phase. Every phase came back with real findings, never with "looks fine": the reviewers that ran code against the modules (simulated learners, every word through the card builders, mutations of the rules) found what reading alone did not.
+- The most expensive mistakes were in the requirements, not in the code: the review ceiling of 30 days that made short sessions never finish, the guess of two months for the course, the question word that held the date groups back. All three were found by simulation after the feature was built. A simulation of the plan belongs before P3, not after P5.
+- "No content from memory" held up in practice. It stopped a gloss ("polite") that no source had, and it made the second reading possible, because there was data to read against.
+- The first design (one session for kana and kanji) did not survive the first reading of the code. Asking a reviewer to check the plan against the code before any code was written saved the largest rework.
+- Parallel work was limited to pairs that touch different files (data next to UI, a review of a commit next to the next phase). Two agents in the same files were never tried.
+- What the loop could not do: anything that needs a device. That list is in section 9.

@@ -5,7 +5,8 @@ import { useKanji } from '../composables/useKanji'
 import { allKanji, courseEntries, kanjiEntry, kanjiLookalikes, kanjiStrokes, ownWords } from '../data/kanjiData'
 import { openKanji } from '../kanjiShell'
 import { kanjiId } from '../kanjiKeys'
-import { writtenClean } from '../learning/kanjiWrite'
+import { peekedAfter, writtenClean } from '../learning/kanjiWrite'
+import type { WriteView } from '../learning/kanjiWrite'
 import StrokeDemo from './StrokeDemo.vue'
 import StrokeCanvas from './StrokeCanvas.vue'
 import Icon from './Icon.vue'
@@ -25,9 +26,8 @@ const lookalikes = computed(() => courseEntries(kanjiLookalikes(picked.value)))
 const words = computed(() => ownWords(picked.value))
 
 // watch the animation, trace over it, then write it from memory (KR50, the same rules as kana)
-type View = 'watch' | 'trace' | 'recall'
-const VIEWS: Array<[View, string]> = [['watch', 'Watch'], ['trace', 'Trace'], ['recall', 'Write']]
-const view = ref<View>('watch')
+const VIEWS: Array<[WriteView, string]> = [['watch', 'Watch'], ['trace', 'Trace'], ['recall', 'Write']]
+const view = ref<WriteView>('watch')
 const attempt = ref(0)  // bumped to give the canvas a fresh start
 const outcome = ref<DrawResult | null>(null)
 // the kanji was on screen since it was picked, so a write isn't really from memory
@@ -40,9 +40,8 @@ const stageEl = ref<HTMLElement | null>(null)
 const hideKanji = computed(() => view.value === 'recall' && !outcome.value)
 const cue = computed(() => cueOf(picked.value))
 
-function setView(v: View): void {
-  // tapping Write again in the middle of a drawing starts over, the strokes shown so far stay seen
-  if (v !== 'recall' || view.value === 'recall') peeked = true
+function setView(v: WriteView): void {
+  peeked = peekedAfter(peeked, { kind: 'view', from: view.value, to: v })
   view.value = v
   retry()
   // on a phone the canvas starts below the fold, and it can't be scrolled by dragging on it
@@ -57,8 +56,7 @@ function retry(): void {
 function onDone(result: DrawResult): void {
   outcome.value = result
   if (view.value === 'recall') saved.value = recordWrite(picked.value, result, peeked)
-  // the finished kanji is shown, anything after this is a repeat with the answer seen
-  peeked = true
+  peeked = peekedAfter(peeked, { kind: 'done' })
 }
 
 const CLEAN_TEXT = {
@@ -79,7 +77,7 @@ function pick(kanji: string): void {
   if (kanji === picked.value) return
   picked.value = kanji
   outcome.value = null
-  peeked = view.value !== 'recall'
+  peeked = peekedAfter(peeked, { kind: 'pick', view: view.value })
 }
 
 // checked once written cleanly from memory, here or in a write quiz

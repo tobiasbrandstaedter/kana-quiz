@@ -108,6 +108,16 @@ export type TypedVerdict =
   // `given` is the kana when they are a known reading, else ''
   | { result: 'wrong'; kana: string; given: string; mistake: ReadingMistake | null; typo: boolean }
 
+/**
+ * What a verdict on a typed reading puts into the stats, null when the card asks again and
+ * counts nothing (a slip, a homograph, kanji in the input). A typo counts as wrong but holds the box.
+ */
+export function verdictAnswer(v: TypedVerdict): { correct: boolean; given: string; typo?: boolean; mistake?: ReadingKind } | null {
+  if (v.result === 'right') return { correct: true, given: v.kana }
+  if (v.result !== 'wrong') return null
+  return { correct: false, given: v.given, typo: v.typo, mistake: v.mistake?.kind }
+}
+
 // readings this short have too many neighbours one key away for a slip to mean anything
 const SHORT_READING = 2
 

@@ -26,8 +26,8 @@ const missedItems = computed(() => missed.value.map(item => {
 
 const outlookText = computed(() => {
   const o = roundOutcome.value.outlook
-  if (o.now) return `${o.now} kanji and words due now.`
-  if (o.soon) return `${o.soon} kanji and words come back within a day.`
+  if (o.now) return o.now === 1 ? '1 kanji or word is due now.' : `${o.now} kanji and words are due now.`
+  if (o.soon) return o.soon === 1 ? '1 kanji or word comes back within a day.' : `${o.soon} kanji and words come back within a day.`
   if (o.nextAt) return `Next review ${fromNow(o.nextAt)}.`
   return ''
 })
@@ -46,15 +46,22 @@ const outlookText = computed(() => {
     <div class="outcome-section">
       <div v-if="roundOutcome.mastered.length" class="outcome-line mastered">
         <span class="outcome-tag">Mastered</span>
-        <span class="kana" lang="ja">{{ roundOutcome.mastered.join(' ') }}</span>
+        <span class="kana outcome-items" lang="ja">
+          <!-- a word next to its kanji would look the same without its reading -->
+          <span v-for="item in roundOutcome.mastered" :key="item.id">{{ item.text }}<small v-if="item.kind === 'word'" class="item-reading">{{ item.reading }}</small></span>
+        </span>
       </div>
       <div v-if="roundOutcome.up.length" class="outcome-line up">
         <span class="outcome-tag">Moved up</span>
-        <span class="kana" lang="ja">{{ roundOutcome.up.join(' ') }}</span>
+        <span class="kana outcome-items" lang="ja">
+          <span v-for="item in roundOutcome.up" :key="item.id">{{ item.text }}<small v-if="item.kind === 'word'" class="item-reading">{{ item.reading }}</small></span>
+        </span>
       </div>
       <div v-if="roundOutcome.down.length" class="outcome-line down">
         <span class="outcome-tag">Back to learning</span>
-        <span class="kana" lang="ja">{{ roundOutcome.down.join(' ') }}</span>
+        <span class="kana outcome-items" lang="ja">
+          <span v-for="item in roundOutcome.down" :key="item.id">{{ item.text }}<small v-if="item.kind === 'word'" class="item-reading">{{ item.reading }}</small></span>
+        </span>
       </div>
       <!-- writing never moves a kanji, the usual reason would be wrong here -->
       <div v-if="writeRound" class="outcome-line quiet">

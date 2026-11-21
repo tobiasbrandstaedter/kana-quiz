@@ -4,7 +4,7 @@ import { detectKanjiPatterns, jaPieces, kanjiStatsFromLog, patternCards } from '
 import type { KanjiPattern, PatternCourse, Piece } from './kanjiPatterns'
 import { newKanjiEntry } from './kanjiStats'
 import { seeded } from './seeded'
-import { DAY, NOW } from './kanjiFixtures'
+import { DAY, NOW, statsOf } from './kanjiFixtures'
 
 // A made up course: kanji A to F in two sets, A and B look alike, words written with the letters
 const SETS: Record<string, { id: string; title: string }> = { s1: { id: 's1', title: 'First set' }, s2: { id: 's2', title: 'Second set' } }
@@ -30,7 +30,6 @@ const COURSE: PatternCourse = {
 
 const entry = (id: string, correct: number, incorrect: number, patch: Partial<KanjiStatEntry> = {}): KanjiStatEntry =>
   ({ ...newKanjiEntry(id), correct, incorrect, lastSeen: NOW - DAY, ...patch })
-const statsOf = (...entries: KanjiStatEntry[]): KanjiStatsMap => Object.fromEntries(entries.map(e => [e.id, e]))
 const text = (pieces: Piece[]) => pieces.map(p => p.text).join('')
 const detect = (stats: KanjiStatsMap, scope: 'round' | 'all' = 'all', log: KanjiAnswerRecord[] = [], all: KanjiStatsMap = stats) =>
   detectKanjiPatterns(stats, log, scope, COURSE, NOW, all)
@@ -104,7 +103,7 @@ describe('reading habits (KR38)', () => {
     expect(found).toHaveLength(1)
     expect(text(found[0].title)).toBe('Long vowels')
     expect(text(found[0].detail)).toBe('A vowel held too long or too short. 3× in the last 30 days, in 2 words.')
-    expect(found[0].chips).toEqual(['A', 'C'])
+    expect(found[0].chips).toEqual(['w:a', 'w:c'])
     expect(found[0].practice).toEqual(['w:a', 'w:c'])
     expect(found[0].mode).toBe('read-choice')
   })

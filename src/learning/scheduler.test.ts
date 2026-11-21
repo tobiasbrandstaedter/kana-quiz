@@ -59,13 +59,13 @@ describe('recentErrors', () => {
 
   it('counts by whatever field the caller names as the id', () => {
     const log = [
-      { id: 'k:日', correct: false },
-      { id: 'k:日', correct: true },
-      { id: 'w:日本', correct: false },
+      { id: 'k:A', correct: false },
+      { id: 'k:A', correct: true },
+      { id: 'w:x:y', correct: false },
     ]
     const m = recentErrors(log, r => r.id)
-    expect(m.get('k:日')).toEqual({ errors: 1, answers: 2 })
-    expect(m.get('w:日本')).toEqual({ errors: 1, answers: 1 })
+    expect(m.get('k:A')).toEqual({ errors: 1, answers: 2 })
+    expect(m.get('w:x:y')).toEqual({ errors: 1, answers: 1 })
   })
 })
 
@@ -144,9 +144,9 @@ describe('orderSession', () => {
   })
 
   it('lays out items that are not kana the same way', () => {
-    const items = orderSession({ due: [], weak: [], fresh: ['k:日', 'k:月', 'k:火'], fill: [] }, fixedRng)
+    const items = orderSession({ due: [], weak: [], fresh: ['k:A', 'k:月', 'k:火'], fill: [] }, fixedRng)
     expect(items.map(i => (i.intro ? 'I' : 'T') + i.pair).join(' '))
-      .toBe('Ik:日 Ik:月 Tk:日 Ik:火 Tk:月 Tk:日 Tk:火 Tk:月 Tk:火')
+      .toBe('Ik:A Ik:月 Tk:A Ik:火 Tk:月 Tk:A Tk:火 Tk:月 Tk:火')
   })
 })
 

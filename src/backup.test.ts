@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { buildBackup, parseBackup, kanaInBackup, kanjiInBackup, restoreBackup } from './backup'
+import { hasKanjiProgress } from './kanjiKeys'
 
 const STORED: Record<string, string> = {
   kana_stats_v3: JSON.stringify({ あ: { kana: 'あ', correct: 2 }, い: { kana: 'い', correct: 1 } }),
@@ -8,7 +9,7 @@ const STORED: Record<string, string> = {
 }
 const read = (key: string) => STORED[key] ?? null
 
-const KANJI_STATS = JSON.stringify({ 'k:日': { id: 'k:日' }, 'k:月': { id: 'k:月' }, 'w:日本': { id: 'w:日本' } })
+const KANJI_STATS = JSON.stringify({ 'k:A': { id: 'k:A' }, 'k:B': { id: 'k:B' }, 'w:x:y': { id: 'w:x:y' } })
 
 function memoryStore(initial: Record<string, string>) {
   const store = { ...initial }
@@ -114,5 +115,14 @@ describe('backup', () => {
     expect(store.kanji_prefs).toBe('{}')
     expect(store.kana_days_v1).toBeUndefined()
     expect(store.kana_stats_v3).toBe(STORED.kana_stats_v3)
+  })
+})
+
+describe('hasKanjiProgress', () => {
+  it('is true for any kanji progress key, whatever it holds, so Reset and Export stay on', () => {
+    expect(hasKanjiProgress(key => ({ kanji_answers_v1: '[null]' })[key] ?? null)).toBe(true)
+    expect(hasKanjiProgress(key => ({ kanji_stats_v1: '{"x":{}}' })[key] ?? null)).toBe(true)
+    expect(hasKanjiProgress(key => ({ kanji_prefs: '{}' })[key] ?? null)).toBe(false)
+    expect(hasKanjiProgress(read)).toBe(false)
   })
 })

@@ -1,9 +1,8 @@
 import { describe, it, expect } from 'vitest'
-import { applyKanjiAnswer, confusedKanji, newKanjiEntry, normalizeKanjiStats } from './kanjiStats'
+import { applyKanjiAnswer, confusedKanji, newKanjiEntry, normalizeKanjiLog, normalizeKanjiStats } from './kanjiStats'
 import type { KanjiAnswerInput } from '../types'
 
-const DAY = 24 * 60 * 60 * 1000
-const NOW = 1_800_000_000_000
+import { DAY, NOW } from './kanjiFixtures'
 
 const answer = (patch: Partial<KanjiAnswerInput> = {}): KanjiAnswerInput =>
   ({ id: 'k:A', type: 'meaning', correct: true, given: 'k:A', ms: 2000, ...patch })
@@ -118,11 +117,56 @@ describe('normalizeKanjiStats', () => {
     expect(normalizeKanjiStats({ 'k:A': { correct: 1, confusions: {}, byType: {} } })['k:A'].mistakes).toEqual({})
   })
 
+  it('keeps only k: and w: ids, so a stray key or __proto__ never becomes an entry', () => {
+    const raw = JSON.parse('{"x":{},"__proto__":{"correct":5},"k:A":{"correct":1},"w:x:y":{"correct":2},"g:x":{}}')
+    const out = normalizeKanjiStats(raw)
+    expect(Object.keys(out)).toEqual(['k:A', 'w:x:y'])
+    expect(Object.getPrototypeOf(out)).toBe(Object.prototype)
+    expect((out as Record<string, unknown>).correct).toBeUndefined()
+    expect(normalizeKanjiStats([{ correct: 1 }])).toEqual({})
+  })
+
+  it('sets nested fields of the wrong shape back, so readers and writes never throw', () => {
+    const raw = JSON.parse(`{"k:A":{"confusions":null,"strokeErrors":null,"byType":{"meaning":null,"recognize":{"correct":"2"}},
+      "mistakes":[1],"strokeFaults":{"shape":"x","order":2},"correct":"3","incorrect":null,"box":99,"due":"soon","streak":1e999}}`)
+    const e = normalizeKanjiStats(raw)['k:A']
+    expect(e).toEqual({
+      ...newKanjiEntry('k:A'), byType: { recognize: { correct: 0, incorrect: 0 } }, strokeFaults: { order: 2 }, box: 7,
+    })
+    expect(() => applyKanjiAnswer(e, answer({ correct: false, given: 'k:B' }), NOW)).not.toThrow()
+    expect(() => applyKanjiAnswer(e, answer({ type: 'write', given: '', strokes: { errors: [1], faults: { shape: 1 } } }), NOW)).not.toThrow()
+    expect(confusedKanji(e)).toEqual([])
+  })
+
+  it('keeps stroke errors as finite numbers at their index, and the box a whole number in range', () => {
+    const e = normalizeKanjiStats({ 'k:A': { strokeErrors: [1, 'x', null, 2], box: -3 }, 'k:B': { box: 1.5 } })
+    expect(e['k:A'].strokeErrors).toEqual([1, 0, 0, 2])
+    expect(e['k:A'].box).toBe(0)
+    expect(e['k:B'].box).toBe(0)
+  })
+
+  it('drops a __proto__ key inside the count maps', () => {
+    const e = normalizeKanjiStats(JSON.parse('{"k:A":{"confusions":{"__proto__":3,"k:B":1}}}'))['k:A']
+    expect(Object.keys(e.confusions)).toEqual(['k:B'])
+    expect(Object.getPrototypeOf(e.confusions)).toBe(Object.prototype)
+  })
+
   it('gives an entry stored before writing came empty stroke tallies, so a write needs no migration', () => {
     const stored = normalizeKanjiStats({ 'k:A': { correct: 1, confusions: {}, byType: { meaning: { correct: 1, incorrect: 0 } }, mistakes: {} } })['k:A']
     expect(stored).toMatchObject({ strokeErrors: [], strokeFaults: {} })
     const e = applyKanjiAnswer(stored, answer({ type: 'write', given: '', strokes: { errors: [2], faults: { shape: 2 } } }), NOW)
     expect(e).toMatchObject({ strokeErrors: [2], strokeFaults: { shape: 2 }, byType: { meaning: { correct: 1, incorrect: 0 }, write: { correct: 1, incorrect: 0 } } })
+  })
+})
+
+describe('normalizeKanjiLog', () => {
+  it('keeps records with a string id, a string type and a finite time', () => {
+    const good = { id: 'k:A', type: 'meaning', correct: true, given: 'k:A', ms: 1, t: NOW }
+    const raw = [null, 5, 'x', [], good, { ...good, id: 3 }, { ...good, type: null }, { ...good, t: 'now' }, { ...good, t: null }]
+    expect(normalizeKanjiLog(raw)).toEqual([good])
+    expect(normalizeKanjiLog(JSON.parse('[{"id":"k:A","type":"meaning","t":1e999}]'))).toEqual([])
+    expect(normalizeKanjiLog({ 0: good })).toEqual([])
+    expect(normalizeKanjiLog(null)).toEqual([])
   })
 })
 

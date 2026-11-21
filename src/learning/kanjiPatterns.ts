@@ -20,7 +20,7 @@ export interface KanjiPattern {
   kind: KanjiPatternKind
   title: Piece[]
   detail: Piece[]
-  chips: string[]      // kanji and written forms shown under the text
+  chips: string[]      // item ids of the kanji and words shown under the text
   severity: number
   practice: string[]   // item ids
   // the question type the pattern is about, picked by the box the way that mode picks it
@@ -126,7 +126,7 @@ function confusions(
       kind: 'confusion',
       title: [ja(ta), en(' vs '), ja(tb)],
       detail: hint ? [en(`Mixed up ${count}×. `), ...jaPieces(hint)] : [en(`Mixed up ${count}×`)],
-      chips: [ta, tb],
+      chips: [a, b],
       severity: 10 + count,
       practice: [...new Set([a, b, ...course.lookalikes(a), ...course.lookalikes(b)])],
       mode: 'recognize',
@@ -156,7 +156,7 @@ function readingHabits(log: KanjiAnswerRecord[], course: PatternCourse, scope: P
     out.push({
       kind: 'reading-habit', title,
       detail: [en(`${sentence} ${hits.length}× ${scope === 'round' ? 'this round' : 'in the last 30 days'}, in ${words.length} words.`)],
-      chips: words.map(id => course.text(id)!),
+      chips: words,
       severity: 5 + hits.length,
       practice: words,
       mode: 'read-choice',
@@ -195,7 +195,7 @@ function readingGap(stats: KanjiStatsMap, entries: KanjiStatEntry[], course: Pat
       ...(more > 0 ? [en(` and ${more} more`)] : []),
       en(one ? ' means, but its words are not read right yet' : ' mean, but their words are not read right yet'),
     ],
-    chips: [...words].map(id => course.text(id)!),
+    chips: [...words],
     severity: 4 + kanji.length,
     practice: [...words],
     mode: 'read-choice',
@@ -227,7 +227,7 @@ function weakSets(
       kind: 'weak-set',
       title: [en(`Weak set: ${title}`)],
       detail: [en(`${answers.incorrect} of ${n} answers wrong, ${pct(acc(answers))} right against ${pct(overall)} overall`)],
-      chips: items.map(e => course.text(e.id)!),
+      chips: items.map(e => e.id),
       severity: 5 + answers.incorrect,
       practice: items.map(e => e.id),
     })
@@ -247,7 +247,7 @@ function slipping(log: KanjiAnswerRecord[], course: PatternCourse, now: number):
     kind: 'slipping',
     title: [en('Slipping')],
     detail: [en('Mastered before, but missed again this week')],
-    chips: ids.map(id => course.text(id)!),
+    chips: ids,
     severity: 7 + ids.length,
     practice: ids,
   }]

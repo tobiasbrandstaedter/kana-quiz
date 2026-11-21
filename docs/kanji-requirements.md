@@ -108,7 +108,7 @@ The default is three new kanji per smart session, each bringing its first word. 
 
 Why: five a day feels fast in week one and collapses in week three, when the reviews pile up. The stop at twelve is what keeps a keen learner from doing that to themselves.
 
-How long the whole course takes was first guessed (two months) and then simulated, and the guess was wrong. 104 kanji and about 250 words are 350 items, each with an intro, two tests and six or seven reviews. Days until the last kanji is introduced, one session a day, three new kanji per session:
+How long the whole course takes was first guessed (two months) and then simulated, and the guess was wrong. 104 kanji and 217 practiced words are 321 items, each with an intro, two tests and six or seven reviews. Days until the last kanji is introduced, one session a day, three new kanji per session:
 
 | Session size | No misses | 15 % of answers missed |
 |---|---|---|
@@ -277,7 +277,7 @@ The draft of the sets is in section 12. The data phase turns it into the final o
 
 ### Which question when
 
-Smart practice and the Mixed mode pick the type from how well the item is known, easiest first:
+In the Mixed mode, which is the default, the type follows from how well the item is known, easiest first. A learner who picks another mode gets that type for the items it fits (a kanji mode for kanji, a word mode for words) whatever the box, in smart practice and in the custom quiz, as the kana modes work. The other kind of item keeps following the rules below.
 
 - KR24: kanji in box 0 and 1: M1. Box 2: M2. From box 3: of M1 and M2 the one with fewer right answers so far.
 - KR25: word in box 0 and 1: R1 and V1, the one with fewer right answers so far. Box 2: R2. From box 3: of R2, S1 and V1 the one with the fewest right answers so far.
@@ -285,7 +285,7 @@ Smart practice and the Mixed mode pick the type from how well the item is known,
 
 ### Schedule
 
-- KR27: kanji and words use the Leitner rules the kana use: only a due item moves up, a miss goes back to box 0, a right answer on the re-ask in the same session can't move up, typos leave the box alone. They get two boxes more than kana, with 60 and 120 days. With the kana ceiling of 30 days the 350 kanji items would need about twelve reviews a day for ever, and a simulation showed a learner with short sessions never reaching the end of the course. Mastered stays box 3.
+- KR27: kanji and words use the Leitner rules the kana use: only a due item moves up, a miss goes back to box 0, a right answer on the re-ask in the same session can't move up, typos leave the box alone. They get two boxes more than kana, with 60 and 120 days. With the kana ceiling of 30 days the 321 items would need about eleven reviews a day for ever, and a simulation showed a learner with short sessions never reaching the end of the course. Mastered stays box 3.
 - KR28: a smart session is filled in this order: due kanji and words, weak ones, new material, then whatever is due next. New material is new kanji (each with its first word), further words whose kanji are ready, and groups that are ready.
 - KR29: a further word is ready when all its kanji have been seen and its home kanji is in box 2 or higher. Among the ready words of a kanji the special ones come last.
 - KR30: per session at most as many new kanji as the picker says, and at most the same number of further words. Further words come before new kanji when both are ready and room is short. A group card does not count against either limit, the members that follow it do.
@@ -323,7 +323,7 @@ Everything not listed stays as it is for kana.
 - KR44: the hero shows the plan of the next smart session (due, new kanji, new words), the next new kanji, and a ring for kanji seen out of the whole set. Before the first session it says what kanji practice is in two lines, plus the hint from KD12 when it applies.
 - KR45: tiles for mastered, learning and open errors count kanji and words together and say so.
 - KR46: modes: Meaning (M1), Recognize (M2), Words (V1), Reading (R1 and R2 by box), Spelling (S1), Mixed. Write (W1) is added with the writing release. No Timed switch (KD16).
-- KR47: the set picker takes the place of the row picker: one entry per set with title, its kanji, and a bar for mastered and learning. A custom quiz runs over the picked sets and, in the word modes, over the words of their kanji that have been introduced.
+- KR47: the set picker takes the place of the row picker: one entry per set with title, its kanji, and a bar for mastered and learning. A custom quiz runs over the kanji of the picked sets in the kanji modes, over the words of those kanji that have been introduced in the word modes, and over both in Mixed.
 - KR48: with sets picked, new kanji in smart practice come from those sets only, and the hero has the same "Use all" way out it has for rows.
 
 ### Writing tab with Kanji picked
@@ -339,7 +339,7 @@ Everything not listed stays as it is for kana.
 
 ### Kanji sheet
 
-- KR54: opens from the chart, the table, the results and from any kanji inside a word. Top to bottom: stroke demo, keyword and other meanings, stage, next review and accuracy, memory hook, parts, its words (each with reading, meaning, sound button, stage, and whether it is unlocked yet), its group if it is the home of one, readings labeled on and kun, confusions, lookalikes, practice button.
+- KR54: opens from the chart, the table, the results and from any kanji inside a word. Top to bottom, in the order the kana sheet has: stroke demo, the row with stage, next review and accuracy, keyword and other meanings, memory hook, parts, its words (each with reading, meaning, sound button, stage, and whether it is unlocked yet), its group if it is the home of one, readings labeled on and kun, confusions, lookalikes, practice button.
 - KR55: on and kun are explained in one line the first time the sheet is opened, not on any quiz card.
 
 ### Quiz and results
@@ -353,7 +353,7 @@ Everything not listed stays as it is for kana.
 
 - KR60: one script builds the kanji data from pinned versions of the sources. Running it again gives the same file. The generated file is not edited by hand.
 - KR61: tests fail when a keyword is not among the source meanings of its kanji, a word or its reading is not in JMdict, a word contains a kanji outside the set, a word is neither in the N5 word list nor carries a reason (KR1), or a rule of section 4 or 5 is broken.
-- KR62: memory hooks and lookalike hints are read by a second reviewer who did not write them, with the stroke data and the source meanings at hand. A hook that states a wrong fact about the kanji is rejected, a hook that is merely plain is fine.
+- KR62: memory hooks and lookalike hints are read by a second reviewer who did not write them, with the stroke data and the source meanings at hand. A hook that states a wrong fact about the kanji is rejected, a hook that is merely plain is fine. Each such reading is written down in section 8 of `kanji-plan.md` (when, by whom, against what, what changed), and content that changes afterwards is read again before it ships.
 - KR63: the app has a Sources section of its own, reachable from the settings, that credits KANJIDIC2 and JMdict (EDRDG, CC BY-SA 4.0), JmdictFurigana (CC BY-SA), KanjiVG (CC BY-SA 3.0) and the N5 word list, each with a link, its licence and the version of the data in the app. The EDRDG licence asks for a separate screen, a line on a start screen is not enough. The README carries the same credits.
 - KR70: the EDRDG licence wants the data kept current. The data is rebuilt from the newest source release whenever a release of the app touches kanji content, and at least twice a year. The README says how in three lines. The Sources section shows the date, so a stale copy is visible.
 

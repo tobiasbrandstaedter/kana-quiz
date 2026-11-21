@@ -2,6 +2,7 @@ import type { QuestionType } from '../types'
 import { groupCardId } from '../kanjiKeys'
 import { shuffle } from './distractors'
 import type { KanjiPlan } from './kanjiPlan'
+import { planReask } from './scheduler'
 
 // How a planned session is laid out as cards: new items interleaved, clumps taken out, and the
 // KR14 check on the card about to be shown. What goes into a session is kanjiPlan.ts.
@@ -128,8 +129,10 @@ export function orderKanjiSession(p: KanjiPlan, rng: () => number = Math.random)
     if (first) word(first, start + 3, { needs: id })
   }
 
-  const total = reviews.length + slots.length
-  reviews.forEach((id, i) => add((i + 0.5) * total / reviews.length, { id }))
+  // over the span the new cards take, so the two interleave; spread over the card count they
+  // bunched at the end, behind the last new card
+  const span = slots.length ? Math.max(...slots.map(s => s.pos)) + 1 : reviews.length
+  reviews.forEach((id, i) => add((i + 0.5) * span / reviews.length, { id }))
 
   // Array.prototype.sort is stable, so ties keep insertion order
   return spreadCards(slots.sort((a, b) => a.pos - b.pos).map(s => s.card))
@@ -153,4 +156,20 @@ export function readyCard<T extends PlannedCard>(cards: T[], at: number, right: 
     const tail = next < 0 ? rest : [...rest.slice(0, next + 1), ...word, ...rest.slice(next + 1)]
     list = spreadCards([...list.slice(0, at), ...tail], at)
   }
+}
+
+/**
+ * Where a missed item comes back and the cards that go in with it (see planReask): the re-ask,
+ * last, in the type that was missed, and the padding in front of it from the questions of the
+ * round. In a write quiz the padding is written too, else its type is left to the caller.
+ * Null when the re-ask is dropped.
+ */
+export function reaskCards(
+  cards: PlannedCard[], current: number, id: string, type: QuestionType, reasked: number, rng: () => number = Math.random,
+): { index: number; cards: PlannedCard[] } | null {
+  const asked = cards.filter(isQuestion).map(c => c.id)
+  const slot = planReask(cards.map(c => c.id), current, id, asked, reasked, rng)
+  if (!slot) return null
+  const pad = slot.pad.map((p): PlannedCard => type === 'write' ? { id: p, type } : { id: p })
+  return { index: slot.index, cards: [...pad, { id, type }] }
 }

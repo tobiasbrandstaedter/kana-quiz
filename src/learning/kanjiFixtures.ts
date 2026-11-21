@@ -1,4 +1,4 @@
-// Made up courses for the tests of kanjiPlan.ts and kanjiSession.ts, no real content.
+// Made up courses and the shared time and stats builders for the kanji tests, no real content.
 import type { KanjiStatEntry, KanjiStatsMap } from '../types'
 import type { PlanCourse, PlanGroup, PlanWord } from './kanjiPlan'
 import { newKanjiEntry } from './kanjiStats'
@@ -8,7 +8,8 @@ export const NOW = 1_800_000_000_000
 
 export const IDS = Array.from({ length: 30 }, (_, i) => `k:${String.fromCharCode(65 + i)}`)
 
-export const seen = (id: string, box: number, due: number): KanjiStatEntry => ({ ...newKanjiEntry(id), correct: 1, box, due })
+export const stat = (id: string, patch: Partial<KanjiStatEntry> = {}): KanjiStatEntry => ({ ...newKanjiEntry(id), ...patch })
+export const seen = (id: string, box: number, due: number): KanjiStatEntry => stat(id, { correct: 1, box, due })
 export const statsOf = (...entries: KanjiStatEntry[]): KanjiStatsMap => Object.fromEntries(entries.map(e => [e.id, e]))
 
 // A course with words: every kanji has its own first word, A has two further words, one
@@ -27,6 +28,11 @@ export const GROUP: PlanGroup = {
   id: 'gb', home: 'k:B', words: [gw('g1', ['A', 'B']), gw('g2', ['D', 'B']), gw('gq', ['E', 'B'])], question: 'w:gq',
 }
 export const G: PlanCourse = { ...C, words: [...WORDS, ...GROUP.words], groups: [GROUP] }
+
+// A second group, on D, which comes after B in the course: two words, no question word
+const gd = (id: string, kanji: string[]): PlanWord => ({ ...word(id, kanji, false), home: 'k:D', group: 'gd' })
+export const GROUP_D: PlanGroup = { id: 'gd', home: 'k:D', words: [gd('d1', ['A', 'D']), gd('d2', ['B', 'D'])], question: null }
+export const G2: PlanCourse = { ...C, words: [...WORDS, ...GROUP.words, ...GROUP_D.words], groups: [GROUP, GROUP_D] }
 
 // A, B and D met with their first words, B reviewed on a later day; C and E still new
 export const READY = [

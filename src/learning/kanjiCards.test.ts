@@ -1,31 +1,32 @@
 import { describe, it, expect } from 'vitest'
 import { seeded } from './seeded'
 import {
-  itemInfo, itemOrder, makeCard, optionText, spellDiff, storedAnswer, typedReadings, wordReadingMistake, wordTypedVerdict, writeCue, PATTERN_COURSE, PLAN_COURSE,
+  introLookalikes, itemInfo, itemOrder, makeCard, metSoFar, missExplanation, optionText, spellDiff, storedAnswer, twinTable, typedReadings, unlikePrevious,
+  wordReadingMistake, wordTypedVerdict, writeCue, PATTERN_COURSE, PLAN_COURSE,
 } from './kanjiCards'
 import { toKana } from './kanaInput'
 import { looksLikeReading } from './readings'
 import { acceptedRomaji } from './romaji'
 import { allPairs } from '../data/kana'
 import type { CardContext } from './kanjiCards'
-import { planKanji } from './kanjiPlan'
-import { orderKanjiSession } from './kanjiSession'
+import { MAX_KANJI_LEARNING, planKanji } from './kanjiPlan'
+import { orderKanjiSession, readyCard, reaskCards } from './kanjiSession'
+import { holdsBox, noteResult } from './kanjiQuiz'
+import type { RoundResults } from './kanjiQuiz'
 import { applyKanjiAnswer, newKanjiEntry } from './kanjiStats'
 import {
-  allKanji, courseWords, groupPractice, homeWords, kanjiEntry, kanjiReadings, kanjiLookalikes, ownWords, practicedWords, sameForm,
+  allKanji, courseWords, groupById, groupPractice, homeWords, kanjiEntry, kanjiLookalikeHint, kanjiReadings, kanjiLookalikes, ownWords, practicedWords, sameForm,
   tooClose, wordById, wordGroups,
 } from '../data/kanjiData'
-import { groupCardId, kanjiOfId } from '../kanjiKeys'
-import type { KanjiCard, KanjiStatsMap, WordQuestionType } from '../types'
+import { cardGroup, groupCardId, kanjiOfId } from '../kanjiKeys'
+import type { KanjiAnswerRecord, KanjiCard, KanjiEntry, KanjiStatsMap, WordQuestionType } from '../types'
+import { DAY, NOW } from './kanjiFixtures'
 
 // Everything here runs over the course data, no reading or meaning is typed in.
-const NOW = 1_800_000_000_000
 const KANJI = allKanji()
 // course words and practiced group words, every card test runs over both
 const WORDS = practicedWords()
 const COURSE_WORDS = courseWords()
-// homographs in the data with kana a romaji keyboard can't give (ー, ぃ, ぢゅ), the test counts them so a data update that changes this shows up
-const KANA_ONLY_HOMOGRAPHS = 14
 
 // a learner who has met every kanji and word
 const everything: CardContext = {
@@ -102,7 +103,7 @@ describe('itemInfo and itemOrder', () => {
 })
 
 describe('makeCard for kanji', () => {
-  it('asks a kanji with three other course kanji, never one too close in meaning', () => {
+  it('asks a kanji with three other course kanji', () => {
     for (const ctx of [everything, nothing]) {
       for (const k of KANJI) {
         for (const type of ['meaning', 'recognize'] as const) {
@@ -110,6 +111,21 @@ describe('makeCard for kanji', () => {
           expect(card).toMatchObject({ id: k.id, home: k.kanji, type, answer: k.kanji })
           expect(new Set(card.options).size).toBe(4)
           for (const o of card.options) expect(kanjiEntry(o), o).not.toBeNull()
+        }
+      }
+    }
+  })
+
+  it('never offers a kanji whose keyword could be right too (KR15)', () => {
+    // two kanji clash when a keyword is a source meaning of the other or the pair is kept as too close
+    const clash = (a: KanjiEntry, b: KanjiEntry) => a.meanings.includes(b.keyword) || b.meanings.includes(a.keyword) || tooClose(a.keyword, b.keyword)
+    // the rule has work to do: some kanji have a clashing one in their own set, where options come from first
+    expect(KANJI.filter(k => KANJI.some(o => o !== k && o.set === k.set && clash(k, o))).length).toBeGreaterThan(0)
+    for (const ctx of [everything, nothing]) {
+      for (const k of KANJI) {
+        for (let seed = 1; seed <= 5; seed++) {
+          const card = makeCard({ id: k.id, type: 'meaning' }, ctx, seeded(seed))
+          for (const o of card.options.filter(o => o !== k.kanji)) expect(clash(k, kanjiEntry(o)!), `${k.kanji} ${o}`).toBe(false)
         }
       }
     }
@@ -127,6 +143,22 @@ describe('makeCard for kanji', () => {
     const k = KANJI.find(x => kanjiLookalikes(x.kanji).length)!
     const card = makeCard({ id: k.id, type: 'recognize' }, everything, seeded())
     expect(card.options.some(o => kanjiLookalikes(k.kanji).includes(o))).toBe(true)
+  })
+
+  it('puts a kanji the learner picked for this one among its options, lookalike or not (KR16)', () => {
+    const k = KANJI.find(x => !kanjiLookalikes(x.kanji).length)!
+    // far off in the course, so nothing but the stored confusion brings it in
+    const far = [...KANJI].reverse().find(o => o.set !== k.set && !k.meanings.includes(o.keyword) && !o.meanings.includes(k.keyword) && !tooClose(k.keyword, o.keyword))!
+    const stats: KanjiStatsMap = { [k.id]: { ...newKanjiEntry(k.id), correct: 1, incorrect: 2, confusions: { [far.id]: 2 } } }
+    for (let seed = 1; seed <= 5; seed++) {
+      for (const type of ['meaning', 'recognize'] as const) {
+        expect(makeCard({ id: k.id, type }, { ...everything, stats }, seeded(seed)).options).toContain(far.kanji)
+      }
+      expect(makeCard({ id: k.id, type: 'meaning' }, { ...everything, stats: {} }, seeded(seed)).options).not.toContain(far.kanji)
+    }
+    // a word with that kanji gets the confused one swapped in as a wrong form
+    const w = WORDS.find(x => x.kanji.length === 1 && x.kanji[0] === k.kanji)!
+    expect(makeCard({ id: w.id, type: 'spell' }, { ...everything, stats }, seeded()).options).toContain(w.form.replace(k.kanji, far.kanji))
   })
 
   it('gives a write card only when the plan names it, never from the mode alone (KR26)', () => {
@@ -191,15 +223,25 @@ describe('makeCard for words', () => {
   })
 
   it('never offers a meaning too close to the right one or among its source glosses (KR72)', () => {
-    for (const w of WORDS) {
-      const card = makeCard({ id: w.id, type: 'word-meaning' }, everything, seeded())
-      expect(card.answer).toBe(w.id)
-      const sources = w.glosses.flatMap(g => g.split(';').map(x => x.trim()))
-      const glosses = card.options.map(id => wordById(id)!.gloss)
-      expect(new Set(glosses).size).toBe(4)
-      for (const g of glosses.filter(g => g !== w.gloss)) {
-        expect(tooClose(g, w.gloss), `${w.id} ${g}`).toBe(false)
-        expect(sources, `${w.id} ${g}`).not.toContain(g)
+    // a gloss in its parts, compared as wordQuiz does: case and punctuation aside
+    const parts = (g: string) => g.split(';').map(x => x.toLowerCase().replace(/[^\p{L}\p{N} ]/gu, '').replace(/\s+/g, ' ').trim())
+    // the hand kept list has glosses of practiced words in it, so the rule has work to do
+    expect(WORDS.filter(w => WORDS.some(o => tooClose(o.gloss, w.gloss))).length).toBeGreaterThan(0)
+    for (const ctx of [everything, nothing]) {
+      for (const w of WORDS) {
+        for (let seed = 1; seed <= 4; seed++) {
+          const card = makeCard({ id: w.id, type: 'word-meaning' }, ctx, seeded(seed))
+          expect(card.answer).toBe(w.id)
+          const sources = [...parts(w.gloss), ...w.glosses.flatMap(parts)]
+          const glosses = card.options.map(id => wordById(id)!.gloss)
+          expect(new Set(glosses).size).toBe(4)
+          for (const id of card.options.filter(id => id !== w.id)) {
+            const o = wordById(id)!
+            expect(tooClose(o.gloss, w.gloss), `${w.id} ${o.gloss}`).toBe(false)
+            for (const p of parts(o.gloss)) expect(sources, `${w.id} ${o.gloss}`).not.toContain(p)
+            for (const p of parts(w.gloss)) expect(o.glosses.flatMap(parts), `${w.id} ${o.gloss}`).not.toContain(p)
+          }
+        }
       }
     }
   })
@@ -312,22 +354,22 @@ describe('wordTypedVerdict over the practiced words', () => {
   })
 
   it('asks again for a reading it does not take, without counting', () => {
+    // kana the romaji table has no spelling for: ー, a small vowel, a small ゃゅょ after a kana it doesn't combine with
+    const noRomaji = (h: string) => /[ーぁぃぅぇぉゎ]/.test(h) ||
+      [...h.matchAll(/(.)([ゃゅょ])/g)].some(m => !HIRAGANA.some(p => p.kana === m[1] + m[2]))
     let typedInRomaji = 0
-    let kanaOnly = 0
     for (const w of WORDS) {
       for (const h of typedReadings(w).again) {
         expect(wordTypedVerdict(w.id, h, false), `${w.id} ${h}`).toEqual({ result: 'homograph', kana: h })
         const typed = romajiOf(h)
-        if (!typed) {
-          kanaOnly++
-          continue
-        }
+        // skipped only where a Japanese keyboard is the one way to type it
+        expect(typed === null, `${w.id} ${h}`).toBe(noRomaji(h))
+        if (!typed) continue
         expect(wordTypedVerdict(w.id, typed, false), `${w.id} ${typed}`).toEqual({ result: 'homograph', kana: h })
         typedInRomaji++
       }
     }
     expect(typedInRomaji).toBeGreaterThan(0)
-    expect(kanaOnly).toBe(KANA_ONLY_HOMOGRAPHS)
   })
 
   it('lets one slip through, then counts it as a typo with nothing stored', () => {
@@ -378,6 +420,95 @@ describe('what an option means per question type', () => {
     expect(spellDiff(a, a + b)).toBeNull()
     // a kana that differs is no swapped kanji
     expect(spellDiff(a + 'い', a + 'う')).toBeNull()
+  })
+})
+
+describe('what a card shows around the answer', () => {
+  it('turns the options round by one when they come in the same order as on the card before', () => {
+    const a = makeCard({ id: KANJI[0].id, type: 'meaning' }, everything, seeded())
+    const b = { ...a, id: KANJI[1].id }
+    const shown = unlikePrevious(b, a)
+    expect(shown.options).toEqual([...a.options.slice(1), a.options[0]])
+    expect(new Set(shown.options)).toEqual(new Set(a.options))
+    // another order, no card before, or no options: as it is
+    const other = { ...b, options: [...b.options].reverse() }
+    expect(unlikePrevious(other, a)).toBe(other)
+    expect(unlikePrevious(b, undefined)).toBe(b)
+    const intro = makeCard({ id: KANJI[0].id, type: 'intro' }, nothing)
+    expect(unlikePrevious(intro, { ...intro })).toBe(intro)
+  })
+
+  it('pairs a wrong kanji with the right one, keywords and the lookalike hint (KR35)', () => {
+    const k = KANJI.find(x => kanjiLookalikes(x.kanji).length)!
+    const other = kanjiEntry(kanjiLookalikes(k.kanji)[0])!
+    for (const type of ['meaning', 'recognize'] as const) {
+      const card: KanjiCard = { id: k.id, home: k.kanji, type, options: [k.kanji, other.kanji], answer: k.kanji }
+      expect(missExplanation(card, other.kanji)).toEqual({
+        yours: { text: other.kanji, meaning: other.keyword },
+        right: { text: k.kanji, meaning: k.keyword },
+        hint: kanjiLookalikeHint(k.kanji, other.kanji),
+      })
+      // "Don't know": only the right one
+      expect(missExplanation(card, null)).toEqual({ yours: null, right: { text: k.kanji, meaning: k.keyword }, hint: null })
+      expect(missExplanation(card, k.kanji)).toBeNull()
+    }
+    // two kanji in no lookalike group: no hint
+    const plain = KANJI.find(x => x !== k && !kanjiLookalikes(x.kanji).includes(k.kanji))!
+    const card: KanjiCard = { id: k.id, home: k.kanji, type: 'meaning', options: [], answer: k.kanji }
+    expect(missExplanation(card, plain.kanji)?.hint).toBeNull()
+  })
+
+  it('names the swapped kanji of a wrong form, nothing for other word cards (KR35)', () => {
+    const w = WORDS.find(x => x.kanji.length === 2)!
+    const swapped = KANJI.find(x => !w.kanji.includes(x.kanji))!
+    const wrong = w.form.replace(w.kanji[0], swapped.kanji)
+    const card: KanjiCard = { id: w.id, home: w.home, type: 'spell', options: [w.form, wrong], answer: w.form }
+    expect(missExplanation(card, wrong)).toEqual({
+      yours: { text: wrong, meaning: swapped.keyword },
+      right: { text: w.form, meaning: kanjiEntry(w.kanji[0])!.keyword },
+      hint: kanjiLookalikeHint(w.kanji[0], swapped.kanji),
+    })
+    expect(missExplanation(card, null)).toBeNull()
+    expect(missExplanation({ ...card, type: 'read-choice', answer: w.reading }, 'x')).toBeNull()
+  })
+
+  it('warns on an intro only about lookalikes the learner has met (KR11)', () => {
+    const k = KANJI.find(x => kanjiLookalikes(x.kanji).length > 1) ?? KANJI.find(x => kanjiLookalikes(x.kanji).length)!
+    const all = kanjiLookalikes(k.kanji)
+    expect(introLookalikes(k.kanji, () => true)).toEqual({ others: all, hint: kanjiLookalikeHint(k.kanji, all[0]) })
+    expect(introLookalikes(k.kanji, () => false)).toBeNull()
+    const last = all[all.length - 1]
+    expect(introLookalikes(k.kanji, x => x === last)).toEqual({ others: [last], hint: kanjiLookalikeHint(k.kanji, last) })
+    expect(introLookalikes(KANJI.find(x => !kanjiLookalikes(x.kanji).length)!.kanji, () => true)).toBeNull()
+  })
+
+  it('names the table of a twin written alike, by the reading typed (KR78, KR80)', () => {
+    let found = 0
+    for (const w of WORDS) {
+      for (const t of sameForm(w)) {
+        if (t.reading === w.reading) continue
+        expect(twinTable(w.id, t.reading), `${w.id} ${t.id}`).toBe(t.group ? groupById(t.group)!.title : null)
+        if (t.group && !w.group) found++
+      }
+      expect(twinTable(w.id, w.reading)).toBeNull()
+    }
+    // the plain number word with a twin in a table is in the data
+    expect(found).toBeGreaterThan(0)
+  })
+})
+
+describe('metSoFar', () => {
+  it('takes what was answered and what this session brings, words only when practiced', () => {
+    const k = KANJI[0]
+    const w = WORDS[0]
+    const stats: KanjiStatsMap = {
+      [k.id]: { ...newKanjiEntry(k.id), correct: 1 },
+      [w.id]: { ...newKanjiEntry(w.id), incorrect: 1 },
+      [KANJI[1].id]: newKanjiEntry(KANJI[1].id),
+    }
+    const met = metSoFar(stats, [KANJI[2].id, WORDS[1].id, groupCardId(wordGroups()[0].id), 'w:nothing:here'])
+    expect(met.kanji).toEqual(new Set([k.kanji, KANJI[2].kanji]))
+    expect(met.words).toEqual(new Set([w.id, WORDS[1].id]))
   })
 })
 
@@ -445,40 +576,107 @@ describe('word groups in cards and sessions', () => {
     const w = groupPractice(g)[0]
     expect(makeCard({ id: w.id, type: 'intro', after: groupCardId(g.id) }, nothing).after).toBe(groupCardId(g.id))
   })
+})
 
-  // a learner who does one smart session of 20 a day and answers every card right: the last
-  // kanji and its words come around day 145, the run goes on a while longer to be sure
-  const SIMULATED_DAYS = 200
-  function everyDay(days: number) {
-    const stats: KanjiStatsMap = {}
-    const opened: Array<{ group: string; day: number }> = []
-    for (let day = 1; day <= days; day++) {
-      let now = NOW + (day - 1) * 24 * 60 * 60 * 1000
-      const plan = planKanji(stats, [], PLAN_COURSE, 20, now, 3)
-      if (plan.group) opened.push({ group: plan.group.id, day })
-      const cards = orderKanjiSession(plan, seeded(day))
-      for (const [i, c] of cards.entries()) {
-        if (c.type === 'intro') {
-          if (c.id === groupCardId(plan.group?.id ?? '')) {
-            // the table comes before every card of its words
-            for (const id of plan.group!.words) expect(cards.findIndex(x => x.id === id)).toBeGreaterThan(i)
-          }
-          continue
-        }
-        const type = c.type ?? (kanjiOfId(c.id) ? 'meaning' : 'read-choice')
-        stats[c.id] = applyKanjiAnswer(stats[c.id], { id: c.id, type, correct: true, given: '', ms: 1000 }, now)
-        now += 10_000
+// A learner who does one smart session a day (20 cards and 3 new unless said otherwise), run through the session the way useKanji
+// does it: readyCard before each card, a miss comes back through reaskCards, a right answer
+// after a miss holds the box. `missRate` of the answers go wrong, drawn from a seeded rng.
+// The rules of a session are checked on every card on the way.
+function simulate(days: number, missRate: number, size = 20, newLimit = 3) {
+  const stats: KanjiStatsMap = {}
+  const log: KanjiAnswerRecord[] = []
+  const rng = seeded(7)
+  const opened: Array<{ group: string; day: number }> = []
+  const tables = new Set<string>()
+  const lastKanji = PLAN_COURSE.kanji[PLAN_COURSE.kanji.length - 1]
+  let lastKanjiDay = 0
+  let reasks = 0
+  let capped = 0
+  for (let day = 1; day <= days; day++) {
+    let now = NOW + (day - 1) * DAY
+    const plan = planKanji(stats, log, PLAN_COURSE, size, now, newLimit)
+    const settling = Object.values(stats).filter(e => e.box <= 1).length
+    if (settling >= MAX_KANJI_LEARNING) {
+      // nothing new while twelve settle (KR31), and the hero says so
+      expect(plan.fresh.length + plan.waitingWords.length + (plan.group ? 1 : 0), `day ${day}`).toBe(0)
+      if (plan.fill.length >= 6) capped++  // room for a new kanji went to early reviews instead
+    }
+    if (plan.group) {
+      opened.push({ group: plan.group.id, day })
+      // opened only once the counter was reviewed on a later day (KR76)
+      expect(stats[PLAN_COURSE.groups.find(g => g.id === plan.group!.id)!.home].box).toBeGreaterThanOrEqual(2)
+    }
+    if (plan.fresh.includes(lastKanji)) lastKanjiDay = day
+
+    const seenBefore = new Set(Object.keys(stats))
+    const introduced = new Set<string>()
+    let cards = orderKanjiSession(plan, seeded(day))
+    const planned = cards.length
+    expect(planned).toBeLessThanOrEqual(size)
+    let added = 0
+    let results: RoundResults = {}
+    const right = new Set<string>()
+    const reasked: Record<string, number> = {}
+    for (let i = 0; i < cards.length; i++) {
+      if (i > 0) cards = readyCard(cards, i, right)
+      if (i >= cards.length) break
+      const c = cards[i]
+      if (c.type === 'intro') {
+        // a first word only once its kanji was answered right (KR14), a group word behind its table
+        if (c.needs) expect(right.has(c.needs), `${c.id} on day ${day}`).toBe(true)
+        if (c.after) expect(tables.has(c.after), `${c.id} on day ${day}`).toBe(true)
+        if (cardGroup(c.id)) tables.add(c.id)
+        introduced.add(c.id)
+        continue
       }
-    }
-    return { stats, opened }
-  }
+      // no question about an item before its intro, no group word before its table was shown
+      if (!seenBefore.has(c.id)) expect(introduced.has(c.id), `${c.id} on day ${day}`).toBe(true)
+      const group = wordById(c.id)?.group
+      if (group) expect(tables.has(groupCardId(group)), `${c.id} on day ${day}`).toBe(true)
 
-  it('opens every group once, after its counter was reviewed on a later day, and brings all its words', () => {
-    // long enough for the last kanji and all its words at this pace, with room to spare
-    const { stats, opened } = everyDay(SIMULATED_DAYS)
-    expect(opened.map(o => o.group).sort()).toEqual(wordGroups().map(g => g.id).sort())
-    for (const g of wordGroups()) {
-      for (const w of groupPractice(g)) expect(stats[w.id]?.correct, w.id).toBeGreaterThan(0)
+      const type = c.type ?? (kanjiOfId(c.id) ? 'meaning' : 'read-choice')
+      const correct = rng() >= missRate
+      stats[c.id] = applyKanjiAnswer(stats[c.id], { id: c.id, type, correct, given: '', ms: 1000, holdBox: holdsBox(results, c.id, correct) }, now)
+      log.push({ id: c.id, type, correct, given: '', ms: 1000, t: now })
+      results = noteResult(results, c.id, correct)
+      if (correct) right.add(c.id)
+      else {
+        const slot = reaskCards(cards, i, c.id, type, reasked[c.id] ?? 0, rng)
+        if (slot) {
+          reasked[c.id] = (reasked[c.id] ?? 0) + 1
+          cards = [...cards.slice(0, slot.index), ...slot.cards, ...cards.slice(slot.index)]
+          added += slot.cards.length
+          reasks++
+        }
+      }
+      now += 10_000
     }
+    // no session over its size, plus what the re-asks brought
+    expect(cards.length, `day ${day}`).toBeLessThanOrEqual(planned + added)
+  }
+  return { stats, opened, lastKanjiDay, reasks, capped }
+}
+
+describe('a learner over months', () => {
+  const allIds = [...PLAN_COURSE.kanji, ...PLAN_COURSE.words.map(w => w.id)]
+  const groupIds = wordGroups().map(g => g.id).sort()
+
+  it('who answers everything right meets every kanji and word, every group once', () => {
+    const { stats, opened, lastKanjiDay } = simulate(200, 0)
+    // the last kanji comes on day 141 at this pace, a little slack for course edits
+    expect(lastKanjiDay).toBeGreaterThan(100)
+    expect(lastKanjiDay).toBeLessThanOrEqual(155)
+    expect(allIds.filter(id => !stats[id]?.correct)).toEqual([])
+    expect(opened.map(o => o.group).sort()).toEqual(groupIds)
+  })
+
+  it('who misses some keeps every rule of a session, re-asks included, and still opens every group', () => {
+    // sessions of 30 with 5 new: at 20 the due reviews fill every day the cap is reached, it never decides
+    const { stats, opened, reasks, capped } = simulate(320, 0.15, 30, 5)
+    // the misses really ran through the re-asks and the cap
+    expect(reasks).toBeGreaterThan(100)
+    expect(capped).toBeGreaterThan(0)
+    expect(opened.map(o => o.group).sort()).toEqual(groupIds)
+    expect(allIds.filter(id => !stats[id])).toEqual([])
   })
 })

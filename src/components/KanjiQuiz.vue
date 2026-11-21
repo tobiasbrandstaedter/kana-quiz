@@ -2,9 +2,9 @@
 import { inject, ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import { QUIZ_KEY } from '../composables/useQuiz'
 import { useKanji } from '../composables/useKanji'
-import { courseEntries, groupById, kanjiEntry, kanjiLookalikeHint, kanjiLookalikes, kanjiStrokes, sameForm, wordById } from '../data/kanjiData'
+import { courseEntries, groupById, kanjiEntry, kanjiStrokes, sameForm, wordById } from '../data/kanjiData'
 import { isSeen } from '../learning/scheduler'
-import { optionText, spellDiff } from '../learning/kanjiCards'
+import { introLookalikes, missExplanation, optionText } from '../learning/kanjiCards'
 import { glyphShift, polylinePoints } from '../data/strokeGlyphs'
 import { setCourse } from '../kanjiShell'
 import { cardGroup, kanjiId } from '../kanjiKeys'
@@ -90,39 +90,18 @@ const parts = computed(() => courseEntries(entry.value?.parts ?? []))
 // one line per kanji of the word: its meaning in this word where the course gives one, else its keyword
 const wordKanji = computed(() => word.value?.kanji.map(k => ({ kanji: k, meaning: word.value!.meanings[k] ?? kanjiEntry(k)?.keyword ?? '' })) ?? [])
 
-// lookalikes the learner knows or meets in this session, the rest would be noise
+// lookalikes the learner knows or meets in this session (KR11)
 const introWarning = computed(() => {
   const c = card.value
   if (!c || !kanjiIntro.value) return null
-  const met = (k: string) => isSeen(statOf(kanjiId(k))) || cards.value.some(x => x.id === kanjiId(k))
-  const others = kanjiLookalikes(c.home).filter(met)
-  if (others.length === 0) return null
-  return { others, hint: kanjiLookalikeHint(c.home, others[0]) }
+  return introLookalikes(c.home, k => isSeen(statOf(kanjiId(k))) || cards.value.some(x => x.id === kanjiId(k)))
 })
 
-// picked against right after a miss (KR35), only the right one after "Don't know". For a
-// written form the kanji that differs, each with its keyword
+// picked against right after a miss (KR35)
 const explanation = computed(() => {
   const c = card.value
   if (!c || !answered.value || correct.value) return null
-  if (c.type === 'meaning' || c.type === 'recognize') {
-    const yours = pickedOption.value ? kanjiEntry(pickedOption.value) : null
-    const right = entry.value!
-    return {
-      yours: yours && { text: yours.kanji, meaning: yours.keyword },
-      right: { text: right.kanji, meaning: right.keyword },
-      hint: yours ? kanjiLookalikeHint(c.home, yours.kanji) : null,
-    }
-  }
-  const diff = c.type === 'spell' && pickedOption.value ? spellDiff(c.answer, pickedOption.value) : null
-  if (diff) {
-    return {
-      yours: { text: pickedOption.value!, meaning: kanjiEntry(diff.given)!.keyword },
-      right: { text: c.answer, meaning: kanjiEntry(diff.right)!.keyword },
-      hint: kanjiLookalikeHint(diff.right, diff.given),
-    }
-  }
-  return null
+  return missExplanation(c, pickedOption.value)
 })
 
 // the word that another reading comes from, for "that is how X is read in Y" (KR33)

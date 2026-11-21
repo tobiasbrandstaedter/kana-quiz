@@ -1,17 +1,11 @@
 import { describe, it, expect } from 'vitest'
 import { itemRow, openKanjiErrors, sortKanjiRows } from './kanjiProgress'
-import { newKanjiEntry } from './kanjiStats'
 import { MASTERED_BOX } from './scheduler'
-import type { ItemInfo, KanjiAnswerRecord, KanjiRow, KanjiStatEntry, KanjiStatsMap } from '../types'
+import { DAY, IDS as ALL_IDS, NOW, stat, statsOf } from './kanjiFixtures'
+import type { ItemInfo, KanjiAnswerRecord, KanjiRow } from '../types'
 
 // letters stand in for kanji, nothing here is course content
-const IDS = ['A', 'B', 'C', 'D', 'E', 'F'].map(k => `k:${k}`)
-
-const DAY = 24 * 60 * 60 * 1000
-const NOW = 1_800_000_000_000
-
-const stat = (id: string, patch: Partial<KanjiStatEntry>): KanjiStatEntry => ({ ...newKanjiEntry(id), ...patch })
-const statsOf = (...stats: KanjiStatEntry[]): KanjiStatsMap => Object.fromEntries(stats.map(e => [e.id, e]))
+const IDS = ALL_IDS.slice(0, 6)
 const miss = (id: string, t = NOW): KanjiAnswerRecord => ({ id, type: 'meaning', correct: false, given: '', ms: 1000, t })
 
 describe('openKanjiErrors', () => {

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { seeded } from './seeded'
-import { kanjiQuestionType, pickKanjiOptions, makeKanjiCard, noteResult, summarizeRound, resultScore, resultLabel, splitMoves } from './kanjiQuiz'
+import { holdsBox, kanjiQuestionType, pickKanjiOptions, makeKanjiCard, noteResult, summarizeRound, resultScore, resultLabel, splitMoves } from './kanjiQuiz'
 import type { RoundResults } from './kanjiQuiz'
 import { newKanjiEntry } from './kanjiStats'
 import type { KanjiEntry } from '../types'
@@ -115,6 +115,18 @@ describe('round scoring', () => {
     expect(summarizeRound(r)).toEqual({ total: 3, first: 1, fixed: 1, open: 1 })
     expect(summarizeRound({})).toEqual({ total: 0, first: 0, fixed: 0, open: 0 })
   })
+
+  it('holds the box on a right answer after a miss of the same item this round, nothing else', () => {
+    let r: RoundResults = noteResult({}, 'k:A', false)
+    r = noteResult(r, 'k:B', true)
+    expect(holdsBox(r, 'k:A', true)).toBe(true)
+    // a miss moves the box down anyway, a first answer or one right so far moves as usual
+    expect(holdsBox(r, 'k:A', false)).toBe(false)
+    expect(holdsBox(r, 'k:B', true)).toBe(false)
+    expect(holdsBox(r, 'k:C', true)).toBe(false)
+    // still held once it was right on the re-ask
+    expect(holdsBox(noteResult(r, 'k:A', true), 'k:A', true)).toBe(true)
+  })
 })
 
 describe('resultScore and resultLabel', () => {
@@ -132,6 +144,8 @@ describe('resultScore and resultLabel', () => {
     expect(resultLabel(round(5, 2, 3)).title).toBe('Got there!')
     expect(resultLabel(round(5, 4)).title).toBe('Great work')
     expect(resultLabel(round(5, 1, 1)).detail).toBe('1 of 5 kanji and words on the first try · 1 right on retry · 3 still open')
+    expect(resultLabel(round(1, 1)).detail).toBe('1 of 1 kanji or word on the first try')
+    expect(resultLabel(round(2, 0, 2)).detail).toBe('0 of 2 kanji and words on the first try · 2 right on retry')
   })
 })
 

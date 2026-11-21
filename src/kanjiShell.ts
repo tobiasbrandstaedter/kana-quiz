@@ -3,7 +3,7 @@
 // the chunk. It reads the kanji keys straight from storage and imports nothing of the chunk.
 import { ref, computed } from 'vue'
 import type { Course, KanjiMode, KanjiStatsMap } from './types'
-import { KANJI_PREFS_KEY, KANJI_PROGRESS_KEYS, KANJI_STATS_KEY, kanjiOfId } from './kanjiKeys'
+import { KANJI_PREFS_KEY, KANJI_PROGRESS_KEYS, KANJI_STATS_KEY, hasKanjiProgress, kanjiOfId } from './kanjiKeys'
 import { hasOpenError, isDue, isSeen } from './learning/scheduler'
 import { clock } from './clock'
 
@@ -102,4 +102,17 @@ export const kanjiErrors = computed(() => Object.values(stored.value).filter(e =
 /** Kanji with stored progress, words not counted. */
 export const kanjiTracked = computed(() => Object.keys(stored.value).filter(id => kanjiOfId(id) !== null).length)
 
+/** Any kanji progress key in storage, whatever it holds. */
+export const kanjiStored = computed(() => {
+  // only read so this runs again after every kanji write and the reset
+  kanjiRevision.value
+  return hasKanjiProgress(key => {
+    try { return localStorage.getItem(key) } catch { return null }
+  })
+})
+
 export const loadKanji = () => import('./kanjiChunk')
+
+// the kanji tabs are what comes up first, so the fetch runs while the shell mounts.
+// A failure is KanjiPart's to show, it asks again
+if (course.value === 'kanji') loadKanji().catch(() => {})

@@ -77,7 +77,7 @@ describe('kanji', () => {
     }
   })
 
-  it('has a one line hook without dashes (KR62)', () => {
+  it('has a one line hook without dashes', () => {
     for (const k of kanjiList) {
       expect(k.hook.trim(), k.kanji).not.toBe('')
       expect(k.hook, k.kanji).not.toMatch(/\n/)
@@ -170,7 +170,7 @@ describe('word groups', () => {
 })
 
 describe('lookalikes and close meanings', () => {
-  it('group only course kanji, with a one line hint without dashes (KR62)', () => {
+  it('group only course kanji, with a one line hint without dashes', () => {
     for (const g of KANJI_LOOKALIKES) {
       expect(g.kanji.length).toBeGreaterThanOrEqual(2)
       for (const k of g.kanji) expect(order, k).toContain(k)
@@ -178,6 +178,19 @@ describe('lookalikes and close meanings', () => {
       expect(g.hint, g.kanji.join('')).not.toMatch(/\n/)
       expect(g.hint, g.kanji.join('')).not.toMatch(DASHES)
     }
+  })
+
+  it('put lookalikes that share a set next to each other (KR9)', () => {
+    let shared = 0
+    for (const g of KANJI_LOOKALIKES) {
+      for (const s of KANJI_SETS) {
+        const at = s.kanji.flatMap((k, i) => g.kanji.includes(k.kanji) ? [i] : [])
+        if (at.length < 2) continue
+        shared++
+        expect(at[at.length - 1] - at[0], `${g.kanji.join('')} in ${s.id}`).toBe(at.length - 1)
+      }
+    }
+    expect(shared).toBeGreaterThan(0)
   })
 
   it('pair only keywords or glosses of the course (KR15)', () => {

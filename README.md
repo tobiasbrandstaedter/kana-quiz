@@ -147,7 +147,8 @@ NODE_USE_ENV_PROXY=1 node scripts/extract-strokes.mjs
 The generated files share those licences. The EDRDG licence asks for the data to be kept current, so it is rebuilt with every release that touches kanji content and at least twice a year:
 
 1. bump the pinned versions at the top of `scripts/extract-kanji.mjs`
-2. run `node scripts/extract-kanji.mjs` (behind a proxy with `NODE_USE_ENV_PROXY=1`)
-3. run `pnpm test`
+2. run `node scripts/extract-kanji.mjs` (behind a proxy with `NODE_USE_ENV_PROXY=1`); it stops at each refreshed source because its sha256 no longer matches and prints the new hash
+3. look at what changed in that source, put the new hash next to its version at the top of the script and run it again, until it writes the files
+4. run `pnpm test`
 
 `node scripts/extract-kanji.mjs --candidates` also writes `scripts/.cache/candidates.md`, the words and readings to pick the course content in `src/data/kanjiCourse.ts` from.

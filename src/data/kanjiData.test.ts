@@ -63,10 +63,18 @@ describe('words', () => {
 
   it('know the other practiced words written the same way, group words included (KR78)', () => {
     for (const w of practicedWords()) {
-      const twins = sameForm(w)
-      expect(twins.map(t => t.id)).toEqual(practicedWords().filter(o => o.form === w.form && o.id !== w.id).map(o => o.id))
-      expect(twins).not.toContain(w)
+      for (const t of sameForm(w)) {
+        expect(t.form).toBe(w.form)
+        expect(t.id).not.toBe(w.id)
+        // both ways round, so either card can name the other
+        expect(sameForm(t)).toContain(w)
+      }
     }
+    // and nothing is missed: as many twins in all as pairs of practiced words written alike
+    const forms = practicedWords().map(w => w.form)
+    const pairs = forms.reduce((n, f, i) => n + forms.slice(i + 1).filter(g => g === f).length, 0)
+    expect(practicedWords().reduce((n, w) => n + sameForm(w).length, 0)).toBe(2 * pairs)
+    expect(pairs).toBeGreaterThan(0)
     // a group word can share its form with a course word
     expect(practicedWords().some(w => w.group && sameForm(w).some(t => t.group === null))).toBe(true)
   })
@@ -165,9 +173,9 @@ describe('lookalikes and close meanings', () => {
   })
 })
 
-// Skipped while kanjiCourse.ts has no groups yet, runs as soon as the first one is in.
-describe.skipIf(WORD_GROUPS.length === 0)('word groups', () => {
+describe('word groups', () => {
   it('merge every member and question word of the course, in table order', () => {
+    expect(WORD_GROUPS.length).toBeGreaterThan(0)
     expect(wordGroups().map(g => g.id)).toEqual(WORD_GROUPS.map(g => g.id))
     WORD_GROUPS.forEach((course, i) => {
       const g = wordGroups()[i]

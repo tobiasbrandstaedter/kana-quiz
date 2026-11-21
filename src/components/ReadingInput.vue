@@ -3,6 +3,7 @@ import { ref, computed, nextTick, onMounted } from 'vue'
 import type { WordGroupEntry } from '../types'
 import { useKanji } from '../composables/useKanji'
 import { cleanTyped, hasKanji, previewParts } from '../learning/kanaInput'
+import { twinTable } from '../learning/kanjiCards'
 
 // The typed reading of a word card (R2, KR20): the field keeps what was typed, the hiragana it
 // turns into shows below it, and the hint when the card asks again. The parent mounts one per
@@ -10,7 +11,7 @@ import { cleanTyped, hasKanji, previewParts } from '../learning/kanaInput'
 const props = defineProps<{ gloss: string; group: WordGroupEntry | null }>()
 const emit = defineEmits<{ table: [] }>()
 
-const { typedAnswer, answered, correct, slipped, verdict, submitTyped, next } = useKanji()
+const { card, typedAnswer, answered, correct, slipped, verdict, submitTyped, next } = useKanji()
 
 // Letters that make no kana yet stay letters, shown apart. Rewriting the value of the field
 // under the iOS keyboard breaks typing, so only the preview shows kana.
@@ -23,6 +24,9 @@ const retryHint = computed(() => {
   if (answered.value || !v) return null
   return v.result === 'slip' || v.result === 'homograph' || v.result === 'kanji' ? v : null
 })
+
+const twinTitle = computed(() =>
+  retryHint.value?.result === 'homograph' && card.value ? twinTable(card.value.id, retryHint.value.kana) : null)
 
 // :value and @input instead of v-model: v-model ignores input while a Japanese keyboard
 // composes, the preview and Check would stay dead until the composition ends
@@ -67,7 +71,7 @@ defineExpose({ check, canSend })
       autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
       enterkeyhint="go"
       placeholder="type romaji..."
-      maxlength="40"
+      maxlength="24"
       :readonly="answered"
       @input="onInput"
       @keydown.enter="onEnter"
@@ -83,6 +87,11 @@ defineExpose({ check, canSend })
         <span class="kana" lang="ja">{{ retryHint.kana }}</span> is a way to read this spelling, but this card wants
         the reading of the table {{ props.group.title }}. Try again.
         <button class="btn btn-sm type-hint-btn" @click="emit('table')">Show the table</button>
+      </template>
+      <!-- the twin is a group word: its table tells them apart, the glosses can be alike (KR78) -->
+      <template v-else-if="twinTitle">
+        <span class="kana" lang="ja">{{ retryHint.kana }}</span> is how this spelling is read in the table {{ twinTitle }}.
+        Here it stands on its own as the word for "{{ props.gloss }}", try again.
       </template>
       <template v-else>
         <span class="kana" lang="ja">{{ retryHint.kana }}</span> is also a way to read this spelling, but for another word.

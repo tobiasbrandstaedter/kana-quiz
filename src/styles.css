@@ -573,9 +573,10 @@ body {
 
 /* a kanji set in the picker: a row button with title and kanji, bar and error dot as for rows */
 .set-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
-.col-btn.set-btn { align-items: flex-start; justify-content: flex-start; gap: 2px; padding: 8px 12px 16px; text-align: left; }
+.col-btn.set-btn { container-type: inline-size; align-items: flex-start; justify-content: flex-start; gap: 2px; padding: 8px 12px 16px; text-align: left; }
 .set-title { padding-right: 12px; font-size: 14px; font-weight: 900; line-height: 1.2; }
-.set-kanji { font-size: 20px; font-weight: 700; line-height: 1.3; letter-spacing: 0.06em; color: var(--ink-2); overflow-wrap: anywhere; }
+/* --n is the number of kanji: seven or eight shrink to stay on one line in a phone's two columns */
+.set-kanji { font-size: min(20px, 100cqi / (var(--n, 5) * 1.06)); font-weight: 700; line-height: 1.3; letter-spacing: 0.06em; color: var(--ink-2); white-space: nowrap; }
 .col-btn.active .set-kanji { color: var(--on-primary); }
 
 .custom-start { display: flex; gap: 12px; align-items: stretch; margin-top: 22px; }
@@ -1084,6 +1085,9 @@ body {
 .outcome-line.up .outcome-tag { background: var(--butter-soft); color: var(--warn-text); }
 .outcome-line.down .outcome-tag { background: var(--bad-soft); color: var(--bad-text); }
 .outcome-line .kana { font-size: 24px; font-weight: 700; letter-spacing: 0.12em; }
+.outcome-items { display: inline-flex; flex-wrap: wrap; gap: 0 0.4em; }
+/* the reading of a word in a list of kanji and words: the kanji and its one kanji word look alike without it */
+.item-reading { margin-left: 2px; font-family: var(--kana-font); font-size: 0.6em; font-weight: 700; letter-spacing: 0; color: var(--ink-2); }
 .outcome-next { padding-top: 10px; border-top: var(--bw) dashed var(--line-soft); font-size: 15px; font-weight: 800; }
 
 .missed-title { font-size: 16px; font-weight: 900; margin-bottom: 12px; }
@@ -1228,6 +1232,9 @@ body {
   cursor: pointer;
 }
 .chart-more small { margin-left: 6px; font-size: 13px; font-weight: 700; color: var(--ink-2); }
+/* a folded kanji set: set titles are longer than row names, one size down keeps them on one line at 375px */
+.chart-more.set-more { gap: 8px; font-size: 14px; }
+.chart-more.set-more small { margin-left: 4px; font-size: 12px; }
 
 .no-errors-state, .no-stats-state, .kanji-load { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 28px 20px; margin-bottom: 8px; border: var(--bw) dashed var(--line-soft); border-radius: 18px; color: var(--ink-2); text-align: center; }
 .no-errors-state .big { width: 64px; height: 64px; display: flex; align-items: center; justify-content: center; border: var(--bw) solid var(--edge); border-radius: 50%; background: var(--good-soft); color: var(--good-text); }
@@ -1608,6 +1615,9 @@ label.btn:focus-within { outline: 3px solid var(--focus); outline-offset: 2px; }
   left: 50%;
   transform: translateX(-50%);
   z-index: 30;
+  /* left: 50% leaves a fixed box only half the screen to shrink into, a longer toast with a
+     button then wrapped one word per line on a phone. A toast that fit looks as before */
+  width: max-content;
   max-width: calc(100% - 32px);
   padding: 12px 16px;
   border: var(--bw) solid var(--edge);

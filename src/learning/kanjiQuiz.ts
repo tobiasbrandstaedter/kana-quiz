@@ -72,6 +72,9 @@ export function noteResult(results: RoundResults, id: string, correct: boolean):
   return { ...results, [id]: { missed: (prev?.missed ?? false) || !correct, last: correct } }
 }
 
+/** Right on the re-ask, seconds after seeing the answer, is no reason to promote: the box holds. */
+export const holdsBox = (results: RoundResults, id: string, correct: boolean): boolean => correct && !!results[id]?.missed
+
 /** Scored once per item: first try means never missed this round. */
 export function summarizeRound(results: RoundResults): { total: number; first: number; fixed: number; open: number } {
   const all = Object.values(results)
@@ -96,7 +99,7 @@ export function resultLabel({ total, first, fixed, open }: RoundSummary): { titl
     pct >= 80   ? ['Great work', 'よくできました'] :
     pct >= 60   ? ['Keep practicing', 'もう少し'] :
                   ['Keep studying', '頑張って！']
-  const parts = [`${first} of ${total} kanji and words on the first try`]
+  const parts = [`${first} of ${total} ${total === 1 ? 'kanji or word' : 'kanji and words'} on the first try`]
   if (fixed) parts.push(`${fixed} right on retry`)
   if (open) parts.push(`${open} still open`)
   return { title, jp, detail: parts.join(' · ') }

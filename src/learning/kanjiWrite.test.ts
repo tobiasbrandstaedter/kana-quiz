@@ -1,14 +1,16 @@
 import { describe, it, expect } from 'vitest'
-import { recallAnswers, trimLog, writeCorrect, writePractice, writeQuizIds, writtenClean } from './kanjiWrite'
+import { peekedAfter, recallAnswers, trimLog, writeCorrect, writePractice, writeQuizIds, writtenClean } from './kanjiWrite'
+import type { WriteTabEvent } from './kanjiWrite'
 import { newKanjiEntry } from './kanjiStats'
 import { pickedKanjiIds } from './kanjiPlan'
 import type { KanjiAnswerRecord, KanjiStatsMap } from '../types'
 
-const DAY = 24 * 60 * 60 * 1000
-// noon, so a few hours either way stay on the same local day
+import { DAY, stat } from './kanjiFixtures'
+
+// not the shared NOW: local noon, so a few hours either way stay on the same local day
 const NOW = new Date(2027, 0, 13, 12).getTime()
 
-const seen = (id: string) => ({ ...newKanjiEntry(id), correct: 1, box: 1 })
+const seen = (id: string) => stat(id, { correct: 1, box: 1 })
 const record = (patch: Partial<KanjiAnswerRecord>): KanjiAnswerRecord =>
   ({ id: 'k:A', type: 'write', correct: true, given: '', ms: 0, t: NOW, ...patch })
 
@@ -97,5 +99,33 @@ describe('writeCorrect', () => {
     expect(writeCorrect(true, false)).toBe(true)
     expect(writeCorrect(true, true)).toBe(false)
     expect(writeCorrect(false, false)).toBe(false)
+  })
+})
+
+describe('peekedAfter (the Writing tab, KR50)', () => {
+  // run events from a start, as the tab does
+  const run = (start: boolean, ...events: WriteTabEvent[]) => events.reduce(peekedAfter, start)
+
+  it('counts a kanji picked while writing as unseen, picked in Watch or Trace as seen', () => {
+    expect(run(true, { kind: 'pick', view: 'recall' })).toBe(false)
+    expect(run(false, { kind: 'pick', view: 'watch' })).toBe(true)
+    expect(run(false, { kind: 'pick', view: 'trace' })).toBe(true)
+  })
+
+  it('keeps what was when going to Write from another view, any other view shows the kanji', () => {
+    expect(run(false, { kind: 'view', from: 'watch', to: 'recall' })).toBe(false)
+    expect(run(true, { kind: 'view', from: 'trace', to: 'recall' })).toBe(true)
+    expect(run(false, { kind: 'view', from: 'recall', to: 'watch' })).toBe(true)
+    expect(run(false, { kind: 'view', from: 'recall', to: 'trace' })).toBe(true)
+  })
+
+  it('counts Write tapped again while writing as seen, the strokes so far were on screen', () => {
+    expect(run(false, { kind: 'view', from: 'recall', to: 'recall' })).toBe(true)
+  })
+
+  it('counts everything after a finished drawing as seen', () => {
+    expect(run(false, { kind: 'done' })).toBe(true)
+    // picked in Write, written, then written again: only the first one was from memory
+    expect(run(true, { kind: 'pick', view: 'recall' }, { kind: 'done' })).toBe(true)
   })
 })

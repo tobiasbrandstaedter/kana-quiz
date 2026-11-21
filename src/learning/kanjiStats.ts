@@ -1,4 +1,4 @@
-import type { KanjiAnswerInput, KanjiStatEntry, KanjiStatsMap, StrokeFault } from '../types'
+import type { KanjiAnswerInput, KanjiAnswerRecord, KanjiStatEntry, KanjiStatsMap, StrokeFault } from '../types'
 import { review, KANJI_INTERVALS } from './scheduler'
 import { kanjiOfId } from '../kanjiKeys'
 
@@ -9,14 +9,63 @@ export function newKanjiEntry(id: string): KanjiStatEntry {
   }
 }
 
-/** What storage holds, as a map. Fields added after an entry was written get their defaults. */
-export function normalizeKanjiStats(raw: unknown): KanjiStatsMap {
-  if (!raw || typeof raw !== 'object') return {}
-  const out: KanjiStatsMap = {}
-  for (const [id, e] of Object.entries(raw as Record<string, unknown>)) {
-    if (e && typeof e === 'object') out[id] = { ...newKanjiEntry(id), ...(e as Partial<KanjiStatEntry>), id }
+const isObject = (x: unknown): x is Record<string, unknown> => !!x && typeof x === 'object' && !Array.isArray(x)
+const num = (x: unknown): number => typeof x === 'number' && Number.isFinite(x) ? x : 0
+
+// storage and backups can be edited by hand: every key below is user text, __proto__ included
+function counts(raw: unknown): Record<string, number> {
+  const out: Record<string, number> = {}
+  if (!isObject(raw)) return out
+  for (const [k, n] of Object.entries(raw)) {
+    if (k !== '__proto__' && typeof n === 'number' && Number.isFinite(n)) out[k] = n
   }
   return out
+}
+
+function directions(raw: unknown): KanjiStatEntry['byType'] {
+  const out: Record<string, { correct: number; incorrect: number }> = {}
+  if (!isObject(raw)) return out
+  for (const [k, d] of Object.entries(raw)) {
+    if (k !== '__proto__' && isObject(d)) out[k] = { correct: num(d.correct), incorrect: num(d.incorrect) }
+  }
+  return out
+}
+
+function entry(id: string, e: Record<string, unknown>): KanjiStatEntry {
+  const box = num(e.box)
+  return {
+    id,
+    correct: num(e.correct), incorrect: num(e.incorrect), totalMs: num(e.totalMs), count: num(e.count),
+    lastSeen: num(e.lastSeen), lastWrong: num(e.lastWrong), resolvedAt: num(e.resolvedAt), streak: num(e.streak),
+    confusions: counts(e.confusions),
+    byType: directions(e.byType),
+    mistakes: counts(e.mistakes),
+    box: Number.isInteger(box) ? Math.min(Math.max(box, 0), KANJI_INTERVALS.length - 1) : 0,
+    due: num(e.due),
+    strokeErrors: Array.isArray(e.strokeErrors) ? e.strokeErrors.map(num) : [],
+    strokeFaults: counts(e.strokeFaults),
+  }
+}
+
+/**
+ * What storage holds, as a map. Fields added after an entry was written get their defaults,
+ * and anything of the wrong shape is dropped or set back, a crafted backup included: only
+ * `k:` and `w:` ids, plain objects and finite numbers inside, a box in range.
+ */
+export function normalizeKanjiStats(raw: unknown): KanjiStatsMap {
+  const out: KanjiStatsMap = {}
+  if (!isObject(raw)) return out
+  for (const [id, e] of Object.entries(raw)) {
+    if ((id.startsWith('k:') || id.startsWith('w:')) && isObject(e)) out[id] = entry(id, e)
+  }
+  return out
+}
+
+/** The stored answer log, records without a string id and type or a finite time dropped. */
+export function normalizeKanjiLog(raw: unknown): KanjiAnswerRecord[] {
+  if (!Array.isArray(raw)) return []
+  return raw.filter((r): r is KanjiAnswerRecord =>
+    isObject(r) && typeof r.id === 'string' && typeof r.type === 'string' && typeof r.t === 'number' && Number.isFinite(r.t))
 }
 
 /**

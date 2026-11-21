@@ -7,6 +7,9 @@ export const KANJI_PREFS_KEY = 'kanji_prefs'
 export const KANJI_PROGRESS_KEYS = [KANJI_STATS_KEY, KANJI_ANSWERS_KEY]
 export const KANJI_KEYS = [...KANJI_PROGRESS_KEYS, KANJI_PREFS_KEY]
 
+// Reset and Export go by this, not by the counts: a broken value still has to be wipeable
+export const hasKanjiProgress = (get: (key: string) => string | null) => KANJI_PROGRESS_KEYS.some(key => get(key) !== null)
+
 // a kanji item is `k:日`, a word `w:...` (see wordId in data/kanjiData.ts)
 export const kanjiId = (kanji: string) => `k:${kanji}`
 

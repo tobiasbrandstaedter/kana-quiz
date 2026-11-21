@@ -1,5 +1,7 @@
 <script setup lang="ts">
+import type { ItemInfo } from '../types'
 import type { KanjiPattern } from '../learning/kanjiPatterns'
+import { itemInfo } from '../learning/kanjiCards'
 
 // The kanji twin of PatternCards: the text comes in pieces, the Japanese ones marked as such (KR57)
 defineProps<{
@@ -11,6 +13,9 @@ defineProps<{
 const emit = defineEmits<{
   practice: [pattern: KanjiPattern]
 }>()
+
+// a word shows its reading, or a kanji and its one kanji word would look the same
+const chipItems = (p: KanjiPattern) => p.chips.slice(0, 12).map(itemInfo).filter((item): item is ItemInfo => !!item)
 </script>
 
 <template>
@@ -26,7 +31,7 @@ const emit = defineEmits<{
           <span v-for="(piece, j) in p.detail" :key="j" :class="{ kana: piece.ja }" :lang="piece.ja ? 'ja' : undefined">{{ piece.text }}</span>
         </div>
         <div class="pattern-kana">
-          <span v-for="(c, j) in p.chips.slice(0, 12)" :key="j" lang="ja">{{ c }}</span>
+          <span v-for="item in chipItems(p)" :key="item.id" lang="ja">{{ item.text }}<small v-if="item.kind === 'word'" class="item-reading">{{ item.reading }}</small></span>
           <span v-if="p.chips.length > 12" class="more">+{{ p.chips.length - 12 }}</span>
         </div>
       </div>

@@ -1,7 +1,12 @@
 import { describe, it, expect } from 'vitest'
 import { seeded } from './seeded'
-import { looksLikeReading, readingMistake, readingOptions, typedVerdict } from './readings'
+import { looksLikeReading, readingMistake, readingOptions, typedVerdict, verdictAnswer } from './readings'
+import { kanaWays } from './kanaInput'
+import { allKanji, kanjiReadings } from '../data/kanjiData'
+import { WORD_SOURCE } from '../data/kanjiSource'
 import type { KanjiReading, ReadingPart } from '../types'
+// its own source, for the check at the end
+import source from './readings.test.ts?raw'
 
 // Made up kana strings and letters for kanji, none of this is a reading of a real word.
 const none = () => [] as KanjiReading[]
@@ -32,7 +37,7 @@ describe('readingMistake', () => {
   })
 
   it('names a sound voiced or unvoiced', () => {
-    expect(readingMistake('だか', 'たか', [], none)).toEqual({ kind: 'voicing' })
+    expect(readingMistake('でか', 'てか', [], none)).toEqual({ kind: 'voicing' })
     expect(readingMistake('ぱに', 'はに', [], none)).toEqual({ kind: 'voicing' })
     expect(readingMistake('ほろ', 'ぼろ', [], none)).toEqual({ kind: 'voicing' })
   })
@@ -71,7 +76,7 @@ describe('readingOptions', () => {
   it('never offers an accepted reading', () => {
     const word = { reading: 'さ', readings: ['さ', 'ざ', 'さあ'], homographs: [], split: [] }
     for (let seed = 1; seed < 30; seed++) {
-      const opts = readingOptions(word, none, ['ざ', 'ほ', 'ら', 'む'], seeded(seed))
+      const opts = readingOptions(word, none, ['ざ', 'ほ', 'ら', 'へ'], seeded(seed))
       expect(opts).not.toContain('ざ')
       expect(opts).not.toContain('さあ')
       expect(opts).toHaveLength(3)
@@ -89,8 +94,8 @@ describe('readingOptions', () => {
   })
 
   it('fills from the readings it is given when the word has too few near misses', () => {
-    const word = { reading: 'に', readings: ['に'], homographs: [], split: [] }
-    expect(readingOptions(word, none, ['に', 'ほ', 'ら'], seeded()).sort()).toEqual(['にい', 'ほ', 'ら'].sort())
+    const word = { reading: 'ぬ', readings: ['ぬ'], homographs: [], split: [] }
+    expect(readingOptions(word, none, ['ぬ', 'ほ', 'ら'], seeded()).sort()).toEqual(['ぬう', 'ほ', 'ら'].sort())
   })
 
   it('makes nothing that cannot be a reading', () => {
@@ -104,9 +109,9 @@ describe('readingOptions', () => {
   })
 
   it('does not split a syllable with a small kana', () => {
-    const word = { reading: 'きょう', readings: ['きょう'], homographs: [], split: [] }
+    const word = { reading: 'みょう', readings: ['みょう'], homographs: [], split: [] }
     for (let seed = 1; seed < 30; seed++) {
-      for (const reading of readingOptions(word, none, [], seeded(seed))) expect(reading).not.toMatch(/^き[^ょ]/)
+      for (const reading of readingOptions(word, none, [], seeded(seed))) expect(reading).not.toMatch(/^み[^ょ]/)
     }
   })
 })
@@ -114,7 +119,7 @@ describe('readingOptions', () => {
 
 describe('looksLikeReading', () => {
   it('takes kana a reading could be', () => {
-    for (const s of ['かっこう', 'きゅう', 'おおい', 'ねえ', 'さんぽ', 'しゃっか']) expect(looksLikeReading(s), s).toBe(true)
+    for (const s of ['かっこう', 'みゅう', 'ええい', 'ねえ', 'さんぽ', 'しゃっか']) expect(looksLikeReading(s), s).toBe(true)
   })
 
   it('turns down what a bounced key gives', () => {
@@ -123,16 +128,17 @@ describe('looksLikeReading', () => {
 })
 
 describe('typedVerdict', () => {
-  // made up words of one, two, three and five kana. The two kana word also accepts とお, the five
+  // made up words of one, two, three and five kana. The two kana word also accepts ろお, the five
   // kana one has an ん before a y and a homograph
   type Word = { reading: string; readings: string[]; homographs: string[]; split: ReadingPart[] }
   const ONE: Word = { reading: 'ね', readings: ['ね'], homographs: [], split: [] }
-  const TWO = { reading: 'さわ', readings: ['さわ', 'とお'], homographs: [], split: [] }
+  const TWO = { reading: 'さわ', readings: ['さわ', 'ろお'], homographs: [], split: [] }
   const FIVE = { reading: 'きんようか', readings: ['きんようか'], homographs: ['きにょうか'], split: [] }
   const THREE = { reading: 'きゅうか', readings: ['きゅうか'], homographs: [], split: [] }
-  const TWO_G = { reading: 'ごご', readings: ['ごご'], homographs: [], split: [] }
+  const TWO_G = { reading: 'げげ', readings: ['げげ'], homographs: [], split: [] }
+  const THREE_KANA = { reading: 'てぬほ', readings: ['てぬほ'], homographs: [], split: [] }
   const ASANENI = { reading: 'あさねに', readings: ['あさねに', 'あさね'], homographs: ['もとね'], split: SPLIT }
-  const KNOWN = new Set(['るるる', 'もと', 'の'])
+  const KNOWN = new Set(['るるる', 'もと', 'へ'])
   const judge = (word: Word, typed: string, withSlip = false, isKnown = (k: string) => KNOWN.has(k)) =>
     typedVerdict(typed, word, readingsOf, isKnown, withSlip)
   const wrong = (kana: string, more: object = {}) => ({ result: 'wrong', kana, given: '', mistake: null, typo: false, ...more })
@@ -142,10 +148,10 @@ describe('typedVerdict', () => {
     expect(judge(ASANENI, 'asane')).toEqual({ result: 'right', kana: 'あさね' })
     expect(judge(ASANENI, ' ASANENI. ')).toEqual({ result: 'right', kana: 'あさねに' })
     expect(judge(ASANENI, 'アサネニ')).toEqual({ result: 'right', kana: 'あさねに' })
-    expect(judge(TWO, 'too')).toEqual({ result: 'right', kana: 'とお' })
+    expect(judge(TWO, 'roo')).toEqual({ result: 'right', kana: 'ろお' })
   })
 
-  it('reads an n before y both ways and takes the one that is right (point 5)', () => {
+  it('reads an n before y both ways and takes the one that is right ', () => {
     expect(judge(FIVE, 'kinyouka')).toEqual({ result: 'right', kana: 'きんようか' })
     expect(judge(FIVE, "kin'youka")).toEqual({ result: 'right', kana: 'きんようか' })
     expect(judge(FIVE, 'kin’youka')).toEqual({ result: 'right', kana: 'きんようか' })
@@ -162,27 +168,32 @@ describe('typedVerdict', () => {
   it('names a near miss against every accepted reading, before it could be a slip', () => {
     expect(judge(ASANENI, 'asaaneni')).toEqual(wrong('あさあねに', { mistake: { kind: 'long-vowel' } }))
     expect(judge(ASANENI, 'motoneni')).toMatchObject({ result: 'wrong', mistake: { kind: 'other-reading', kanji: 'X' } })
-    // とお is accepted but not shown first: とう is the long vowel held with another kana
-    expect(judge(TWO, 'tou')).toEqual(wrong('とう', { mistake: { kind: 'vowel-kana' } }))
+    // ろお is accepted but not shown first: ろう is the long vowel held with another kana
+    expect(judge(TWO, 'rou')).toEqual(wrong('ろう', { mistake: { kind: 'vowel-kana' } }))
   })
 
-  it('names nothing for kana no reading could be, a bounced key is a slip (point 2)', () => {
+  it('names nothing for kana no reading could be, a bounced key is a slip ', () => {
     expect(judge(FIVE, 'kkinyouka')).toEqual({ result: 'slip' })
     expect(judge(THREE, 'kyuuuka')).toEqual({ result: 'slip' })
     // っご is no reading, so no small っ mistake; two kana are too short for a slip
-    expect(judge(TWO_G, 'ggogo')).toEqual(wrong('っごご'))
+    expect(judge(TWO_G, 'ggege')).toEqual(wrong('っげげ'))
     // a small っ where one could be is still named
     expect(judge(FIVE, 'kinyoukka')).toEqual(wrong('きんようっか', { mistake: { kind: 'small-tsu' } }))
   })
 
-  it('never lets clean kana pass as a slip for a reading of one or two kana (point 1)', () => {
+  it('never lets clean kana pass as a slip for a reading of one or two kana (KR23)', () => {
     expect(judge(ONE, 'nu')).toEqual(wrong('ぬ'))
     expect(judge(ONE, 'nne')).toEqual(wrong('んね'))
     expect(judge(TWO, 'sawa'.replace('w', 'q'))).toEqual({ result: 'slip' })  // さqあ has a letter left
     expect(judge(TWO, 'sara')).toEqual(wrong('さら'))
   })
 
-  it('counts a second clean slip as a miss, only letters left over make it a typo (point 1)', () => {
+  it('lets clean kana one key off pass as a slip from three kana on', () => {
+    expect(judge(THREE_KANA, 'tenoho')).toEqual({ result: 'slip' })
+    expect(judge(TWO, 'sawo')).toEqual(wrong('さを'))
+  })
+
+  it('counts a second clean slip as a miss, only letters left over make it a typo (KR23)', () => {
     expect(judge(FIVE, 'kinyouko')).toEqual({ result: 'slip' })
     expect(judge(FIVE, 'kinyouko', true)).toEqual(wrong('きにょうこ'))
     expect(judge(FIVE, 'kinyoukq')).toEqual({ result: 'slip' })
@@ -196,7 +207,38 @@ describe('typedVerdict', () => {
 
   it('stores what was typed only when it is a known reading', () => {
     expect(judge(ASANENI, 'rururu')).toEqual(wrong('るるる', { given: 'るるる' }))
-    expect(judge(ONE, 'no')).toEqual(wrong('の', { given: 'の' }))
+    expect(judge(ONE, 'he')).toEqual(wrong('へ', { given: 'へ' }))
     expect(judge(ASANENI, 'kokoko')).toEqual(wrong('こここ'))
+  })
+})
+
+describe('verdictAnswer', () => {
+  it('counts a right and a wrong reading, a typo holds the box', () => {
+    expect(verdictAnswer({ result: 'right', kana: 'ねこう' })).toEqual({ correct: true, given: 'ねこう' })
+    const miss = verdictAnswer({ result: 'wrong', kana: 'ねこ', given: 'ねこ', mistake: { kind: 'long-vowel' }, typo: false })
+    expect(miss).toEqual({ correct: false, given: 'ねこ', typo: false, mistake: 'long-vowel' })
+    const typo = verdictAnswer({ result: 'wrong', kana: 'ねこく', given: '', mistake: null, typo: true })
+    expect(typo).toEqual({ correct: false, given: '', typo: true, mistake: undefined })
+  })
+
+  it('records nothing for a slip, a homograph or kanji in the input, the card asks again', () => {
+    expect(verdictAnswer({ result: 'slip' })).toBeNull()
+    expect(verdictAnswer({ result: 'homograph', kana: 'ねこう' })).toBeNull()
+    expect(verdictAnswer({ result: 'kanji' })).toBeNull()
+  })
+})
+
+describe('the fixtures of this file', () => {
+  // reads its own source, so a fixture added later is checked without a list to keep up
+  it('are no reading of the course, in kana or in romaji', () => {
+    const real = new Set<string>()
+    for (const w of Object.values(WORD_SOURCE)) [w.reading, ...w.readings].forEach(r => real.add(r))
+    for (const k of allKanji()) kanjiReadings(k.kanji).forEach(r => real.add(r.reading))
+    const literals = [...source.matchAll(/'([^'\n]+)'/g)].map(m => m[1])
+    const kana = literals.filter(s => /^[\p{Script=Hiragana}\p{Script=Katakana}ー]+$/u.test(s))
+    const romaji = literals.filter(s => /^[a-z']+$/.test(s) && s.length > 1)
+    expect(kana.length).toBeGreaterThan(20)
+    expect(kana.filter(s => real.has(s))).toEqual([])
+    expect(romaji.filter(s => kanaWays(s).some(k => real.has(k)))).toEqual([])
   })
 })

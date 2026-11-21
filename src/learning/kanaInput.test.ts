@@ -18,10 +18,10 @@ describe('toKana', () => {
   })
 
   it('takes the spellings of romaji.ts', () => {
-    expect(toKana('si')).toBe('し')
+    expect(toKana('sire')).toBe('しれ')
     expect(toKana('tu')).toBe('つ')
-    expect(toKana('hu')).toBe('ふ')
-    expect(toKana('ti')).toBe('ち')
+    expect(toKana('hura')).toBe('ふら')
+    expect(toKana('tiru')).toBe('ちる')
     expect(toKana('zya')).toBe('じゃ')
     expect(toKana('jyo')).toBe('じょ')
     expect(toKana('tyu')).toBe('ちゅ')
@@ -30,11 +30,11 @@ describe('toKana', () => {
   })
 
   it('writes long vowels as typed', () => {
-    expect(toKana('kou')).toBe('こう')
-    expect(toKana('koo')).toBe('こお')
+    expect(toKana('mekou')).toBe('めこう')
+    expect(toKana('mekoo')).toBe('めこお')
     expect(toKana('kei')).toBe('けい')
     expect(toKana('kee')).toBe('けえ')
-    expect(toKana('shuu')).toBe('しゅう')
+    expect(toKana('shuure')).toBe('しゅうれ')
   })
 
   it('makes a doubled consonant a small っ', () => {
@@ -49,8 +49,8 @@ describe('toKana', () => {
     expect(toKana('kanna')).toBe('かんな')
     expect(toKana('kannna')).toBe('かんな')
     expect(toKana('kanta')).toBe('かんた')
-    expect(toKana('kan')).toBe('かん')
-    expect(toKana('kann')).toBe('かん')
+    expect(toKana('ran')).toBe('らん')
+    expect(toKana('rann')).toBe('らん')
     expect(toKana("kan'a")).toBe('かんあ')
     expect(toKana('kana')).toBe('かな')
     expect(toKana('kanya')).toBe('かにゃ')
@@ -74,14 +74,14 @@ describe('toKana', () => {
     // n' decides it already
     expect(kanaWays("kan'ya")).toEqual(['かんや'])
     // nn before a vowel or y keeps the second n for the syllable, or is ん alone
-    expect(kanaWays('konnichi')).toEqual(['こんにち', 'こんいち'])
+    expect(kanaWays('monnite')).toEqual(['もんにて', 'もんいて'])
     expect(kanaWays('kinnyou')).toEqual(['きんにょう', 'きんよう'])
     expect(kanaWays('kannta')).toEqual(['かんた'])
   })
 
   it('keeps a trailing n a letter for the preview', () => {
-    expect(toKana('kan', { trailingN: false })).toBe('かn')
-    expect(toKana('kann', { trailingN: false })).toBe('かん')
+    expect(toKana('ran', { trailingN: false })).toBe('らn')
+    expect(toKana('rann', { trailingN: false })).toBe('らん')
   })
 
   it('leaves letters that make no kana as typed', () => {
@@ -101,7 +101,7 @@ describe('toKana', () => {
 describe('cleanTyped', () => {
   it('drops what is no letter, apostrophe or kana, and makes the curly apostrophe plain', () => {
     expect(cleanTyped(' KA ta. ')).toBe('kata')
-    expect(cleanTyped('ｋａ')).toBe('ka')
+    expect(cleanTyped('ｒａ')).toBe('ra')
     expect(cleanTyped('ka3t,ö!')).toBe('kat')
     expect(cleanTyped('kan’a')).toBe("kan'a")
     expect(toKana('kan’a')).toBe('かんあ')
@@ -116,8 +116,8 @@ describe('cleanTyped', () => {
 
 describe('previewParts and isAllKana', () => {
   it('split kana so far from letters left', () => {
-    expect(previewParts('kakpu')).toEqual([{ text: 'か', pending: false }, { text: 'k', pending: true }, { text: 'ぷ', pending: false }])
-    expect(previewParts('kan')).toEqual([{ text: 'か', pending: false }, { text: 'n', pending: true }])
+    expect(previewParts('rakpu')).toEqual([{ text: 'ら', pending: false }, { text: 'k', pending: true }, { text: 'ぷ', pending: false }])
+    expect(previewParts('ran')).toEqual([{ text: 'ら', pending: false }, { text: 'n', pending: true }])
     expect(previewParts('')).toEqual([])
     expect(isAllKana('かっこう')).toBe(true)
     expect(isAllKana('かn')).toBe(false)
@@ -136,7 +136,7 @@ describe('isRomajiSlip', () => {
   })
 
   it('measures against every accepted spelling, n both ways', () => {
-    expect(isRomajiSlip('sk', ['し'])).toBe(true)
+    expect(isRomajiSlip('skre', ['しれ'])).toBe(true)
     expect(isRomajiSlip('kanyoi', ['かんよう'])).toBe(true)
   })
 

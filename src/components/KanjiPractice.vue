@@ -32,11 +32,11 @@ const basicHiraganaUnseen = computed(() => BASIC_HIRAGANA.some(k => !isSeen(stat
 // the most pressing part of the plan is the headline, the rest goes underneath
 const plan = computed(() => {
   const s = summary.value
-  if (firstRun.value) return { headline: `Your first ${s.fresh} kanji`, rest: '' }
+  if (firstRun.value) return { headline: s.fresh === 1 ? 'Your first kanji' : `Your first ${s.fresh} kanji`, rest: '' }
   const parts: Array<[number, string, string]> = [
     // everything that is due, kanji and words, not just what fits into one session
     [s.outlook.now, 'due for review', 'due'],
-    [s.weak, 'weak ones to firm up', 'weak'],
+    [s.weak, s.weak === 1 ? 'weak one to firm up' : 'weak ones to firm up', 'weak'],
     [s.fresh, `new kanji ready`, 'new kanji'],
     [s.newWords, `new word${s.newWords === 1 ? '' : 's'} ready`, `new word${s.newWords === 1 ? '' : 's'}`],
   ]
@@ -48,7 +48,7 @@ const plan = computed(() => {
 
 const caughtUpText = computed(() => {
   const o = summary.value.outlook
-  if (o.soon) return `${o.soon} kanji and words come back within a day.`
+  if (o.soon) return o.soon === 1 ? '1 kanji or word comes back within a day.' : `${o.soon} kanji and words come back within a day.`
   if (o.nextAt) return `Next review ${fromNow(o.nextAt)}.`
   return ''
 })
@@ -185,7 +185,7 @@ function progressText(p: ColumnProgress): string {
       <span class="stat-num">{{ summary.itemsSeen - summary.itemsMastered }}</span>
       <span class="stat-label">learning</span>
     </div>
-    <button class="stat-tile bad" :aria-label="`${openErrors.length} open errors, show them`" @click="showErrors()">
+    <button class="stat-tile bad" :aria-label="`${openErrors.length} open error${openErrors.length === 1 ? '' : 's'}, show them`" @click="showErrors()">
       <span class="stat-num">{{ openErrors.length }}</span>
       <span class="stat-label">errors</span>
     </button>
@@ -238,7 +238,7 @@ function progressText(p: ColumnProgress): string {
           @click="toggleSet(s.id)"
         >
           <span class="set-title">{{ s.title }}</span>
-          <span class="set-kanji" lang="ja">{{ s.kanji.join('') }}</span>
+          <span class="set-kanji" lang="ja" :style="{ '--n': s.kanji.length }">{{ s.kanji.join('') }}</span>
           <span class="sr-only">, {{ progressText(progressBySet[s.id]) }}</span>
           <span class="error-dot"></span>
           <span v-if="progressBySet[s.id].seen" class="col-progress" aria-hidden="true">
@@ -261,6 +261,10 @@ function progressText(p: ColumnProgress): string {
       <p v-else class="hint-line">Every kanji of the picked sets you have met so far, written from memory. It doesn't move them up or down.</p>
     </template>
     <p v-else-if="wordMode" class="hint-line">Every word of the picked sets you have met so far once, in the mode above.</p>
+    <p v-else-if="mode === 'mixed'" class="hint-line">
+      Every kanji of the picked sets once, and every word of them you have met so far, each asked by how well you know it.
+      Kanji you haven't met yet are asked too.
+    </p>
     <p v-else class="hint-line">Every kanji of the picked sets once, in the mode above. Kanji you haven't met yet are asked too.</p>
   </section>
 

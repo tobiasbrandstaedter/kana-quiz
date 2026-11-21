@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { seeded } from './seeded'
 import { planKanji, planCards } from './kanjiPlan'
 import type { PlanCourse } from './kanjiPlan'
-import { orderKanjiSession, readyCard, spreadCards } from './kanjiSession'
+import { orderKanjiSession, readyCard, reaskCards, spreadCards } from './kanjiSession'
 import type { PlannedCard } from './kanjiSession'
 import { groupCardId } from '../kanjiKeys'
 import { C, DAY, G, IDS, NOW, WORDS, readyWith, seen, statsOf } from './kanjiFixtures'
@@ -73,6 +73,25 @@ describe('orderKanjiSession', () => {
   })
 })
 
+describe('orderKanjiSession with reviews', () => {
+  it('spreads the reviews over the session instead of bunching them', () => {
+    const reviews = IDS.slice(10, 16)
+    const stats = statsOf(...reviews.map(id => seen(id, 2, NOW - DAY)))
+    for (let seed = 1; seed < 6; seed++) {
+      const p = planKanji(stats, [], { kanji: [...C.kanji, ...reviews], words: WORDS, groups: [] }, 30, NOW, 3)
+      expect(p.due).toHaveLength(6)
+      const cards = orderKanjiSession(p, seeded(seed))
+      const at = cards.flatMap((c, i) => reviews.includes(c.id) ? [i] : [])
+      // one review in each sixth of the session, give or take a card
+      const sixth = cards.length / 6
+      at.forEach((i, n) => {
+        expect(i, JSON.stringify(at)).toBeGreaterThanOrEqual(Math.floor(n * sixth) - 1)
+        expect(i, JSON.stringify(at)).toBeLessThanOrEqual(Math.ceil((n + 1) * sixth) + 1)
+      })
+    }
+  })
+})
+
 describe('spreadCards', () => {
   it('puts another card between two questions of the same item', () => {
     const cards: PlannedCard[] = [{ id: 'a' }, { id: 'a' }, { id: 'b' }]
@@ -133,3 +152,36 @@ describe('readyCard (KR14)', () => {
   })
 })
 
+
+describe('reaskCards', () => {
+  // the last card is the miss, so the re-ask needs padding from the round
+  const round: PlannedCard[] = [
+    { id: 'k:A', type: 'intro' }, { id: 'g:x', type: 'intro' }, { id: 'k:A' }, { id: 'k:B' }, { id: 'k:C' }, { id: 'k:D' },
+  ]
+
+  it('brings the miss back in the type that was missed, behind questions of the round', () => {
+    for (let seed = 1; seed < 10; seed++) {
+      const r = reaskCards(round, 5, 'k:D', 'recognize', 0, seeded(seed))!
+      expect(r.index).toBe(6)
+      expect(r.cards[r.cards.length - 1]).toEqual({ id: 'k:D', type: 'recognize' })
+      const pad = r.cards.slice(0, -1)
+      expect(pad.length).toBeGreaterThan(0)
+      for (const p of pad) {
+        // a question of the round with its type left open, never an intro-only card or the miss itself
+        expect(p.type).toBeUndefined()
+        expect(['k:A', 'k:B', 'k:C']).toContain(p.id)
+      }
+    }
+  })
+
+  it('pads a write quiz with writes', () => {
+    const r = reaskCards(round, 5, 'k:D', 'write', 0, seeded())!
+    expect(r.cards.every(c => c.type === 'write')).toBe(true)
+    expect(r.cards[r.cards.length - 1].id).toBe('k:D')
+  })
+
+  it('drops the re-ask after two, or when the round has nothing to pad with', () => {
+    expect(reaskCards(round, 5, 'k:D', 'meaning', 2, seeded())).toBeNull()
+    expect(reaskCards([{ id: 'k:A', type: 'intro' }, { id: 'k:A' }], 1, 'k:A', 'meaning', 0, seeded())).toBeNull()
+  })
+})

@@ -131,6 +131,17 @@ export function makeCard(item: PlannedCard, ctx: CardContext, rng: () => number 
 }
 
 /**
+ * The card as it is about to be shown after `prev`. Options are shuffled per card, but two cards
+ * in a row can still draw the same four in the same order (two new kanji of one set), which
+ * looks like a stuck screen: then they move round by one.
+ */
+export function unlikePrevious(card: KanjiCard, prev: KanjiCard | undefined): KanjiCard {
+  const o = card.options
+  if (!prev || o.length < 2 || o.join('|') !== prev.options.join('|')) return card
+  return { ...card, options: [...o.slice(1), o[0]] }
+}
+
+/**
  * The second cue of a write question next to the keyword (W1): the reading of the kanji's
  * first word in hiragana, once the learner has met that word. Null before that.
  */
@@ -138,6 +149,62 @@ export function writeCue(kanji: string, stats: KanjiStatsMap): string | null {
   const first = kanjiEntry(kanji)?.words[0]
   const word = first && isSeen(stats[first]) ? wordById(first) : null
   return word?.reading ?? null
+}
+
+/** Kanji and practiced words the learner has met, the session's own items included: the pools wrong options prefer. */
+export function metSoFar(stats: KanjiStatsMap, sessionIds: string[]): { kanji: Set<string>; words: Set<string> } {
+  const ids = [...Object.keys(stats).filter(id => isSeen(stats[id])), ...sessionIds]
+  return {
+    kanji: new Set(ids.map(kanjiOfId).filter((k): k is string => !!k)),
+    words: new Set(ids.filter(id => PLAN_WORDS.has(id))),
+  }
+}
+
+export interface Explained { text: string; meaning: string }
+
+/**
+ * What a wrong meaning, recognize or spelling answer shows (KR35): the pick next to the right
+ * one, each with its keyword, and the lookalike hint when the two are in one group. For a
+ * written form the kanji that differs. Only the right one after "Don't know" (picked null),
+ * null for other types and for a form that doesn't swap one kanji.
+ */
+export function missExplanation(card: KanjiCard, picked: string | null): { yours: Explained | null; right: Explained; hint: string | null } | null {
+  if (picked === card.answer) return null
+  if (card.type === 'meaning' || card.type === 'recognize') {
+    const right = kanjiEntry(card.home)!
+    const yours = picked ? kanjiEntry(picked) : null
+    return {
+      yours: yours && { text: yours.kanji, meaning: yours.keyword },
+      right: { text: right.kanji, meaning: right.keyword },
+      hint: yours ? kanjiLookalikeHint(card.home, yours.kanji) : null,
+    }
+  }
+  const diff = card.type === 'spell' && picked ? spellDiff(card.answer, picked) : null
+  if (!diff) return null
+  return {
+    yours: { text: picked!, meaning: kanjiEntry(diff.given)!.keyword },
+    right: { text: card.answer, meaning: kanjiEntry(diff.right)!.keyword },
+    hint: kanjiLookalikeHint(diff.right, diff.given),
+  }
+}
+
+/**
+ * The lookalikes a kanji intro warns about (KR11): only those the learner has met (`met`, which
+ * the caller makes "seen, or in this session"), the rest would be noise. Null when there is none.
+ */
+export function introLookalikes(kanji: string, met: (k: string) => boolean): { others: string[]; hint: string | null } | null {
+  const others = kanjiLookalikes(kanji).filter(met)
+  return others.length ? { others, hint: kanjiLookalikeHint(kanji, others[0]) } : null
+}
+
+/**
+ * The table a typed reading comes from when it is the reading of a group word written like this
+ * word (KR78, KR80): 十 typed the counting way on the plain number card. Null otherwise.
+ */
+export function twinTable(id: string, kana: string): string | null {
+  const w = wordById(id)
+  const twin = w && sameForm(w).find(t => t.reading === kana)
+  return twin?.group ? groupById(twin.group)?.title ?? null : null
 }
 
 /** What an option shows: keywords and glosses in English, kanji, readings and forms as they are. */

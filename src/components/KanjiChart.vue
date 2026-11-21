@@ -66,7 +66,7 @@ const counts = computed(() => {
           </button>
         </div>
       </template>
-      <button v-else class="chart-more" @click="opened = new Set([...opened, g.id])">
+      <button v-else class="chart-more set-more" @click="opened = new Set([...opened, g.id])">
         <span>{{ g.title }} <small>{{ g.kanji.length }} kanji, not started</small></span>
         <Icon name="down" :size="18" />
       </button>

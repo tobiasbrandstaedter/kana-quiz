@@ -141,7 +141,7 @@ export function isRomajiSlip(typed: string, readings: string[]): boolean {
   // Listing every spelling of a reading would multiply out (si/shi, tu/tsu, n/nn ...), so
   // instead each string one edit away from the input is converted and looked up. That is
   // about 55 conversions per letter, times the ways kanaWays reads an n, which is why the
-  // field is capped at 40 characters.
+  // field is capped at 24 characters (the longest reading is ten letters).
   for (let i = 0; i <= t.length; i++) {
     const head = t.slice(0, i)
     if (i < t.length && hits(head + t.slice(i + 1))) return true
