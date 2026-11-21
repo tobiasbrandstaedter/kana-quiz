@@ -295,7 +295,7 @@ In the Mixed mode, which is the default, the type follows from how well the item
 ### Feedback
 
 - KR33: a wrong reading names its kind when it has one: long vowel, small っ, voicing, wrong kana for a long vowel, or "that is how 国 is read in 外国, here it is くに". The right reading is shown in large hiragana.
-- KR34: after any reading question the meaning of the word is shown, right or wrong, and stays long enough to be read (the jump to the next card after a right answer takes at least a second).
+- KR34: after any reading question the meaning of the word is shown, right or wrong, and stays until the learner taps Next. No kanji card moves on by itself, right or wrong: the answer is there to be looked at and the word to be heard.
 - KR35: a wrong M1, M2 or S1 shows what was picked next to what was right, each with its keyword, and the lookalike hint when the two are in one group.
 - KR36: the sound button is on every word intro and on the feedback of every question about a word.
 
