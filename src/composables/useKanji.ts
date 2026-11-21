@@ -384,20 +384,9 @@ function createKanji() {
     answered.value = true
     correct.value = a.correct
     record(a)
-    if (!a.correct) {
-      queueReask(a.id, a.type)
-      return
-    }
-    // A word card waits for Next: its reading and meaning are to be read (KR34), and a card
-    // that changes under the finger would take the tap meant for Next. So does a write card,
-    // the drawing is to be compared with the kanji. A kanji card moves on shortly, unless Next
-    // was pressed first.
-    if (!kanjiOfId(a.id) || a.type === 'write') return
-    const session = startedAt.value
-    const at = current.value
-    setTimeout(() => {
-      if (kanjiScreen.value === 'quiz' && startedAt.value === session && current.value === at) next()
-    }, 400)
+    // every card waits for Next, right or wrong: the answer is there to be looked at and heard,
+    // and a card that changes by itself takes the tap meant for Next
+    if (!a.correct) queueReask(a.id, a.type)
   }
 
   function answer(given: string | null): void {
