@@ -290,10 +290,11 @@ export interface KanjiReading {
 // 'read-choice' and asks R1 or R2 by the box, there is no mode of its own for R2.
 // 'write' shows the keyword and has the kanji drawn from memory (W1). It is an offer: never
 // in smart practice or Mixed, and it never moves a box (KD11, KR26).
-export type KanjiQuestionType = 'meaning' | 'recognize'
+// kanji-read: a word met so far that holds the kanji, its reading typed, counted for the kanji (KR83)
+export type KanjiQuestionType = 'meaning' | 'recognize' | 'kanji-read'
 export type WordQuestionType = 'word-meaning' | 'read-choice' | 'read-type' | 'spell'
 export type QuestionType = KanjiQuestionType | WordQuestionType | 'write'
-export type KanjiMode = Exclude<QuestionType, 'read-type'> | 'mixed'
+export type KanjiMode = Exclude<QuestionType, 'read-type' | 'kanji-read'> | 'mixed'
 export type Course = 'kana' | 'kanji'
 
 // the kinds of wrong readings that have a name (KR22, KR33), see learning/readings.ts
@@ -315,6 +316,7 @@ export interface KanjiStatEntry {
   mistakes: Partial<Record<ReadingKind, number>>  // wrong readings by kind, words only
   box: number
   due: number
+  ease: number  // scales the rest from box 2 on, see reviewKanji
   // written answers, kanji only, as kana store them: rejected attempts per stroke index and by fault
   strokeErrors: number[]
   strokeFaults: Partial<Record<StrokeFault, number>>
@@ -367,6 +369,7 @@ export interface KanjiCard {
   // the intro of a group word in the session its group opens: the group card, which has to come first
   after?: string
   reask?: boolean
+  word?: string  // kanji-read: the id of the word the kanji is read in
 }
 
 // what an item id stands for, a kanji or a word, for every list that shows both

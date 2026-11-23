@@ -18,9 +18,12 @@ const byKanji = (k: string) => ALL.find(e => e.kanji === k)!
 const never = () => false
 
 describe('kanjiQuestionType', () => {
-  const at = (box: number, meaning = 0, recognize = 0) => ({
+  const at = (box: number, meaning = 0, recognize = 0, read = 0) => ({
     ...newKanjiEntry('k:A'), correct: 1, box,
-    byType: { meaning: { correct: meaning, incorrect: 0 }, recognize: { correct: recognize, incorrect: 0 } },
+    byType: {
+      meaning: { correct: meaning, incorrect: 0 }, recognize: { correct: recognize, incorrect: 0 },
+      'kanji-read': { correct: read, incorrect: 0 },
+    },
   })
 
   it('asks the meaning while new and in box 1, the kanji in box 2', () => {
@@ -30,11 +33,24 @@ describe('kanjiQuestionType', () => {
     expect(kanjiQuestionType(at(2), 'mixed')).toBe('recognize')
   })
 
-  it('from box 3 picks the type with fewer right answers', () => {
-    expect(kanjiQuestionType(at(3, 5, 2), 'mixed')).toBe('recognize')
-    expect(kanjiQuestionType(at(4, 1, 2), 'mixed')).toBe('meaning')
-    expect(kanjiQuestionType(at(3, 2, 2), 'mixed', () => 0.1)).toBe('meaning')
-    expect(kanjiQuestionType(at(3, 2, 2), 'mixed', () => 0.9)).toBe('recognize')
+  it('from box 3 reads the kanji in a word, meaning or recognize once below half of that (KR83)', () => {
+    expect(kanjiQuestionType(at(3, 2, 1), 'mixed')).toBe('kanji-read')
+    expect(kanjiQuestionType(at(4, 2, 1, 2), 'mixed')).toBe('kanji-read')
+    expect(kanjiQuestionType(at(4, 2, 1, 3), 'mixed')).toBe('recognize')
+    expect(kanjiQuestionType(at(4, 1, 2, 3), 'mixed')).toBe('meaning')
+    expect(kanjiQuestionType(at(5, 2, 2, 6), 'mixed', () => 0.1)).toBe('meaning')
+    expect(kanjiQuestionType(at(5, 2, 2, 6), 'mixed', () => 0.9)).toBe('recognize')
+    // answered right every time: about half the reviews read it in a word
+    let e = at(3, 2, 1)
+    const asked: string[] = []
+    for (let i = 0; i < 12; i++) {
+      const t = kanjiQuestionType(e, 'mixed', seeded(i))
+      asked.push(t)
+      e = { ...e, byType: { ...e.byType, [t]: { correct: (e.byType[t]?.correct ?? 0) + 1, incorrect: 0 } } }
+    }
+    const reads = asked.filter(t => t === 'kanji-read').length
+    expect(reads).toBeGreaterThanOrEqual(5)
+    expect(reads).toBeLessThanOrEqual(7)
   })
 
   it('follows a fixed mode', () => {
@@ -45,7 +61,7 @@ describe('kanjiQuestionType', () => {
   it('goes by the box in the word modes, they only fix the type of words', () => {
     expect(kanjiQuestionType(at(1), 'spell')).toBe('meaning')
     expect(kanjiQuestionType(at(2), 'read-choice')).toBe('recognize')
-    expect(kanjiQuestionType(at(3, 5, 2), 'word-meaning')).toBe('recognize')
+    expect(kanjiQuestionType(at(3, 5, 2), 'word-meaning')).toBe('kanji-read')
   })
 })
 

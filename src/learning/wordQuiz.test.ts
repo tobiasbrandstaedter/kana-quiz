@@ -39,21 +39,33 @@ describe('wordQuestionType', () => {
     expect(wordQuestionType(at(5), 'read-choice')).toBe('read-type')
   })
 
-  it('asks reading or meaning while new and in box 1, the one with fewer right answers (KR25)', () => {
-    expect(wordQuestionType(at(1, { choice: 2, meaning: 1 }), 'mixed')).toBe('word-meaning')
-    expect(wordQuestionType(at(0, { choice: 0, meaning: 3 }), 'mixed')).toBe('read-choice')
-    expect(wordQuestionType(undefined, 'mixed', () => 0.1)).toBe('read-choice')
-    expect(wordQuestionType(undefined, 'mixed', () => 0.9)).toBe('word-meaning')
+  it('asks the reading by choice while new and in box 1, the meaning while it was never right (KR25)', () => {
+    expect(wordQuestionType(undefined, 'mixed')).toBe('read-choice')
+    expect(wordQuestionType(at(1, { choice: 2, meaning: 1 }), 'mixed')).toBe('read-choice')
+    expect(wordQuestionType(at(0, { choice: 3, meaning: 0 }), 'mixed')).toBe('word-meaning')
   })
 
   it('asks the reading typed in box 2', () => {
     expect(wordQuestionType(at(2, { typed: 9 }), 'mixed')).toBe('read-type')
   })
 
-  it('from box 3 asks the one of typed reading, spelling and meaning with the fewest right answers', () => {
-    expect(wordQuestionType(at(3, { typed: 2, meaning: 2, spell: 0 }), 'mixed')).toBe('spell')
-    expect(wordQuestionType(at(4, { typed: 1, choice: 0, meaning: 2, spell: 3 }), 'mixed')).toBe('read-type')
-    expect(wordQuestionType(at(3, { typed: 1, meaning: 0, spell: 1 }), 'mixed')).toBe('word-meaning')
+  it('from box 3 asks the typed reading, the meaning below two thirds of it, spelling below half', () => {
+    expect(wordQuestionType(at(3, { typed: 1, meaning: 1, spell: 0 }), 'mixed')).toBe('spell')
+    expect(wordQuestionType(at(4, { typed: 2, meaning: 2, spell: 1 }), 'mixed')).toBe('read-type')
+    expect(wordQuestionType(at(4, { typed: 3, meaning: 2, spell: 2 }), 'mixed')).toBe('read-type')
+    expect(wordQuestionType(at(5, { typed: 4, meaning: 2, spell: 2 }), 'mixed')).toBe('word-meaning')
+    expect(wordQuestionType(at(5, { typed: 5, meaning: 4, spell: 2 }), 'mixed')).toBe('spell')
+    // a word answered right every time: the typed reading most often, the meaning in between
+    let e = at(3, { choice: 1, meaning: 1 })
+    const asked: string[] = []
+    for (let i = 0; i < 12; i++) {
+      const t = wordQuestionType(e, 'mixed', seeded(i))
+      asked.push(t)
+      e = { ...e, byType: { ...e.byType, [t]: { correct: (e.byType[t]?.correct ?? 0) + 1, incorrect: 0 } } }
+    }
+    const count = (t: string) => asked.filter(x => x === t).length
+    expect(count('read-type')).toBeGreaterThan(count('word-meaning'))
+    expect(count('word-meaning')).toBeGreaterThanOrEqual(3)
     for (let seed = 1; seed < 20; seed++) expect(wordQuestionType(at(3, { choice: 0 }), 'mixed', seeded(seed))).not.toBe('read-choice')
   })
 

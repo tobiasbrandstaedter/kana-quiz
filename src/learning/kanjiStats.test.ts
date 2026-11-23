@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { applyKanjiAnswer, confusedKanji, newKanjiEntry, normalizeKanjiLog, normalizeKanjiStats } from './kanjiStats'
 import type { KanjiAnswerInput } from '../types'
+import { EASE_MAX, EASE_MIN } from './scheduler'
 
 import { DAY, NOW } from './kanjiFixtures'
 
@@ -15,11 +16,12 @@ describe('applyKanjiAnswer', () => {
     expect(e.due).toBe(NOW + DAY)
   })
 
-  it('moves a stored box 5 item on to 60 and then 120 days, no migration needed', () => {
-    const stored = { ...newKanjiEntry('k:A'), correct: 5, box: 5, due: NOW }
+  it('moves a stored box 5 item on to 60 and then 120 days times its ease, no migration needed', () => {
+    // written before the ease: it starts at 1 and goes up a little with every promotion
+    const { 'k:A': stored } = normalizeKanjiStats({ 'k:A': { correct: 5, box: 5, due: NOW } })
     const six = applyKanjiAnswer(stored, answer(), NOW)
-    expect(six).toMatchObject({ box: 6, due: NOW + 60 * DAY })
-    expect(applyKanjiAnswer(six, answer(), six.due)).toMatchObject({ box: 7, due: six.due + 120 * DAY })
+    expect(six).toMatchObject({ box: 6, due: NOW + 60 * 1.05 * DAY, ease: 1.05 })
+    expect(applyKanjiAnswer(six, answer(), six.due)).toMatchObject({ box: 7, due: six.due + 120 * 1.1 * DAY })
   })
 
   it('counts per question type', () => {
@@ -28,11 +30,22 @@ describe('applyKanjiAnswer', () => {
     expect(e.byType).toEqual({ meaning: { correct: 1, incorrect: 0 }, recognize: { correct: 0, incorrect: 1 } })
   })
 
-  it('sends a miss back to box 0 and stores what was picked', () => {
+  it('sends a miss back, a mastered item to box 1, lowers the ease and stores what was picked', () => {
     const before = { ...newKanjiEntry('k:A'), correct: 4, box: 3, due: NOW + 5 * DAY, streak: 4 }
     const e = applyKanjiAnswer(before, answer({ correct: false, given: 'k:B' }), NOW)
-    expect(e).toMatchObject({ box: 0, due: NOW, streak: 0, lastWrong: NOW, incorrect: 1 })
+    expect(e).toMatchObject({ box: 1, due: NOW + DAY, streak: 0, lastWrong: NOW, incorrect: 1 })
+    expect(e.ease).toBeCloseTo(0.8)
+    expect(applyKanjiAnswer({ ...before, box: 2 }, answer({ correct: false }), NOW).box).toBe(0)
     expect(e.confusions).toEqual({ 'k:B': 1 })
+  })
+
+  it('lowers the ease once for a miss and its re-asks, again on a later day', () => {
+    const before = { ...newKanjiEntry('k:A'), correct: 4, box: 3, due: NOW, ease: 1 }
+    let e = applyKanjiAnswer(before, answer({ correct: false }), NOW)
+    e = applyKanjiAnswer(e, answer({ correct: false }), NOW + 60_000)
+    expect(e).toMatchObject({ box: 0 })
+    expect(e.ease).toBeCloseTo(0.8)
+    expect(applyKanjiAnswer(e, answer({ correct: false }), NOW + DAY).ease).toBeCloseTo(0.6)
   })
 
   it('counts a wrong reading by its kind', () => {
@@ -143,6 +156,11 @@ describe('normalizeKanjiStats', () => {
     expect(e['k:A'].strokeErrors).toEqual([1, 0, 0, 2])
     expect(e['k:A'].box).toBe(0)
     expect(e['k:B'].box).toBe(0)
+  })
+
+  it('keeps the ease in its bounds, an entry without one or with a broken one starts at 1', () => {
+    const e = normalizeKanjiStats({ 'k:A': { ease: 1.3 }, 'k:B': { ease: 9 }, 'k:C': { ease: -1 }, 'k:D': { ease: 'x' }, 'k:E': {} })
+    expect(Object.values(e).map(x => x.ease)).toEqual([1.3, EASE_MAX, EASE_MIN, 1, 1])
   })
 
   it('drops a __proto__ key inside the count maps', () => {

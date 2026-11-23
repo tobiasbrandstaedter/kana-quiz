@@ -15,6 +15,13 @@ export function openKanjiErrors(stats: KanjiStatsMap, log: KanjiAnswerRecord[], 
     .sort((a, b) => recentOf(b.id) - recentOf(a.id) || b.incorrect - a.incorrect)
 }
 
+/**
+ * A word the learner can read: its reading was typed right at least once and it is in box 2 or
+ * above now. A miss sends it to box 0 or 1, from where it climbs back on a later day.
+ * A reading only ever picked among four doesn't count.
+ */
+export const readsWord = (stat: KanjiStatEntry): boolean => (stat.byType['read-type']?.correct ?? 0) > 0 && stat.box >= 2
+
 /** A table row: what the item is, where it sits in the course, and its numbers. */
 export function itemRow(item: ItemInfo, order: number, stat: KanjiStatEntry): KanjiRow {
   return { item, order, correct: stat.correct, incorrect: stat.incorrect, acc: accuracy(stat), box: stat.box, due: stat.due }

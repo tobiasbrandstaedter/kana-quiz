@@ -10,8 +10,8 @@ import { cardGroup, kanjiId, kanjiOfId } from '../kanjiKeys'
 import type { PlanCourse, PlanWord } from './kanjiPlan'
 import type { PlannedCard } from './kanjiSession'
 import type { PatternCourse } from './kanjiPatterns'
-import { confusedKanji } from './kanjiStats'
-import { kanjiQuestionType, makeKanjiCard, pickKanjiOptions } from './kanjiQuiz'
+import { confusedKanji, newKanjiEntry } from './kanjiStats'
+import { kanjiQuestionType, makeKanjiCard, pickKanjiOptions, sightType } from './kanjiQuiz'
 import { isWordType, pickMeaningOptions, pickReadingOptions, pickSpellOptions, wordQuestionType } from './wordQuiz'
 import { readingMistake, typedVerdict } from './readings'
 import type { ReadingMistake, TypedVerdict } from './readings'
@@ -86,6 +86,7 @@ export interface CardContext {
   mode: KanjiMode
   knownKanji: Set<string>  // kanji the learner has met, this session's included
   knownWords: Set<string>  // word ids, the same
+  session?: Set<string>    // item ids of the session, a kanji-read card leaves its words to their own cards
 }
 
 // the confusions of a kanji and its lookalikes, the first tier of wrong kanji
@@ -102,7 +103,14 @@ export function makeCard(item: PlannedCard, ctx: CardContext, rng: () => number 
   if (kanji) {
     const entry = kanjiEntry(kanji)!
     if (item.type === 'intro' || item.type === 'write') return { id: item.id, home: kanji, type: item.type, options: [], answer: kanji }
-    const type = item.type === 'meaning' || item.type === 'recognize' ? item.type : kanjiQuestionType(ctx.stats[item.id], ctx.mode, rng)
+    let type = item.type === 'meaning' || item.type === 'recognize' || item.type === 'kanji-read' ? item.type : kanjiQuestionType(ctx.stats[item.id], ctx.mode, rng)
+    if (type === 'kanji-read') {
+      // a re-ask asks the word that was missed again
+      const word = (item.word ? wordById(item.word) : null) ?? readInWord(kanji, ctx.stats, rng, ctx.session)
+      if (word) return { id: item.id, home: kanji, type, options: [], answer: word.reading, word: word.id }
+      // no word met yet that shows its reading
+      type = sightType(ctx.stats[item.id] ?? newKanjiEntry(item.id), rng)
+    }
     const wrong = pickKanjiOptions(entry, KANJI, preferredFor(ctx.stats)(kanji), ctx.knownKanji, tooClose, rng)
     return makeKanjiCard(entry, type, wrong, rng)
   }
@@ -128,6 +136,21 @@ export function makeCard(item: PlannedCard, ctx: CardContext, rng: () => number 
     wrong = pickSpellOptions(word, KANJI, preferredFor(ctx.stats), ctx.knownKanji, kanjiWithReading, isPracticed, rng)
   }
   return { ...base, type, options: shuffle([answer, ...wrong], rng), answer }
+}
+
+/**
+ * The word a kanji-read card asks (KR83): a practiced word the learner has answered that holds
+ * the kanji with a reading of its own (not a special one like はつか), course words before
+ * group words, whose irregular members test the table more than the kanji, and words with a
+ * card of their own in the session (`avoid`) last, or the card would give their answer away.
+ * Null when none.
+ */
+export function readInWord(kanji: string, stats: KanjiStatsMap, rng: () => number = Math.random, avoid: Set<string> = new Set()): WordEntry | null {
+  const met = PRACTICED.filter(w => w.kanji.includes(kanji) && isSeen(stats[w.id]) && w.split.some(p => p.text === kanji))
+  const rank = (w: WordEntry) => (w.group ? 1 : 0) + (avoid.has(w.id) ? 2 : 0)
+  const best = Math.min(...met.map(rank))
+  const pool = met.filter(w => rank(w) === best)
+  return pool.length ? pool[Math.floor(rng() * pool.length)] : null
 }
 
 /**

@@ -14,6 +14,7 @@ export interface PlannedCard {
   type?: QuestionType | 'intro'
   needs?: string  // see KanjiCard.needs
   after?: string  // see KanjiCard.after
+  word?: string   // a kanji-read re-ask: the word that was missed, see KanjiCard.word
 }
 
 const isQuestion = (c: PlannedCard) => c.type !== 'intro'

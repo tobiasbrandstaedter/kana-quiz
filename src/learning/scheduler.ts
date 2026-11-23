@@ -12,6 +12,15 @@ export const MASTERED_BOX = 3
 // items would fill every session for good and nothing new would come
 export const KANJI_INTERVALS = [...INTERVALS, 60 * DAY, 120 * DAY]
 
+// Every kanji and word keeps an ease: its rest from box 2 on is the box interval times that
+// (box 1 stays one day). Right when due nudges it up, a miss pulls it down four times as far,
+// so what the learner finds easy comes back less often and what keeps slipping more often.
+export const EASE_START = 1
+export const EASE_MIN = 0.6
+export const EASE_MAX = 2
+const EASE_UP = 0.05
+const EASE_DOWN = 0.2
+
 // reviews done a few hours early still count, nobody studies at the exact same time every day
 const DUE_SLACK = 4 * 60 * 60 * 1000
 
@@ -37,13 +46,31 @@ export function isDue(s: Schedule, now: number): boolean {
 /**
  * Wrong answers drop back to box 0. Correct answers only promote when the kana
  * was actually due, so answering it five times in one sitting doesn't fake mastery.
- * `intervals` is the rest per box, the last one is the top box.
  */
-export function review(s: Schedule, correct: boolean, now: number, intervals: number[] = INTERVALS): Schedule {
+export function review(s: Schedule, correct: boolean, now: number): Schedule {
   if (!correct) return { box: 0, due: now }
   if (!isDue(s, now)) return s
-  const box = Math.min(intervals.length - 1, s.box + 1)
-  return { box, due: now + intervals[box] }
+  const box = Math.min(MAX_BOX, s.box + 1)
+  return { box, due: now + INTERVALS[box] }
+}
+
+export interface KanjiSchedule extends Schedule {
+  ease: number
+}
+
+/**
+ * `review` for kanji and words: the longer interval table, the ease of the item, and a miss
+ * in a mastered box goes back to box 1 instead of 0, with its day of rest there (the re-ask in
+ * the session still comes). It was known for weeks and comes back faster than something never
+ * learned, a second miss in the same session still takes it to 0.
+ */
+export function reviewKanji(s: KanjiSchedule, correct: boolean, now: number): KanjiSchedule {
+  const ease = Math.max(EASE_MIN, s.ease - EASE_DOWN)
+  if (!correct) return s.box >= MASTERED_BOX ? { box: 1, due: now + KANJI_INTERVALS[1], ease } : { box: 0, due: now, ease }
+  if (!isDue(s, now)) return s
+  const box = Math.min(KANJI_INTERVALS.length - 1, s.box + 1)
+  const up = Math.min(EASE_MAX, s.ease + EASE_UP)
+  return { box, due: now + Math.round(KANJI_INTERVALS[box] * (box >= 2 ? up : 1)), ease: up }
 }
 
 /** Errors per item within its last RECENT_WINDOW answers in the log. `idOf` says which item a record is about. */

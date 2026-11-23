@@ -2,7 +2,7 @@
 import { inject, ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import { QUIZ_KEY } from '../composables/useQuiz'
 import { useKanji } from '../composables/useKanji'
-import { courseEntries, groupById, kanjiEntry, kanjiStrokes, sameForm, wordById } from '../data/kanjiData'
+import { courseEntries, groupById, kanjiEntry, kanjiStrokes, practicedWords, sameForm, wordById } from '../data/kanjiData'
 import { isSeen } from '../learning/scheduler'
 import { introLookalikes, missExplanation, optionText } from '../learning/kanjiCards'
 import { glyphShift, polylinePoints } from '../data/strokeGlyphs'
@@ -23,9 +23,12 @@ const {
   choose, giveUp, submitWrite, next, goHome, resume,
 } = useKanji()
 
-// a word card carries its word, a kanji card its kanji, a table card the group that opens
-// with it; `entry` is the kanji, for a word its home kanji, for a table card the counter
-const word = computed(() => card.value ? wordById(card.value.id) : null)
+// a word card carries its word, a kanji card its kanji (a kanji read in a word that word too),
+// a table card the group that opens with it; `entry` is the kanji, for a word its home kanji,
+// for a table card the counter
+const word = computed(() => card.value ? wordById(card.value.word ?? card.value.id) : null)
+// a kanji read in a word: the kanji marked inside the word
+const markKanji = computed(() => card.value?.type === 'kanji-read' ? card.value.home : null)
 const newGroup = computed(() => {
   const id = card.value ? cardGroup(card.value.id) : null
   return id ? groupById(id) : null
@@ -49,7 +52,7 @@ const questionWord = computed(() => !!word.value && wordGroup.value?.question ==
 // open, closing it gives the focus back to the button that opened it
 const wordTableOpen = ref(false)
 watch(card, () => { wordTableOpen.value = false })
-const isTyped = computed(() => card.value?.type === 'read-type')
+const isTyped = computed(() => card.value?.type === 'read-type' || card.value?.type === 'kanji-read')
 
 // the word is the kanji standing alone: its intro only says so, the kanji intro came just before
 const aloneAsWord = computed(() => !!word.value && word.value.form === word.value.home)
@@ -80,6 +83,7 @@ const label = computed(() => {
     'word-meaning': 'What does this word mean?',
     'read-choice': 'How is this word read?',
     'read-type': 'How is this word read? Type it',
+    'kanji-read': 'How is this word read? Type it',
     spell: 'How is this word written?',
     write: 'Write the kanji for',
   }[c.type]
@@ -102,6 +106,24 @@ const explanation = computed(() => {
   const c = card.value
   if (!c || !answered.value || correct.value) return null
   return missExplanation(c, pickedOption.value)
+})
+
+// after a kanji question: words met so far that hold it, with their readings, so a kanji is
+// never only a meaning (KR81). One word per reading of the kanji first, its own words before others
+const kanjiWords = computed(() => {
+  const c = card.value
+  if (!c || !answered.value || (c.type !== 'meaning' && c.type !== 'recognize')) return []
+  const met = practicedWords()
+    .filter(w => w.kanji.includes(c.home) && isSeen(statOf(w.id)))
+    .sort((a, b) => Number(b.home === c.home) - Number(a.home === c.home))
+  // a special reading (はつか) has no part for the kanji alone, it comes with the rest
+  const readingIn = (w: (typeof met)[number]) => w.split.find(p => p.text === c.home)?.reading
+  const shown: typeof met = []
+  for (const w of met) {
+    const r = readingIn(w)
+    if (r && !shown.some(x => readingIn(x) === r)) shown.push(w)
+  }
+  return [...shown, ...met.filter(w => !shown.includes(w))].slice(0, 3)
 })
 
 // the word that another reading comes from, for "that is how X is read in Y" (KR33)
@@ -281,7 +303,12 @@ const formLength = computed(() => Math.max(1, ...(card.value?.options ?? []).map
           <div class="word-gloss">{{ word.gloss }}</div>
         </template>
         <template v-else-if="word">
-          <div class="q-main q-word" :style="{ '--len': [...word.form].length }" lang="ja">{{ word.form }}</div>
+          <div class="q-main q-word" :style="{ '--len': [...word.form].length }" lang="ja">
+            <template v-if="markKanji">
+              <span v-for="(ch, i) in [...word.form]" :key="i" :class="{ 'q-mark': ch === markKanji }">{{ ch }}</span>
+            </template>
+            <template v-else>{{ word.form }}</template>
+          </div>
           <template v-if="isIntro">
             <div class="intro-reading-row">
               <span class="intro-reading" lang="ja">{{ word.reading }}</span>
@@ -434,6 +461,14 @@ const formLength = computed(() => Math.max(1, ...(card.value?.options ?? []).map
             </div>
           </div>
           <div v-if="explanation.hint" class="explain-hint">{{ explanation.hint }}</div>
+        </div>
+
+        <div v-if="kanjiWords.length" class="explain kanji-words">
+          <span class="kanji-words-label">How it's read</span>
+          <span v-for="w in kanjiWords" :key="w.id" class="kanji-word">
+            <span class="kanji-word-form" lang="ja">{{ w.form }}</span>
+            <span class="kanji-word-reading" lang="ja">{{ w.reading }}</span>
+          </span>
         </div>
 
         <div v-if="hook" class="mnemonic"><Icon name="bulb" :size="20" /><span>{{ hook }}</span></div>

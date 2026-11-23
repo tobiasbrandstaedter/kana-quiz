@@ -34,9 +34,10 @@ const gd = (id: string, kanji: string[]): PlanWord => ({ ...word(id, kanji, fals
 export const GROUP_D: PlanGroup = { id: 'gd', home: 'k:D', words: [gd('d1', ['A', 'D']), gd('d2', ['B', 'D'])], question: null }
 export const G2: PlanCourse = { ...C, words: [...WORDS, ...GROUP.words, ...GROUP_D.words], groups: [GROUP, GROUP_D] }
 
-// A, B and D met with their first words, B reviewed on a later day; C and E still new
+// A, B and D met with their first words, B reviewed on a later day, A missed last time (so
+// its further words wait); C and E still new
 export const READY = [
-  seen('k:A', 1, NOW + DAY), seen('k:B', 2, NOW + DAY), seen('k:D', 1, NOW + DAY),
+  seen('k:A', 0, NOW + DAY), seen('k:B', 2, NOW + DAY), seen('k:D', 1, NOW + DAY),
   seen('w:a', 1, NOW + DAY), seen('w:b', 1, NOW + DAY), seen('w:ad', 1, NOW + DAY),
 ]
 export const readyWith = (...extra: KanjiStatEntry[]) => statsOf(...READY, ...extra)

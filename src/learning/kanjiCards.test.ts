@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { seeded } from './seeded'
 import {
-  introLookalikes, itemInfo, itemOrder, makeCard, metSoFar, missExplanation, optionText, spellDiff, storedAnswer, twinTable, typedReadings, unlikePrevious,
+  introLookalikes, itemInfo, itemOrder, makeCard, metSoFar, missExplanation, optionText, readInWord, spellDiff, storedAnswer, twinTable, typedReadings, unlikePrevious,
   wordReadingMistake, wordTypedVerdict, writeCue, PATTERN_COURSE, PLAN_COURSE,
 } from './kanjiCards'
 import { toKana } from './kanaInput'
@@ -137,6 +137,37 @@ describe('makeCard for kanji', () => {
     expect(makeCard({ id: k.id }, nothing).type).toBe('meaning')
     const stats: KanjiStatsMap = { [k.id]: { ...newKanjiEntry(k.id), correct: 1, box: 2 } }
     expect(makeCard({ id: k.id }, { ...nothing, stats }).type).toBe('recognize')
+  })
+
+  it('reads a kanji in a word met so far from box 3, else asks it by sight (KR83)', () => {
+    const at3 = (id: string) => ({ ...newKanjiEntry(id), correct: 3, box: 3, byType: { meaning: { correct: 2, incorrect: 0 }, recognize: { correct: 1, incorrect: 0 } } })
+    // a kanji with a course word whose reading has a part for the kanji alone
+    const k = KANJI.find(x => WORDS.some(w => !w.group && w.kanji.includes(x.kanji) && w.split.some(p => p.text === x.kanji)))!
+    const words = WORDS.filter(w => !w.group && w.kanji.includes(k.kanji) && w.split.some(p => p.text === k.kanji))
+    const none = makeCard({ id: k.id }, { ...nothing, stats: { [k.id]: at3(k.id) } }, seeded())
+    expect(['meaning', 'recognize']).toContain(none.type)
+    const stats: KanjiStatsMap = { [k.id]: at3(k.id), [words[0].id]: { ...newKanjiEntry(words[0].id), correct: 1, box: 1 } }
+    const card = makeCard({ id: k.id }, { ...nothing, stats }, seeded())
+    expect(card).toMatchObject({ id: k.id, home: k.kanji, type: 'kanji-read', options: [], answer: words[0].reading, word: words[0].id })
+    // a re-ask keeps the type, the word is judged as itself
+    expect(makeCard({ id: k.id, type: 'kanji-read' }, { ...nothing, stats }, seeded()).word).toBe(words[0].id)
+    expect(wordTypedVerdict(card.word!, words[0].reading, false).result).toBe('right')
+  })
+
+  it('keeps the missed word on a re-ask and leaves words with a card of their own in the session last', () => {
+    const k = KANJI.find(x => WORDS.filter(w => !w.group && w.kanji.includes(x.kanji) && w.split.some(p => p.text === x.kanji)).length >= 2)!
+    const [a, b] = WORDS.filter(w => !w.group && w.kanji.includes(k.kanji) && w.split.some(p => p.text === k.kanji))
+    const stats: KanjiStatsMap = { [a.id]: { ...newKanjiEntry(a.id), correct: 1 }, [b.id]: { ...newKanjiEntry(b.id), correct: 1 } }
+    for (let seed = 1; seed < 10; seed++) {
+      expect(readInWord(k.kanji, stats, seeded(seed), new Set([a.id]))?.id).toBe(b.id)
+      expect(makeCard({ id: k.id, type: 'kanji-read', word: a.id }, { ...nothing, stats }, seeded(seed)).word).toBe(a.id)
+    }
+  })
+
+  it('never reads a kanji in a word whose reading has no part for it alone', () => {
+    const special = WORDS.find(w => w.kanji.length > 1 && w.kanji.some(k => !w.split.some(p => p.text === k)))!
+    const k = special.kanji.find(x => !special.split.some(p => p.text === x))!
+    expect(readInWord(k, { [special.id]: { ...newKanjiEntry(special.id), correct: 1 } })).toBeNull()
   })
 
   it('puts the lookalikes of a kanji among its options', () => {
@@ -663,7 +694,7 @@ describe('a learner over months', () => {
 
   it('who answers everything right meets every kanji and word, every group once', () => {
     const { stats, opened, lastKanjiDay } = simulate(200, 0)
-    // the last kanji comes on day 141 at this pace, a little slack for course edits
+    // the last kanji comes on day 131 at this pace, a little slack for course edits
     expect(lastKanjiDay).toBeGreaterThan(100)
     expect(lastKanjiDay).toBeLessThanOrEqual(155)
     expect(allIds.filter(id => !stats[id]?.correct)).toEqual([])

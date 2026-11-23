@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { itemRow, openKanjiErrors, sortKanjiRows } from './kanjiProgress'
+import { itemRow, openKanjiErrors, readsWord, sortKanjiRows } from './kanjiProgress'
 import { MASTERED_BOX } from './scheduler'
 import { DAY, IDS as ALL_IDS, NOW, stat, statsOf } from './kanjiFixtures'
 import type { ItemInfo, KanjiAnswerRecord, KanjiRow } from '../types'
@@ -29,6 +29,15 @@ describe('openKanjiErrors', () => {
     )
     const log = [miss('k:B'), miss('k:B')]
     expect(openKanjiErrors(s, log, IDS).map(e => e.id)).toEqual(['k:B', 'k:A'])
+  })
+})
+
+describe('readsWord', () => {
+  it('needs a typed reading that was right and a word that has not fallen back since', () => {
+    const typed = { 'read-type': { correct: 1, incorrect: 0 } }
+    expect(readsWord(stat('w:a', { box: 2, byType: typed }))).toBe(true)
+    expect(readsWord(stat('w:a', { box: 1, byType: typed }))).toBe(false)
+    expect(readsWord(stat('w:a', { box: 4, byType: { 'read-choice': { correct: 3, incorrect: 0 } } }))).toBe(false)
   })
 })
 

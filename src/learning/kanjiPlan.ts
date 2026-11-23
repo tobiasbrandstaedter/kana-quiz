@@ -9,8 +9,10 @@ export const MAX_KANJI_LEARNING = 12
 // one for the meaning), so a new kanji with its first word takes six (KR14)
 export const CARDS_PER_NEW = 3
 export const CARDS_PER_WORD = 3
-// a further word waits until its home kanji has survived a review on a later day (KR29)
-export const WORD_UNLOCK_BOX = 2
+// a further word waits until its home kanji was answered right once (KR29), a group until
+// its counter has survived a review on a later day (KR76): a table is many words at once
+export const WORD_UNLOCK_BOX = 1
+export const GROUP_UNLOCK_BOX = 2
 
 // a word as the plan sees it, a course word or a practiced word of a group
 export interface PlanWord {
@@ -50,13 +52,13 @@ export function wordLock(w: PlanWord, stats: KanjiStatsMap): Lock {
 
 /**
  * What still keeps a group from opening (KR76): kanji of its practiced words not seen yet, a
- * counter below WORD_UNLOCK_BOX. The question word doesn't hold the group back (its kanji for
+ * counter below GROUP_UNLOCK_BOX. The question word doesn't hold the group back (its kanji for
  * "what" comes late in the course), it waits for its own kanji through wordLock like any word.
  */
 export function groupLock(g: PlanGroup, stats: KanjiStatsMap): Lock {
   const members = g.words.filter(w => w.id !== g.question)
   const unseen = [...new Set(members.flatMap(w => w.kanji))].filter(id => !isSeen(stats[id]))
-  const review = (stats[g.home]?.box ?? 0) < WORD_UNLOCK_BOX
+  const review = (stats[g.home]?.box ?? 0) < GROUP_UNLOCK_BOX
   return unseen.length || review ? { unseen, review } : null
 }
 
@@ -93,7 +95,9 @@ export interface KanjiPlan {
  * 4. a group opens only when nothing else waits: its card (one card, counts against no
  *    limit) and as many of its words as still fit, one group per session
  * 5. new kanji from `newIds` (the picked sets, in course order), each with its first word
- *    when the learner can read it by then: six cards, else three, and only when all fit
+ *    when the learner can read it by then: six cards, else three, and only when all fit.
+ *    None while a further word of a kanji already met was left behind in step 3: the words
+ *    carry the readings, so they keep up and the kanji wait (KD8)
  * 6. the items due next fill the rest
  * New words and new kanji have a limit of `newLimit` each (KR30), nothing new comes while
  * MAX_KANJI_LEARNING items are in box 0 or 1 (KR31). With sets picked, new words, groups and
@@ -156,12 +160,13 @@ export function planKanji(
     room -= 1 + words.length * CARDS_PER_WORD
   }
 
-  // 5. new kanji
+  // 5. new kanji, unless words of met kanji are still waiting for their turn
+  const wordsBehind = waiting.some(w => !w.group && !waitingWords.includes(w.id))
   const fresh: string[] = []
   const firstWords: Record<string, string> = {}
   const met = new Set(reviewable.map(e => e.id))
   for (const id of newIds) {
-    if (fresh.length >= limit) break
+    if (wordsBehind || fresh.length >= limit) break
     if (isSeen(stats[id])) continue
     const first = course.words.find(w => w.home === id && w.first)
     // its other kanji met before or new earlier in this session

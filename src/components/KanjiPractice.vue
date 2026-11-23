@@ -190,7 +190,10 @@ function progressText(p: ColumnProgress): string {
       <span class="stat-label">errors</span>
     </button>
   </div>
-  <p class="hint-line">Kanji and words counted together.</p>
+  <p class="hint-line">
+    Kanji and words counted together.
+    <template v-if="summary.wordsRead">You can read {{ summary.wordsRead }} of {{ summary.wordsTotal }} words from memory.</template>
+  </p>
 
   <h2 class="section-title spaced">How to practice</h2>
   <p v-if="mode === 'write'" class="section-note">Write is for the custom quiz. Practice now asks as in Mixed.</p>
