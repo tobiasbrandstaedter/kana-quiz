@@ -40,10 +40,9 @@ export function cleanTyped(typed: string): string {
 
 /**
  * Hiragana for what was typed. Letters that don't make a kana (yet) stay as typed. ん comes
- * from `n'`, `nn`, an n before a consonant or kana, an m before b, p or m, and a final n
- * (`trailingN` false keeps that one a letter for the preview).
+ * from `n'`, `nn`, an n before a consonant or kana, an m before b, p or m, and a final n.
  */
-export function toKana(typed: string, { trailingN = true } = {}): string {
+export function toKana(typed: string): string {
   const s = cleanTyped(typed)
   let out = ''
   let i = 0
@@ -59,11 +58,6 @@ export function toKana(typed: string, { trailingN = true } = {}): string {
       // the second n stays for the syllable after it when it can make one: konnichi
       out += 'ん'
       i += joinsN(s[i + 2]) ? 1 : 2
-      continue
-    }
-    if (ch === 'n' && next === undefined && !trailingN) {
-      out += 'n'
-      i++
       continue
     }
     const nIsN = ch === 'n' && (next === undefined || !joinsN(next))
@@ -120,9 +114,12 @@ export function kanaWays(typed: string): string[] {
   return [...ways]
 }
 
-/** The preview of what is being typed: runs of kana so far and of letters not kana yet. */
+/**
+ * The preview of what is being typed: runs of kana so far and of letters not kana yet. It shows
+ * what Check would send, so a final n is ん already and turns into な once an a follows.
+ */
 export function previewParts(typed: string): Array<{ text: string; pending: boolean }> {
-  return toKana(typed, { trailingN: false }).split(/([^ぁ-ゖ]+)/).filter(Boolean)
+  return toKana(typed).split(/([^ぁ-ゖ]+)/).filter(Boolean)
     .map(text => ({ text, pending: !isAllKana(text) }))
 }
 

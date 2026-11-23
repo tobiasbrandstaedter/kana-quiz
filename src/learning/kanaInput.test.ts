@@ -79,9 +79,9 @@ describe('toKana', () => {
     expect(kanaWays('kannta')).toEqual(['かんた'])
   })
 
-  it('keeps a trailing n a letter for the preview', () => {
-    expect(toKana('ran', { trailingN: false })).toBe('らn')
-    expect(toKana('rann', { trailingN: false })).toBe('らん')
+  it('reads a final n or nn as ん', () => {
+    expect(toKana('ran')).toBe('らん')
+    expect(toKana('rann')).toBe('らん')
   })
 
   it('leaves letters that make no kana as typed', () => {
@@ -117,7 +117,10 @@ describe('cleanTyped', () => {
 describe('previewParts and isAllKana', () => {
   it('split kana so far from letters left', () => {
     expect(previewParts('rakpu')).toEqual([{ text: 'ら', pending: false }, { text: 'k', pending: true }, { text: 'ぷ', pending: false }])
-    expect(previewParts('ran')).toEqual([{ text: 'ら', pending: false }, { text: 'n', pending: true }])
+    // a final n shows as the ん that Check would send
+    expect(previewParts('san')).toEqual([{ text: 'さん', pending: false }])
+    expect(previewParts('sana')).toEqual([{ text: 'さな', pending: false }])
+    expect(previewParts('sank')).toEqual([{ text: 'さん', pending: false }, { text: 'k', pending: true }])
     expect(previewParts('')).toEqual([])
     expect(isAllKana('かっこう')).toBe(true)
     expect(isAllKana('かn')).toBe(false)
