@@ -39,6 +39,15 @@ describe('applyKanjiAnswer', () => {
     expect(e.confusions).toEqual({ 'k:B': 1 })
   })
 
+  it('lowers the ease once for a miss and its re-asks, again on a later day', () => {
+    const before = { ...newKanjiEntry('k:A'), correct: 4, box: 3, due: NOW, ease: 1 }
+    let e = applyKanjiAnswer(before, answer({ correct: false }), NOW)
+    e = applyKanjiAnswer(e, answer({ correct: false }), NOW + 60_000)
+    expect(e).toMatchObject({ box: 0 })
+    expect(e.ease).toBeCloseTo(0.8)
+    expect(applyKanjiAnswer(e, answer({ correct: false }), NOW + DAY).ease).toBeCloseTo(0.6)
+  })
+
   it('counts a wrong reading by its kind', () => {
     // made up kana, not readings of real words
     const miss = (given: string, mistake: 'long-vowel' | 'voicing') =>

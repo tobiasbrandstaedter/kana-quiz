@@ -104,15 +104,22 @@ const explanation = computed(() => {
   return missExplanation(c, pickedOption.value)
 })
 
-// after a kanji question: the words met so far that hold it, with their readings, its own
-// first, so a kanji is never only a meaning (KR81)
+// after a kanji question: words met so far that hold it, with their readings, so a kanji is
+// never only a meaning (KR81). One word per reading of the kanji first, its own words before others
 const kanjiWords = computed(() => {
   const c = card.value
   if (!c || !answered.value || (c.type !== 'meaning' && c.type !== 'recognize')) return []
-  return practicedWords()
+  const met = practicedWords()
     .filter(w => w.kanji.includes(c.home) && isSeen(statOf(w.id)))
     .sort((a, b) => Number(b.home === c.home) - Number(a.home === c.home))
-    .slice(0, 3)
+  // a special reading (はつか) has no part for the kanji alone, it comes with the rest
+  const readingIn = (w: (typeof met)[number]) => w.split.find(p => p.text === c.home)?.reading
+  const shown: typeof met = []
+  for (const w of met) {
+    const r = readingIn(w)
+    if (r && !shown.some(x => readingIn(x) === r)) shown.push(w)
+  }
+  return [...shown, ...met.filter(w => !shown.includes(w))].slice(0, 3)
 })
 
 // the word that another reading comes from, for "that is how X is read in Y" (KR33)
@@ -431,14 +438,6 @@ const formLength = computed(() => Math.max(1, ...(card.value?.options ?? []).map
           </div>
         </div>
 
-        <div v-if="kanjiWords.length" class="explain kanji-words">
-          <span class="kanji-words-label">Read in</span>
-          <span v-for="w in kanjiWords" :key="w.id" class="kanji-word">
-            <span class="kanji-word-form" lang="ja">{{ w.form }}</span>
-            <span class="kanji-word-reading" lang="ja">{{ w.reading }}</span>
-          </span>
-        </div>
-
         <div v-if="explanation" class="explain">
           <div class="explain-pair">
             <div v-if="explanation.yours" class="explain-item yours">
@@ -453,6 +452,14 @@ const formLength = computed(() => Math.max(1, ...(card.value?.options ?? []).map
             </div>
           </div>
           <div v-if="explanation.hint" class="explain-hint">{{ explanation.hint }}</div>
+        </div>
+
+        <div v-if="kanjiWords.length" class="explain kanji-words">
+          <span class="kanji-words-label">How it's read</span>
+          <span v-for="w in kanjiWords" :key="w.id" class="kanji-word">
+            <span class="kanji-word-form" lang="ja">{{ w.form }}</span>
+            <span class="kanji-word-reading" lang="ja">{{ w.reading }}</span>
+          </span>
         </div>
 
         <div v-if="hook" class="mnemonic"><Icon name="bulb" :size="20" /><span>{{ hook }}</span></div>

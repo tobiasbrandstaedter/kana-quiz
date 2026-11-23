@@ -49,12 +49,13 @@ describe('wordQuestionType', () => {
     expect(wordQuestionType(at(2, { typed: 9 }), 'mixed')).toBe('read-type')
   })
 
-  it('from box 3 asks the typed reading, spelling or meaning only once it falls below half of it', () => {
+  it('from box 3 asks the typed reading, the meaning below two thirds of it, spelling below half', () => {
     expect(wordQuestionType(at(3, { typed: 1, meaning: 1, spell: 0 }), 'mixed')).toBe('spell')
-    expect(wordQuestionType(at(4, { typed: 2, meaning: 1, spell: 1 }), 'mixed')).toBe('read-type')
-    expect(wordQuestionType(at(5, { typed: 4, meaning: 2, spell: 2 }), 'mixed')).toBe('read-type')
-    expect(wordQuestionType(at(5, { typed: 5, meaning: 2, spell: 3 }), 'mixed')).toBe('word-meaning')
-    // a word answered right every time is read in about two of three reviews
+    expect(wordQuestionType(at(4, { typed: 2, meaning: 2, spell: 1 }), 'mixed')).toBe('read-type')
+    expect(wordQuestionType(at(4, { typed: 3, meaning: 2, spell: 2 }), 'mixed')).toBe('read-type')
+    expect(wordQuestionType(at(5, { typed: 4, meaning: 2, spell: 2 }), 'mixed')).toBe('word-meaning')
+    expect(wordQuestionType(at(5, { typed: 5, meaning: 4, spell: 2 }), 'mixed')).toBe('spell')
+    // a word answered right every time: the typed reading most often, the meaning in between
     let e = at(3, { choice: 1, meaning: 1 })
     const asked: string[] = []
     for (let i = 0; i < 12; i++) {
@@ -62,7 +63,9 @@ describe('wordQuestionType', () => {
       asked.push(t)
       e = { ...e, byType: { ...e.byType, [t]: { correct: (e.byType[t]?.correct ?? 0) + 1, incorrect: 0 } } }
     }
-    expect(asked.filter(t => t === 'read-type').length).toBeGreaterThanOrEqual(7)
+    const count = (t: string) => asked.filter(x => x === t).length
+    expect(count('read-type')).toBeGreaterThan(count('word-meaning'))
+    expect(count('word-meaning')).toBeGreaterThanOrEqual(3)
     for (let seed = 1; seed < 20; seed++) expect(wordQuestionType(at(3, { choice: 0 }), 'mixed', seeded(seed))).not.toBe('read-choice')
   })
 

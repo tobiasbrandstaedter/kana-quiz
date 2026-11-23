@@ -412,7 +412,7 @@ These need a real device or a person, and nothing in the repo can stand in for t
 ### Known limits, left on purpose
 
 - The stroke check lets about 3 of 100 order mistakes inside dense kanji through, and short strokes drawn backwards (section 6.2). It never rejects a correct stroke.
-- At 20 cards a day the course takes five to ten months (KD9). With the ease (KD19) the simulation brings the last kanji on day 131 with no misses (141 before) and on day 273 with 15 % misses (306 before). Sessions of 10 with a miss rate of 15 % do not reach the end within 600 days, the hero then says that reviews fill the session.
+- At 20 cards a day the course takes five to ten months (KD9). With the ease (KD19) the simulation brings the last kanji on day 131 with no misses (141 before) and on day 255 with 15 % misses (306 before). Sessions of 10 with a miss rate of 15 % do not reach the end within 600 days, the hero then says that reviews fill the session.
 - A learner who keeps missing a third of all answers stays at the limit of twelve unsettled items. The simulation assumes a miss rate that never improves, a real learner's does.
 - With sets picked, a kanji can be introduced before a part of it from a set that is not picked. Kana rows behave the same.
 - Reading choice cards for one kanji words rarely offer another reading of the same kanji, because those readings are right for the spelling in another word (homographs).

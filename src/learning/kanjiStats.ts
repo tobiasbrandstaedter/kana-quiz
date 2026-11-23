@@ -9,6 +9,8 @@ export function newKanjiEntry(id: string): KanjiStatEntry {
   }
 }
 
+const EASE_COOLDOWN = 12 * 60 * 60 * 1000
+
 const isObject = (x: unknown): x is Record<string, unknown> => !!x && typeof x === 'object' && !Array.isArray(x)
 const num = (x: unknown): number => typeof x === 'number' && Number.isFinite(x) ? x : 0
 
@@ -75,11 +77,14 @@ export function normalizeKanjiLog(raw: unknown): KanjiAnswerRecord[] {
  * The entry after one answer, the old one stays untouched. Box, due and ease move through
  * `reviewKanji` (up to box 7, 120 days times the ease), except with holdBox (right on the re-ask
  * after a miss in the same session) and for a typo (a typed reading that slipped twice), as for kana.
+ * A miss lowers the ease only when the item wasn't missed in the last twelve hours.
  * "Don't know" comes with an empty `given` and leaves no confusion behind. A wrong reading
  * with a name counts its kind in `mistakes`. A written answer goes to `applyWrite`.
  */
 export function applyKanjiAnswer(old: KanjiStatEntry | undefined, a: KanjiAnswerInput, now: number): KanjiStatEntry {
   if (a.type === 'write') return applyWrite(old, a)
+  // a bad sitting (a miss and its re-asks) lowers the ease once, not three times
+  const missedLately = !!old && now - old.lastWrong < EASE_COOLDOWN
   const e = old
     ? { ...old, confusions: { ...old.confusions }, byType: { ...old.byType }, mistakes: { ...old.mistakes } }
     : newKanjiEntry(a.id)
@@ -98,7 +103,11 @@ export function applyKanjiAnswer(old: KanjiStatEntry | undefined, a: KanjiAnswer
     if (a.given) e.confusions[a.given] = (e.confusions[a.given] ?? 0) + 1
     if (a.mistake) e.mistakes[a.mistake] = (e.mistakes[a.mistake] ?? 0) + 1
   }
-  if (!a.holdBox && !a.typo) Object.assign(e, reviewKanji(e, a.correct, now))
+  if (!a.holdBox && !a.typo) {
+    const ease = e.ease
+    Object.assign(e, reviewKanji(e, a.correct, now))
+    if (!a.correct && missedLately) e.ease = ease
+  }
   if (a.ms > 0 && a.ms < 30_000) {
     e.totalMs += a.ms
     e.count++
