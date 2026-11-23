@@ -190,6 +190,7 @@ What changed:
 - A word is asked for its reading most of the time. Meaning and spelling come in once they fall behind (KR25).
 - A further word comes once its kanji was answered right, and no new kanji starts while further words of kanji already met wait for room (KR29, KR30). The reading of a kanji comes with its words, so the words have to keep up.
 - After a question about a kanji, the card shows how it is read in the words met so far (KR81).
+- From box 3 about half the reviews of a kanji ask it read in a word, typed (KR83). Knowing a kanji now means reading it, not only naming it.
 - Progress names the words the learner can read from memory, not only the kanji known by meaning (KR82).
 - Each kanji and word keeps an ease that scales its rest, and a mastered item that slips goes back to box 1, not 0 (KR27).
 
@@ -243,6 +244,7 @@ Rules for picking words:
 - KR80: for a member of a group only the reading the table shows is right. Another reading the dictionary gives for the same entry (七月 read the regular way), or the reading of another picked word with the same written form (十), is not wrong either: the card asks again without counting and points to the table. Otherwise a learner could carry an irregular member to mastered without ever producing the reading the table teaches.
 - KR81: after a question about a kanji (M1, M2), right or wrong, the card shows up to three words met so far that hold it, with their readings: one word per reading of the kanji first, its own words before others, below the explanation of a miss (KD19).
 - KR82: a word counts as read when its reading was typed right at least once and it is in box 2 or above now. The Practice tab says how many of all practiced words that is once there is one, the Progress tab shows it in place of words mastered (KD19).
+- KR83: R3, a kanji read in a word: a practiced word the learner has answered that holds the kanji, with the kanji marked, its reading typed as in R2 and judged as that word's reading. Course words before group words (an irregular member tests its table more than the kanji), never a word whose reading has no part for the kanji alone (二十日 はつか). The answer counts for the kanji only, its box and its byType; the word keeps its own schedule (KD3). A miss comes back as R3 in the same word, the feedback is the one of a word. A word with a card of its own in the session is picked only when no other fits, R3 would give its answer away. The kind of a wrong reading on R3 is stored with the kanji and stays out of the reading habits (KR38), which count words.
 - KR77: the group card can be opened again at any time from the sheet of its home kanji and from the feedback of any of its members.
 
 ## 5. Order
@@ -273,6 +275,7 @@ The draft of the sets is in section 12. The data phase turns it into the final o
 | V1 | word in kanji | meaning | choice of 4 | G2 |
 | R1 | word in kanji | reading | choice of 4 readings | G2 |
 | R2 | word in kanji | reading | typed | G2 |
+| R3 | a word met so far, the kanji marked in it | reading of the word, counted for the kanji | typed | G1, G2 (KR83) |
 | S1 | reading and meaning | written form | choice of 4 | G3 |
 | W1 | keyword and the reading of the first word | the kanji, drawn | canvas | G4, later release |
 
@@ -297,7 +300,7 @@ The draft of the sets is in section 12. The data phase turns it into the final o
 
 In the Mixed mode, which is the default, the type follows from how well the item is known, easiest first. A learner who picks another mode gets that type for the items it fits (a kanji mode for kanji, a word mode for words) whatever the box, in smart practice and in the custom quiz, as the kana modes work. The other kind of item keeps following the rules below.
 
-- KR24: kanji in box 0 and 1: M1. Box 2: M2. From box 3: of M1 and M2 the one with fewer right answers so far.
+- KR24: kanji in box 0 and 1: M1. Box 2: M2. From box 3: R3, the kanji read in a word (KR83), M1 or M2 once it has fewer than half the right answers of R3 (the one with fewer). Without a word met that R3 can ask, M1 or M2 by fewer right answers.
 - KR25: word in box 0 and 1: R1, V1 while the meaning was never answered right. Box 2: R2. From box 3: R2, V1 once it has fewer than two thirds of the right answers of R2, S1 once it has fewer than half (the one with fewer, a tie at random). The typed reading is the most asked, the meaning stays in between, since a word whose meaning fades loses its reading too (KD18, KD19).
 - KR26: W1 is never picked by smart practice. It has its own mode and the Writing tab (KD11).
 

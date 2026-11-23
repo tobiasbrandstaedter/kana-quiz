@@ -38,6 +38,7 @@ const hints = computed(() => {
 const TYPES: Array<[QuestionType, string]> = [
   ['meaning', 'Meaning'],
   ['recognize', 'Recognize'],
+  ['kanji-read', 'Read in a word'],
   ['write', 'Write'],
 ]
 

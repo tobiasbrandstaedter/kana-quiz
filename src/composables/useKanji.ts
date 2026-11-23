@@ -223,6 +223,7 @@ function createKanji() {
   // kanji and words the learner has met, the session's own included, for the wrong options
   let knownKanji = new Set<string>()
   let knownWords = new Set<string>()
+  let sessionIds = new Set<string>()
 
   const card = computed(() => cards.value[current.value] ?? null)
   const progress = computed(() => cards.value.length ? (current.value / cards.value.length) * 100 : 0)
@@ -230,7 +231,7 @@ function createKanji() {
   // a pattern session asks the type its card is about, re-ask padding included
   let sessionMode: KanjiMode | null = null
   const buildCard = (item: PlannedCard): KanjiCard =>
-    makeCard(item, { stats: stats.value, mode: sessionMode ?? mode.value, knownKanji, knownWords })
+    makeCard(item, { stats: stats.value, mode: sessionMode ?? mode.value, knownKanji, knownWords, session: sessionIds })
 
   function resetCard(): void {
     answered.value = false
@@ -251,6 +252,7 @@ function createKanji() {
     const met = metSoFar(stats.value, items.map(i => i.id))
     knownKanji = met.kanji
     knownWords = met.words
+    sessionIds = new Set(items.map(i => i.id))
     reasked = {}
     rightIds = new Set()
     moves.value = {}
@@ -373,10 +375,12 @@ function createKanji() {
   }
 
   // a missed item comes back a few cards later, in the type that was missed
-  function queueReask(id: string, type: QuestionType): void {
+  function queueReask(id: string, type: QuestionType, word?: string): void {
     const slot = reaskCards(cards.value, current.value, id, type, reasked[id] ?? 0)
     if (!slot) return
     reasked[id] = (reasked[id] ?? 0) + 1
+    // a kanji read in a word comes back in the same word
+    if (word) slot.cards[slot.cards.length - 1].word = word
     const built = slot.cards.map(buildCard)
     built[built.length - 1].reask = true
     cards.value.splice(slot.index, 0, ...built)
@@ -388,7 +392,7 @@ function createKanji() {
     record(a)
     // every card waits for Next, right or wrong: the answer is there to be looked at and heard,
     // and a card that changes by itself takes the tap meant for Next
-    if (!a.correct) queueReask(a.id, a.type)
+    if (!a.correct) queueReask(a.id, a.type, card.value?.word)
   }
 
   function answer(given: string | null): void {
@@ -405,8 +409,9 @@ function createKanji() {
   function submitTyped(): void {
     const c = card.value
     const typed = typedAnswer.value
-    if (!c || c.type !== 'read-type' || answered.value || !(cleanTyped(typed) || hasKanji(typed))) return
-    const v = wordTypedVerdict(c.id, typed, slipped.value)
+    if (!c || (c.type !== 'read-type' && c.type !== 'kanji-read') || answered.value || !(cleanTyped(typed) || hasKanji(typed))) return
+    // a kanji read in a word is judged as that word, and counts for the kanji
+    const v = wordTypedVerdict(c.word ?? c.id, typed, slipped.value)
     verdict.value = v
     if (v.result === 'slip') slipped.value = true
     if (v.result === 'wrong') mistake.value = v.mistake

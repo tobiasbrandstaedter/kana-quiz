@@ -913,6 +913,8 @@ body {
 .word-line-reading { font-size: 26px; font-weight: 700; color: var(--primary-text); }
 .word-line-gloss { font-size: 16px; font-weight: 800; color: var(--ink-2); }
 .word-line .explain-hint { flex-basis: 100%; }
+/* a kanji read in a word: the kanji asked about, marked inside the word */
+.q-mark { text-decoration: underline; text-decoration-thickness: 4px; text-underline-offset: 8px; text-decoration-color: var(--primary-text); }
 /* after a kanji question: the words met so far that hold it, a line of form and reading pairs */
 .kanji-words { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: center; gap: 4px 16px; }
 .kanji-words-label { flex-basis: 100%; text-align: center; font-size: 14px; font-weight: 800; color: var(--ink-2); }

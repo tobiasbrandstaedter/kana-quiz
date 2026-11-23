@@ -26,7 +26,7 @@ const retryHint = computed(() => {
 })
 
 const twinTitle = computed(() =>
-  retryHint.value?.result === 'homograph' && card.value ? twinTable(card.value.id, retryHint.value.kana) : null)
+  retryHint.value?.result === 'homograph' && card.value ? twinTable(card.value.word ?? card.value.id, retryHint.value.kana) : null)
 
 // :value and @input instead of v-model: v-model ignores input while a Japanese keyboard
 // composes, the preview and Check would stay dead until the composition ends

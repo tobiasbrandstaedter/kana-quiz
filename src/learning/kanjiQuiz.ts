@@ -6,16 +6,27 @@ import { shuffle } from './distractors'
  * Which question a kanji gets (KR24). Meaning and Recognize ask their type. Every other mode
  * (Mixed, and the word modes, which leave kanji to Mixed) goes by how well the kanji is
  * known: its meaning while new and in box 1, the kanji for its keyword in box 2, from box 3
- * the type with fewer right answers so far.
+ * the kanji read in a word it is in (KR83), meaning or recognize once it has fewer than half
+ * the right answers of that (the one with fewer, a tie at random). A known kanji should be
+ * readable, not only recognized (KD19). makeCard falls back when no word was met yet.
  */
 export function kanjiQuestionType(e: KanjiStatEntry | undefined, mode: KanjiMode, rng: () => number = Math.random): KanjiQuestionType {
   if (mode === 'meaning' || mode === 'recognize') return mode
   if (!isSeen(e) || e.box <= 1) return 'meaning'
   if (e.box === 2) return 'recognize'
-  const meaning = e.byType.meaning?.correct ?? 0
-  const recognize = e.byType.recognize?.correct ?? 0
-  if (meaning !== recognize) return meaning < recognize ? 'meaning' : 'recognize'
-  return rng() < 0.5 ? 'meaning' : 'recognize'
+  const right = (t: KanjiQuestionType) => e.byType[t]?.correct ?? 0
+  const read = right('kanji-read')
+  const behind = (['meaning', 'recognize'] as const).filter(t => right(t) * 2 < read)
+  if (!behind.length) return 'kanji-read'
+  return sightType(e, rng, behind)
+}
+
+/** Meaning or recognize, the one with fewer right answers, a tie at random. */
+export function sightType(e: KanjiStatEntry, rng: () => number = Math.random, types: readonly ('meaning' | 'recognize')[] = ['meaning', 'recognize']): 'meaning' | 'recognize' {
+  const right = (t: 'meaning' | 'recognize') => e.byType[t]?.correct ?? 0
+  const fewest = Math.min(...types.map(right))
+  const tied = types.filter(t => right(t) === fewest)
+  return tied[Math.floor(rng() * tied.length)]
 }
 
 // two kanji whose keywords could both be right: one keyword is a source meaning of the

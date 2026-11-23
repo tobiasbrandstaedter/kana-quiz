@@ -23,9 +23,12 @@ const {
   choose, giveUp, submitWrite, next, goHome, resume,
 } = useKanji()
 
-// a word card carries its word, a kanji card its kanji, a table card the group that opens
-// with it; `entry` is the kanji, for a word its home kanji, for a table card the counter
-const word = computed(() => card.value ? wordById(card.value.id) : null)
+// a word card carries its word, a kanji card its kanji (a kanji read in a word that word too),
+// a table card the group that opens with it; `entry` is the kanji, for a word its home kanji,
+// for a table card the counter
+const word = computed(() => card.value ? wordById(card.value.word ?? card.value.id) : null)
+// a kanji read in a word: the kanji marked inside the word
+const markKanji = computed(() => card.value?.type === 'kanji-read' ? card.value.home : null)
 const newGroup = computed(() => {
   const id = card.value ? cardGroup(card.value.id) : null
   return id ? groupById(id) : null
@@ -49,7 +52,7 @@ const questionWord = computed(() => !!word.value && wordGroup.value?.question ==
 // open, closing it gives the focus back to the button that opened it
 const wordTableOpen = ref(false)
 watch(card, () => { wordTableOpen.value = false })
-const isTyped = computed(() => card.value?.type === 'read-type')
+const isTyped = computed(() => card.value?.type === 'read-type' || card.value?.type === 'kanji-read')
 
 // the word is the kanji standing alone: its intro only says so, the kanji intro came just before
 const aloneAsWord = computed(() => !!word.value && word.value.form === word.value.home)
@@ -80,6 +83,7 @@ const label = computed(() => {
     'word-meaning': 'What does this word mean?',
     'read-choice': 'How is this word read?',
     'read-type': 'How is this word read? Type it',
+    'kanji-read': 'How is this word read? Type it',
     spell: 'How is this word written?',
     write: 'Write the kanji for',
   }[c.type]
@@ -299,7 +303,12 @@ const formLength = computed(() => Math.max(1, ...(card.value?.options ?? []).map
           <div class="word-gloss">{{ word.gloss }}</div>
         </template>
         <template v-else-if="word">
-          <div class="q-main q-word" :style="{ '--len': [...word.form].length }" lang="ja">{{ word.form }}</div>
+          <div class="q-main q-word" :style="{ '--len': [...word.form].length }" lang="ja">
+            <template v-if="markKanji">
+              <span v-for="(ch, i) in [...word.form]" :key="i" :class="{ 'q-mark': ch === markKanji }">{{ ch }}</span>
+            </template>
+            <template v-else>{{ word.form }}</template>
+          </div>
           <template v-if="isIntro">
             <div class="intro-reading-row">
               <span class="intro-reading" lang="ja">{{ word.reading }}</span>
