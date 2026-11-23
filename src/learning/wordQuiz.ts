@@ -8,20 +8,24 @@ export const isWordType = (t: string): t is WordQuestionType =>
 
 /**
  * Which question a word gets (KR25). The modes Words and Spelling ask their type, Reading
- * asks by choice in box 0 and 1 and typed from box 2. Every other mode goes by the box:
- * - box 0 and 1: reading by choice or meaning, whichever has fewer right answers
+ * asks by choice in box 0 and 1 and typed from box 2. Every other mode asks the reading,
+ * since the reading is what a word is in the app for (G2):
+ * - box 0 and 1: reading by choice, the meaning while it was never answered right
  * - box 2: reading typed
- * - box 3 and up: spelling, meaning or reading typed, whichever has the fewest right answers
+ * - box 3 and up: reading typed, spelling or meaning only once it has fewer than half the
+ *   right answers of the typed reading (the one with fewer, a tie at random)
  */
 export function wordQuestionType(e: KanjiStatEntry | undefined, mode: KanjiMode, rng: () => number = Math.random): WordQuestionType {
   const box = isSeen(e) ? e.box : 0
   if (mode === 'read-choice') return box >= 2 ? 'read-type' : 'read-choice'
   if (isWordType(mode)) return mode
-  if (box === 2) return 'read-type'
-  const types: WordQuestionType[] = box >= 3 ? ['spell', 'word-meaning', 'read-type'] : ['read-choice', 'word-meaning']
   const right = (t: WordQuestionType) => e?.byType[t]?.correct ?? 0
-  const fewest = Math.min(...types.map(right))
-  const tied = types.filter(t => right(t) === fewest)
+  if (box <= 1) return isSeen(e) && right('word-meaning') === 0 ? 'word-meaning' : 'read-choice'
+  if (box === 2) return 'read-type'
+  const behind = (['spell', 'word-meaning'] as const).filter(t => right(t) * 2 < right('read-type'))
+  if (!behind.length) return 'read-type'
+  const fewest = Math.min(...behind.map(right))
+  const tied = behind.filter(t => right(t) === fewest)
   return tied[Math.floor(rng() * tied.length)]
 }
 

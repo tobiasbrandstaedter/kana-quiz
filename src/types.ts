@@ -315,6 +315,7 @@ export interface KanjiStatEntry {
   mistakes: Partial<Record<ReadingKind, number>>  // wrong readings by kind, words only
   box: number
   due: number
+  ease: number  // scales the rest from box 2 on, see reviewKanji
   // written answers, kanji only, as kana store them: rejected attempts per stroke index and by fault
   strokeErrors: number[]
   strokeFaults: Partial<Record<StrokeFault, number>>

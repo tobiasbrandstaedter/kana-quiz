@@ -193,7 +193,7 @@ describe('planKanji with words', () => {
   })
 
   it('puts a first word left behind first in line, before new kanji', () => {
-    const s = statsOf(seen('k:A', 1, NOW + DAY))
+    const s = statsOf(seen('k:A', 0, NOW + DAY))
     const p = planKanji(s, [], C, 10, NOW, 3)
     expect(p.waitingWords).toEqual(['w:a'])
     // three cards for the word, six for the next kanji with its word, the last one fills
@@ -202,18 +202,21 @@ describe('planKanji with words', () => {
     expect(planCards(p)).toBe(10)
   })
 
-  it('unlocks further words once the home kanji is in box 2, the special one last (KR29)', () => {
-    const early = statsOf(seen('k:A', 1, NOW + DAY), seen('w:a', 1, NOW + DAY))
+  it('unlocks further words once the home kanji was answered right, the special one last (KR29)', () => {
+    const early = statsOf(seen('k:A', 0, NOW + DAY), seen('w:a', 1, NOW + DAY))
     expect(planKanji(early, [], C, 30, NOW, 3).waitingWords).toEqual([])
-    const reviewed = statsOf(seen('k:A', 2, NOW + DAY), seen('w:a', 1, NOW + DAY))
+    const reviewed = statsOf(seen('k:A', 1, NOW + DAY), seen('w:a', 1, NOW + DAY))
     expect(planKanji(reviewed, [], C, 30, NOW, 3).waitingWords).toEqual(['w:a2', 'w:a-special'])
   })
 
-  it('takes at most as many words as new kanji, words first when room is short (KR30)', () => {
-    const s = statsOf(seen('k:A', 2, NOW + DAY), seen('w:a', 1, NOW + DAY))
+  it('takes at most as many words as new kanji, no new kanji while words of met kanji wait (KR30, KD8)', () => {
+    const s = statsOf(seen('k:A', 1, NOW + DAY), seen('w:a', 1, NOW + DAY))
     const one = planKanji(s, [], C, 30, NOW, 1)
     expect(one.waitingWords).toEqual(['w:a2'])
-    expect(one.fresh).toEqual(['k:B'])
+    expect(one.fresh).toEqual([])
+    const two = planKanji(s, [], C, 30, NOW, 2)
+    expect(two.waitingWords).toEqual(['w:a2', 'w:a-special'])
+    expect(two.fresh).toEqual(['k:B', 'k:C'])
     const short = planKanji(s, [], C, 5, NOW, 3)
     expect(short.waitingWords).toEqual(['w:a2'])
     expect(short.fresh).toEqual([])
@@ -249,11 +252,11 @@ describe('planKanji with words', () => {
 
 describe('wordLock', () => {
   it('names the kanji not met yet and whether the home kanji still needs a review', () => {
-    const s = statsOf(seen('k:A', 1, NOW + DAY))
+    const s = statsOf(seen('k:A', 0, NOW + DAY))
     expect(wordLock(WORDS[5], s)).toEqual({ unseen: ['k:D'], review: false })
     expect(wordLock(WORDS[2], s)).toEqual({ unseen: [], review: true })
     expect(wordLock(WORDS[0], s)).toBeNull()
-    expect(wordLock(WORDS[2], statsOf(seen('k:A', 2, NOW + DAY)))).toBeNull()
+    expect(wordLock(WORDS[2], statsOf(seen('k:A', 1, NOW + DAY)))).toBeNull()
   })
 })
 

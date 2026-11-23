@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import type { AnswerRecord, StatEntry, StatsMap } from '../types'
-import { review, isDue, dueAt, recentErrors, pickSmart, orderSession, reaskSlot, planReask, columnProgress, dueOutlook, mixedDirection, MAX_BOX, KANJI_INTERVALS } from './scheduler'
+import { review, reviewKanji, isDue, dueAt, recentErrors, pickSmart, orderSession, reaskSlot, planReask, columnProgress, dueOutlook, mixedDirection, MAX_BOX, MASTERED_BOX, EASE_MIN, EASE_MAX } from './scheduler'
 import { allPairs, pairFor, HIRAGANA } from '../data/kana'
 import { newEntry } from './statsMigration'
 
@@ -44,10 +44,43 @@ describe('review', () => {
     expect(review({ box: MAX_BOX, due: 0 }, true, NOW).box).toBe(MAX_BOX)
   })
 
-  it('takes a longer interval table for kanji, the kana one stays', () => {
-    expect(review({ box: MAX_BOX, due: 0 }, true, NOW, KANJI_INTERVALS)).toEqual({ box: MAX_BOX + 1, due: NOW + 60 * DAY })
-    expect(review({ box: MAX_BOX + 1, due: 0 }, true, NOW, KANJI_INTERVALS)).toEqual({ box: MAX_BOX + 2, due: NOW + 120 * DAY })
-    expect(review({ box: MAX_BOX + 2, due: 0 }, true, NOW, KANJI_INTERVALS).box).toBe(MAX_BOX + 2)
+})
+
+describe('reviewKanji', () => {
+  it('goes on to 60 and 120 days, scaled by the ease from box 2', () => {
+    expect(reviewKanji({ box: 0, due: 0, ease: 1.5 }, true, NOW)).toEqual({ box: 1, due: NOW + DAY, ease: 1.55 })
+    expect(reviewKanji({ box: 1, due: 0, ease: 0.95 }, true, NOW)).toEqual({ box: 2, due: NOW + 3 * DAY, ease: 1 })
+    expect(reviewKanji({ box: MAX_BOX, due: 0, ease: 0.95 }, true, NOW)).toMatchObject({ box: MAX_BOX + 1, due: NOW + 60 * DAY })
+    expect(reviewKanji({ box: MAX_BOX + 1, due: 0, ease: 0.95 }, true, NOW)).toMatchObject({ box: MAX_BOX + 2, due: NOW + 120 * DAY })
+    expect(reviewKanji({ box: MAX_BOX + 2, due: 0, ease: 1 }, true, NOW).box).toBe(MAX_BOX + 2)
+    expect(reviewKanji({ box: 3, due: 0, ease: 1.45 }, true, NOW).due).toBe(NOW + 1.5 * 14 * DAY)
+  })
+
+  it('keeps everything when the item was not due', () => {
+    const s = { box: 3, due: NOW + 5 * DAY, ease: 1.2 }
+    expect(reviewKanji(s, true, NOW)).toBe(s)
+  })
+
+  it('lowers the ease on a miss four times as far as a right answer raises it, within its bounds', () => {
+    expect(reviewKanji({ box: 2, due: NOW, ease: 1 }, false, NOW).ease).toBeCloseTo(0.8)
+    expect(reviewKanji({ box: 2, due: NOW, ease: EASE_MIN }, false, NOW).ease).toBe(EASE_MIN)
+    expect(reviewKanji({ box: 2, due: 0, ease: EASE_MAX }, true, NOW).ease).toBe(EASE_MAX)
+  })
+
+  it('sends a miss from a mastered box to box 1 with a day of rest, from below to box 0, due at once', () => {
+    expect(reviewKanji({ box: MASTERED_BOX, due: NOW + DAY, ease: 1 }, false, NOW)).toMatchObject({ box: 1, due: NOW + DAY })
+    expect(reviewKanji({ box: 7, due: NOW + DAY, ease: 1 }, false, NOW)).toMatchObject({ box: 1, due: NOW + DAY })
+    expect(reviewKanji({ box: MASTERED_BOX - 1, due: NOW, ease: 1 }, false, NOW)).toMatchObject({ box: 0, due: NOW })
+    // a second miss in the same session
+    expect(reviewKanji({ box: 1, due: NOW, ease: 1 }, false, NOW).box).toBe(0)
+  })
+
+  it('gives an item that slipped twice a shorter rest in the same box than one never missed', () => {
+    const climb = (ease: number) => [0, 1, 2, 3].reduce(s => reviewKanji(s, true, s.due), { box: 0, due: NOW, ease })
+    const easy = climb(1)
+    const hard = climb(reviewKanji(reviewKanji({ box: 2, due: NOW, ease: 1 }, false, NOW), false, NOW).ease)
+    expect(hard.box).toBe(easy.box)
+    expect(hard.due - NOW).toBeLessThan(easy.due - NOW)
   })
 })
 

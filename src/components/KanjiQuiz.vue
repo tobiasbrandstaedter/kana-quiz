@@ -2,7 +2,7 @@
 import { inject, ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import { QUIZ_KEY } from '../composables/useQuiz'
 import { useKanji } from '../composables/useKanji'
-import { courseEntries, groupById, kanjiEntry, kanjiStrokes, sameForm, wordById } from '../data/kanjiData'
+import { courseEntries, groupById, kanjiEntry, kanjiStrokes, practicedWords, sameForm, wordById } from '../data/kanjiData'
 import { isSeen } from '../learning/scheduler'
 import { introLookalikes, missExplanation, optionText } from '../learning/kanjiCards'
 import { glyphShift, polylinePoints } from '../data/strokeGlyphs'
@@ -102,6 +102,17 @@ const explanation = computed(() => {
   const c = card.value
   if (!c || !answered.value || correct.value) return null
   return missExplanation(c, pickedOption.value)
+})
+
+// after a kanji question: the words met so far that hold it, with their readings, its own
+// first, so a kanji is never only a meaning (KR81)
+const kanjiWords = computed(() => {
+  const c = card.value
+  if (!c || !answered.value || (c.type !== 'meaning' && c.type !== 'recognize')) return []
+  return practicedWords()
+    .filter(w => w.kanji.includes(c.home) && isSeen(statOf(w.id)))
+    .sort((a, b) => Number(b.home === c.home) - Number(a.home === c.home))
+    .slice(0, 3)
 })
 
 // the word that another reading comes from, for "that is how X is read in Y" (KR33)
@@ -418,6 +429,14 @@ const formLength = computed(() => Math.max(1, ...(card.value?.options ?? []).map
               here it is <span class="kana" lang="ja">{{ mistake.right }}</span>.
             </template>
           </div>
+        </div>
+
+        <div v-if="kanjiWords.length" class="explain kanji-words">
+          <span class="kanji-words-label">Read in</span>
+          <span v-for="w in kanjiWords" :key="w.id" class="kanji-word">
+            <span class="kanji-word-form" lang="ja">{{ w.form }}</span>
+            <span class="kanji-word-reading" lang="ja">{{ w.reading }}</span>
+          </span>
         </div>
 
         <div v-if="explanation" class="explain">

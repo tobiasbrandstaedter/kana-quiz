@@ -20,7 +20,7 @@ import { cleanTyped, hasKanji } from '../learning/kanaInput'
 import { verdictAnswer } from '../learning/readings'
 import type { ReadingMistake, TypedVerdict } from '../learning/readings'
 import { isWordType } from '../learning/wordQuiz'
-import { itemRow, openKanjiErrors, sortKanjiRows } from '../learning/kanjiProgress'
+import { itemRow, openKanjiErrors, readsWord, sortKanjiRows } from '../learning/kanjiProgress'
 import { dueOutlook, columnProgress, isSeen, MASTERED_BOX } from '../learning/scheduler'
 import type { ColumnProgress } from '../learning/scheduler'
 import { shuffle } from '../learning/distractors'
@@ -90,7 +90,9 @@ function createKanji() {
       total: kanjiIds.length,
       seen: seen.length,
       mastered: mastered(seen),
-      wordsMastered: mastered(seenWords.value),
+      // words read from memory, out of every practiced word (KR82)
+      wordsRead: seenWords.value.filter(readsWord).length,
+      wordsTotal: wordIds.length,
       // kanji and words together, for the tiles (KR45)
       itemsSeen: items.length,
       itemsMastered: mastered(items),

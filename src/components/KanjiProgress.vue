@@ -54,7 +54,7 @@ function sortState(col: KanjiSortCol): string {
     <div class="stats-summary">
       <div class="stat-card correct"><div class="sc-value">{{ summary.mastered }}<small> / {{ summary.total }}</small></div><div class="sc-label">Mastered</div></div>
       <div class="stat-card accent"><div class="sc-value">{{ summary.seen }}<small> / {{ summary.total }}</small></div><div class="sc-label">Kanji seen</div></div>
-      <div class="stat-card purple"><div class="sc-value">{{ summary.wordsMastered }}</div><div class="sc-label">Words mastered</div></div>
+      <div class="stat-card purple"><div class="sc-value">{{ summary.wordsRead }}<small> / {{ summary.wordsTotal }}</small></div><div class="sc-label">Words you can read</div></div>
       <div class="stat-card"><div class="sc-value">{{ summary.accuracy }}</div><div class="sc-label">Accuracy</div></div>
     </div>
 

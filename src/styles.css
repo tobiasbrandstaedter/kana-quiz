@@ -161,7 +161,7 @@ body {
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 .q-main, .option-btn, .error-kana, .missed-item .k, .col-btn .kana-sample, .set-kanji, .stats-kana-cell,
 .cc-kana, .stroke-kana, .stroke-pick, .row-chip, .kc-kanji, .explain-item .k, .hero-kana, .fb-kana,
-.intro-reading, .q-reading, .word-line-form, .word-line-reading, .kd-word-form, .kd-word-reading, .missed-reading,
+.intro-reading, .q-reading, .word-line-form, .word-line-reading, .kanji-word-form, .kanji-word-reading, .kd-word-form, .kd-word-reading, .missed-reading,
 .error-reading, .stats-reading, .word-kanji-row .kana, .kana-preview, .typed-answer, .group-form, .group-reading {
   font-family: var(--kana-font);
   /* a font without a bold cut shows as it is, smeared fake bold is no help when learning shapes */
@@ -913,6 +913,12 @@ body {
 .word-line-reading { font-size: 26px; font-weight: 700; color: var(--primary-text); }
 .word-line-gloss { font-size: 16px; font-weight: 800; color: var(--ink-2); }
 .word-line .explain-hint { flex-basis: 100%; }
+/* after a kanji question: the words met so far that hold it, a line of form and reading pairs */
+.kanji-words { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: center; gap: 4px 16px; }
+.kanji-words-label { flex-basis: 100%; text-align: center; font-size: 14px; font-weight: 800; color: var(--ink-2); }
+.kanji-word { display: inline-flex; align-items: baseline; gap: 6px; }
+.kanji-word-form { font-size: 24px; font-weight: 700; line-height: 1.2; }
+.kanji-word-reading { font-size: 18px; font-weight: 700; color: var(--primary-text); }
 /* the button that says a word sits in a line of text, centered on it rather than on the baseline */
 .intro-reading-row { display: flex; align-items: center; justify-content: center; gap: 12px; }
 .word-line .speak-btn, .word-line .btn, .kd-word-main .speak-btn { align-self: center; }
@@ -1917,7 +1923,7 @@ label.btn:focus-within { outline: 3px solid var(--focus); outline-offset: 2px; }
 :root[data-theme="sumi"] .intro-romaji { font-family: var(--mincho); color: var(--ink); }
 :root[data-theme="sumi"] :is(.kanji-keyword, .intro-keyword, .word-gloss) { font-family: var(--mincho); font-weight: 800; color: var(--ink); }
 /* readings stay ink, vermilion is for what needs a look */
-:root[data-theme="sumi"] :is(.word-line-reading, .kd-word-reading, .kd-reading-kind, .kana-preview, .group-reading) { color: var(--ink); }
+:root[data-theme="sumi"] :is(.word-line-reading, .kanji-word-reading, .kd-word-reading, .kd-reading-kind, .kana-preview, .group-reading) { color: var(--ink); }
 :root[data-theme="sumi"] .kd-word-note .kana { color: var(--shu); }
 /* an irregular member of a group: a vermilion rule, the one accent */
 :root[data-theme="sumi"] :is(.group-row.irregular, .group-swatch) { border-color: var(--shu); background: transparent; }

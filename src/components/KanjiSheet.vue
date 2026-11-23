@@ -73,7 +73,7 @@ const words = computed(() => entry.value ? homeWords(entry.value.kanji).filter(w
   const missing = missingOf(lock)
   let note = 'ready, comes in a coming session'
   if (missing.length) note = 'unlocks once you have met'
-  else if (lock?.review) note = 'unlocks once this kanji is reviewed on a later day'
+  else if (lock?.review) note = 'unlocks once you answer this kanji right'
   else if (lock) note = 'comes with the kanji'
   return { word: w, stage, note, missing }
 }) : [])

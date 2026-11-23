@@ -1,11 +1,11 @@
 import type { KanjiAnswerInput, KanjiAnswerRecord, KanjiStatEntry, KanjiStatsMap, StrokeFault } from '../types'
-import { review, KANJI_INTERVALS } from './scheduler'
+import { reviewKanji, EASE_MAX, EASE_MIN, EASE_START, KANJI_INTERVALS } from './scheduler'
 import { kanjiOfId } from '../kanjiKeys'
 
 export function newKanjiEntry(id: string): KanjiStatEntry {
   return {
     id, correct: 0, incorrect: 0, totalMs: 0, count: 0, lastSeen: 0, lastWrong: 0, resolvedAt: 0,
-    streak: 0, confusions: {}, byType: {}, mistakes: {}, box: 0, due: 0, strokeErrors: [], strokeFaults: {},
+    streak: 0, confusions: {}, byType: {}, mistakes: {}, box: 0, due: 0, ease: EASE_START, strokeErrors: [], strokeFaults: {},
   }
 }
 
@@ -33,6 +33,8 @@ function directions(raw: unknown): KanjiStatEntry['byType'] {
 
 function entry(id: string, e: Record<string, unknown>): KanjiStatEntry {
   const box = num(e.box)
+  // entries from before the ease have none and start where a new one does
+  const ease = typeof e.ease === 'number' && Number.isFinite(e.ease) ? Math.min(Math.max(e.ease, EASE_MIN), EASE_MAX) : EASE_START
   return {
     id,
     correct: num(e.correct), incorrect: num(e.incorrect), totalMs: num(e.totalMs), count: num(e.count),
@@ -42,6 +44,7 @@ function entry(id: string, e: Record<string, unknown>): KanjiStatEntry {
     mistakes: counts(e.mistakes),
     box: Number.isInteger(box) ? Math.min(Math.max(box, 0), KANJI_INTERVALS.length - 1) : 0,
     due: num(e.due),
+    ease,
     strokeErrors: Array.isArray(e.strokeErrors) ? e.strokeErrors.map(num) : [],
     strokeFaults: counts(e.strokeFaults),
   }
@@ -69,9 +72,9 @@ export function normalizeKanjiLog(raw: unknown): KanjiAnswerRecord[] {
 }
 
 /**
- * The entry after one answer, the old one stays untouched. The Leitner box moves through
- * `review` with the kanji intervals (up to box 7, 120 days), except with holdBox (right on the re-ask after a miss in the same session) and
- * for a typo (a typed reading that slipped twice), as for kana.
+ * The entry after one answer, the old one stays untouched. Box, due and ease move through
+ * `reviewKanji` (up to box 7, 120 days times the ease), except with holdBox (right on the re-ask
+ * after a miss in the same session) and for a typo (a typed reading that slipped twice), as for kana.
  * "Don't know" comes with an empty `given` and leaves no confusion behind. A wrong reading
  * with a name counts its kind in `mistakes`. A written answer goes to `applyWrite`.
  */
@@ -95,7 +98,7 @@ export function applyKanjiAnswer(old: KanjiStatEntry | undefined, a: KanjiAnswer
     if (a.given) e.confusions[a.given] = (e.confusions[a.given] ?? 0) + 1
     if (a.mistake) e.mistakes[a.mistake] = (e.mistakes[a.mistake] ?? 0) + 1
   }
-  if (!a.holdBox && !a.typo) Object.assign(e, review(e, a.correct, now, KANJI_INTERVALS))
+  if (!a.holdBox && !a.typo) Object.assign(e, reviewKanji(e, a.correct, now))
   if (a.ms > 0 && a.ms < 30_000) {
     e.totalMs += a.ms
     e.count++

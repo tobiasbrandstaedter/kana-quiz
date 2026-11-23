@@ -663,7 +663,7 @@ describe('a learner over months', () => {
 
   it('who answers everything right meets every kanji and word, every group once', () => {
     const { stats, opened, lastKanjiDay } = simulate(200, 0)
-    // the last kanji comes on day 141 at this pace, a little slack for course edits
+    // the last kanji comes on day 131 at this pace, a little slack for course edits
     expect(lastKanjiDay).toBeGreaterThan(100)
     expect(lastKanjiDay).toBeLessThanOrEqual(155)
     expect(allIds.filter(id => !stats[id]?.correct)).toEqual([])

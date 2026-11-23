@@ -119,6 +119,8 @@ How long the whole course takes was first guessed (two months) and then simulate
 
 So the default of 20 cards a day is five to ten months, and whoever wants it faster does a second session or picks 30. At size 10 with misses the reviews fill nearly every session, the hero then says so (KR31). This is what the amount of material costs, not something a scheduling trick removes.
 
+Since KD19 an easy item rests longer than the table says and a hard one shorter. Run again with that: at 20 cards a day the last kanji comes on day 131 with no misses and on day 273 with 15 % missed.
+
 ### KD10: kanji is a fourth script, never mixed with kana
 
 The script switch gets a fourth choice, Kanji. Practice, Writing and Progress follow it as they do today. Kana and kanji never share a session. The streak and the answers per day count both.
@@ -179,6 +181,20 @@ A new word is tested for its reading and for its meaning.
 
 Why: the learner knows no vocabulary. A word whose meaning is only shown turns into a sound without content (毎日 is まいにち, and what was it again?), and then the reading does not stick either.
 
+### KD19: the reading leads, revised 2026-11-23 after using the app
+
+The owner of the app learned the meanings of the kanji quickly and the readings hardly at all. Three things in the first version caused that: a kanji card never asks a reading, a word asked the reading or the meaning in turn by whichever had fewer right answers (so a word in box 4 could go two months without its reading), and every item rested by the same fixed table no matter how hard it was. The goal G2 lost against G1 although the exam asks words.
+
+What changed:
+
+- A word is asked for its reading. Meaning and spelling come in only once they fall behind (KR25).
+- A further word comes once its kanji was answered right, and no new kanji starts while further words of kanji already met wait for room (KR29, KR30). The reading of a kanji comes with its words, so the words have to keep up.
+- After a question about a kanji, the card shows how it is read in the words met so far (KR81).
+- Progress names the words the learner can read from memory, not only the kanji known by meaning (KR82).
+- Each kanji and word keeps an ease that scales its rest, and a mastered item that slips goes back to box 1, not 0 (KR27).
+
+Not changed: readings are still learned through words only (KD4). All readings of a kanji up front would mean four to eight readings per card, of which N5 needs one or two. Of the 263 N5 words in JMdict whose kanji are all in the set, 246 are in the course already, so the readings were there, they were only asked too rarely.
+
 ## 4. What is learned
 
 ### Kanji
@@ -225,6 +241,8 @@ Rules for picking words:
 - KR75: practiced as words are, in the groups practiced by exception: every irregular member, one regular member per group so the pattern itself is practiced, and the question word (何時, 何人) where there is one. Days of the week, counting things and days of the month are practiced in full, they are N5 words each.
 - KR76: a group is ready when its home kanji is in box 2 or higher and all kanji in its practiced members have been seen. The question word does not hold the group back, it waits for its own kanji like any word (nearly all question words contain 何, which comes late, and dates are wanted early). A group starts with a group card: the table, irregular members marked, not scored. After that its practiced members come in as further words (KR29, KR30), in table order. At most one group opens per session, and a started group is finished before the next one opens.
 - KR80: for a member of a group only the reading the table shows is right. Another reading the dictionary gives for the same entry (七月 read the regular way), or the reading of another picked word with the same written form (十), is not wrong either: the card asks again without counting and points to the table. Otherwise a learner could carry an irregular member to mastered without ever producing the reading the table teaches.
+- KR81: after a question about a kanji (M1, M2), right or wrong, the card shows up to three words met so far that hold it, with their readings, its own words first (KD19).
+- KR82: a word counts as read when its reading was typed right at least once and it is in box 2 or above now. The Practice tab says how many of all practiced words that is once there is one, the Progress tab shows it in place of words mastered (KD19).
 - KR77: the group card can be opened again at any time from the sheet of its home kanji and from the feedback of any of its members.
 
 ## 5. Order
@@ -280,15 +298,15 @@ The draft of the sets is in section 12. The data phase turns it into the final o
 In the Mixed mode, which is the default, the type follows from how well the item is known, easiest first. A learner who picks another mode gets that type for the items it fits (a kanji mode for kanji, a word mode for words) whatever the box, in smart practice and in the custom quiz, as the kana modes work. The other kind of item keeps following the rules below.
 
 - KR24: kanji in box 0 and 1: M1. Box 2: M2. From box 3: of M1 and M2 the one with fewer right answers so far.
-- KR25: word in box 0 and 1: R1 and V1, the one with fewer right answers so far. Box 2: R2. From box 3: of R2, S1 and V1 the one with the fewest right answers so far.
+- KR25: word in box 0 and 1: R1, V1 while the meaning was never answered right. Box 2: R2. From box 3: R2, S1 or V1 only once it has fewer than half the right answers of R2 (the one with fewer, a tie at random), so about two reviews in three ask the reading typed (KD19).
 - KR26: W1 is never picked by smart practice. It has its own mode and the Writing tab (KD11).
 
 ### Schedule
 
-- KR27: kanji and words use the Leitner rules the kana use: only a due item moves up, a miss goes back to box 0, a right answer on the re-ask in the same session can't move up, typos leave the box alone. They get two boxes more than kana, with 60 and 120 days. With the kana ceiling of 30 days the 321 items would need about eleven reviews a day for ever, and a simulation showed a learner with short sessions never reaching the end of the course. Mastered stays box 3.
+- KR27: kanji and words use the Leitner rules the kana use: only a due item moves up, a miss goes back to box 0 (from box 3 or above to box 1, see below), a right answer on the re-ask in the same session can't move up, typos leave the box alone. They get two boxes more than kana, with 60 and 120 days. With the kana ceiling of 30 days the 321 items would need about eleven reviews a day for ever, and a simulation showed a learner with short sessions never reaching the end of the course. Mastered stays box 3. Since KD19 each item has an ease, 1 at the start, between 0.6 and 2: up 0.05 with every promotion, down 0.2 with every miss, and the rest from box 2 on is the box interval times the ease. A miss in box 3 or above goes back to box 1 with its day of rest (it was known for weeks), a second miss in the same session to box 0.
 - KR28: a smart session is filled in this order: due kanji and words, weak ones, new material, then whatever is due next. New material is new kanji (each with its first word), further words whose kanji are ready, and groups that are ready.
-- KR29: a further word is ready when all its kanji have been seen and its home kanji is in box 2 or higher. Among the ready words of a kanji the special ones come last.
-- KR30: per session at most as many new kanji as the picker says, and at most the same number of further words. Further words come before new kanji when both are ready and room is short. A group card does not count against either limit, the members that follow it do.
+- KR29: a further word is ready when all its kanji have been seen and its home kanji is in box 1 or higher, so answered right once (KD19, it was box 2 before). A group still waits for its counter in box 2 (KR76). Among the ready words of a kanji the special ones come last.
+- KR30: per session at most as many new kanji as the picker says, and at most the same number of further words. Further words come before new kanji when both are ready and room is short, and no new kanji starts while a further word of a kanji already met is left waiting (KD19). A group card does not count against either limit, the members that follow it do.
 - KR31: no new kanji, words or groups while twelve or more kanji and words are in box 0 or 1. The hero says why, as it does for kana today. It also says so when the reviews fill the session and nothing new fits although something is ready: a second session or a longer one makes room.
 - KR32: a missed item comes back three to six cards later in the type that was missed, at most twice per session, as today.
 
@@ -333,7 +351,7 @@ Everything not listed stays as it is for kana.
 
 ### Progress tab with Kanji picked
 
-- KR51: summary: kanji seen and mastered out of the whole set, words mastered, accuracy.
+- KR51: summary: kanji seen and mastered out of the whole set, words the learner can read out of all practiced words (KR82), accuracy.
 - KR52: the chart shows the kanji by set, colored by stage, with the dots for due and open errors. Sets nobody has started stay folded.
 - KR53: patterns, open errors and the table list kanji and words. The table can be narrowed to one of the two.
 
